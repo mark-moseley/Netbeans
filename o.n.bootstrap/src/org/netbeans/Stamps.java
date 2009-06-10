@@ -44,22 +44,19 @@ import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.nio.ByteBuffer;
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.Collection;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -151,8 +148,8 @@ public final class Stamps {
     public ByteBuffer asByteBuffer(String cache) {
         return asByteBuffer(cache, true, false);
     }
-    private File file(String cache, int[] len) {
-        String ud = System.getProperty("netbeans.user"); // NOI18N
+    final File file(String cache, int[] len) {
+        String ud = getUserDir();
         if (ud == null) {
             return null;
         }
@@ -168,7 +165,7 @@ public final class Stamps {
             return null;
         }
 
-        if (moduleJARs() >= last) {
+        if (moduleJARs() > last) {
             return null;
         }
 
@@ -242,7 +239,32 @@ public final class Stamps {
     public void shutdown() {
         waitFor(true);
     }
-
+    
+    public void discardCaches() {
+        discardCachesImpl(moduleJARs);
+    }
+    
+    private static void discardCachesImpl(AtomicLong al) {
+        String user = getUserDir();
+        long now = System.currentTimeMillis();
+        if (user != null) {
+            File f = new File(user, ".lastModified");
+            if (f.exists()) {
+                f.setLastModified(now);
+            } else {
+                f.getParentFile().mkdirs();
+                try {
+                    f.createNewFile();
+                } catch (IOException ex) {
+                    LOG.log(Level.WARNING, "Cannot create " + f, ex);
+                }
+            }
+        }
+        if (al != null) {
+            al.set(now);
+        }
+    }
+    
     final void waitFor(boolean noNotify) {
         Worker wait;
         synchronized (worker) {
@@ -269,26 +291,41 @@ public final class Stamps {
     // Implementation. As less dependecies on other NetBeans clases, as possible, please.
     // This will be called externally from a launcher.
     //
-    
+
+    private static String getUserDir() {
+        String ud = System.getProperty("netbeans.user"); // NOI18N
+        return "memory".equals(ud) ? null : ud;
+    }
 
     private static AtomicLong stamp(boolean checkStampFile) {
         AtomicLong result = new AtomicLong();
+        StringBuilder sb = new StringBuilder();
         
         Set<File> processedDirs = new HashSet<File>();
         String home = System.getProperty ("netbeans.home"); // NOI18N
         if (home != null) {
             stampForCluster (new File (home), result, processedDirs, checkStampFile, true);
+            sb.append(home).append('=').append(result.longValue()).append('\n');
         }
         String nbdirs = System.getProperty("netbeans.dirs"); // NOI18N
         if (nbdirs != null) {
             StringTokenizer tok = new StringTokenizer(nbdirs, File.pathSeparator);
             while (tok.hasMoreTokens()) {
-                stampForCluster(new File(tok.nextToken()), result, processedDirs, checkStampFile, true);
+                String t = tok.nextToken();
+                stampForCluster(new File(t), result, processedDirs, checkStampFile, true);
+                sb.append(t).append('=').append(result.longValue()).append('\n');
             }
         }
-        String user = System.getProperty ("netbeans.user"); // NOI18N
+        String user = getUserDir();
         if (user != null) {
             stampForCluster (new File (user), result, new HashSet<File> (), false, false);
+            sb.append(user).append('=').append(result.longValue()).append('\n');
+            
+            File userDir = new File(user);
+            File checkSum = new File(new File(new File(new File(userDir, "var"), "cache"), "lastModified"), "all-checksum.txt");
+            if (!compareAndUpdateFile(checkSum, sb.toString(), result)) {
+                discardCachesImpl(result);
+            }
         }
         
         return result;
@@ -306,7 +343,7 @@ public final class Stamps {
             }
             return;
         }
-        String user = System.getProperty ("netbeans.user"); // NOI18N
+        String user = getUserDir();
         if (user != null) {
             File userDir = new File(user);
             stamp = new File(new File(new File(new File(userDir, "var"), "cache"), "lastModified"), cluster.getName());
@@ -320,13 +357,12 @@ public final class Stamps {
             createStampFile = false;
         }
 
-    
         File configDir = new File(new File(cluster, "config"), "Modules"); // NOI18N
         File modulesDir = new File(cluster, "modules"); // NOI18N
         
         highestStampForDir(configDir, result);
         highestStampForDir(modulesDir, result);
-    
+        
         if (createStampFile) {
             try {
                 stamp.getParentFile().mkdirs();
@@ -352,6 +388,50 @@ public final class Stamps {
             highestStampForDir(f, result);
         }
 
+    }
+    
+    private static boolean compareAndUpdateFile(File file, String content, AtomicLong result) {
+        try {
+            byte[] expected = content.getBytes("UTF-8"); // NOI18N
+            byte[] read = new byte[expected.length];
+            FileInputStream is = null;
+            boolean areCachesOK;
+            boolean writeFile;
+            long lastMod;
+            try {
+                is = new FileInputStream(file);
+                int len = is.read(read);
+                areCachesOK = len == read.length && is.available() == 0 && Arrays.equals(expected, read);
+                writeFile = !areCachesOK;
+                lastMod = file.lastModified();
+            } catch (FileNotFoundException notFoundEx) {
+                // ok, running for the first time, no need to invalidate the cache
+                areCachesOK = true;
+                writeFile = true;
+                lastMod = result.get();
+            } finally {
+                if (is != null) {
+                    is.close();
+                }
+            }
+            if (writeFile) {
+                file.getParentFile().mkdirs();
+                FileOutputStream os = new FileOutputStream(file);
+                os.write(expected);
+                os.close();
+                if (areCachesOK) {
+                    file.setLastModified(lastMod);
+                }
+            } else {
+                if (lastMod > result.get()) {
+                    result.set(lastMod);
+                }
+            }
+            return areCachesOK;
+        } catch (IOException ex) {
+            ex.printStackTrace();
+            return false;
+        }
     }
     
     private static void deleteCache(File cacheFile) throws IOException {
@@ -421,7 +501,7 @@ public final class Stamps {
         public boolean store(AtomicInteger delay) {
             assert os == null;
             
-            String ud = System.getProperty("netbeans.user"); // NOI18N
+            String ud = getUserDir();
             if (ud == null) {
                 LOG.warning("No 'netbeans.user' property to store: " + cache); // NOI18N
                 return false;
@@ -431,7 +511,9 @@ public final class Stamps {
             try {
                 LOG.log(Level.FINE, "Cleaning cache {0}", cacheFile);
                 
-                deleteCache(cacheFile);
+                if (!append) {
+                    deleteCache(cacheFile);
+                }
                 cacheFile.getParentFile().mkdirs();
 
                 LOG.log(Level.FINE, "Storing cache {0}", cacheFile);
@@ -458,6 +540,8 @@ public final class Stamps {
                 if (delete) {
                     cacheFile.delete();
                     cacheFile.deleteOnExit();
+                } else {
+                    cacheFile.setLastModified(moduleJARs());
                 }
             }
             return !delete;
@@ -494,10 +578,13 @@ public final class Stamps {
         private void count(int add) {
             count += add;
             if (count > 64 * 1024) {
-                try {
-                    Thread.sleep(delay.get());
-                } catch (InterruptedException ex) {
-                    Exceptions.printStackTrace(ex);
+                int wait = delay.get();
+                if (wait > 0) {
+                    try {
+                        Thread.sleep(wait);
+                    } catch (InterruptedException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
                 }
                 count = 0;
             }
@@ -571,7 +658,9 @@ public final class Stamps {
             int before = delay.get();
             for (int till = before; till >= 0; till -= 500) {
                 try {
-                    Thread.sleep(500);
+                    synchronized (this) {
+                        wait(500);
+                    }
                 } catch (InterruptedException ex) {
                     LOG.log(Level.INFO, null, ex);
                 }
@@ -579,9 +668,8 @@ public final class Stamps {
                     break;
                 }
             }
-            before = 128;
-            if (before > 128) {
-                delay.compareAndSet(before, 128);
+            if (before > 512) {
+                delay.compareAndSet(before, 512);
             }
             
             long time = System.currentTimeMillis();
@@ -623,6 +711,9 @@ public final class Stamps {
             try {
                 this.noNotify = noNotify;
                 delay.set(0);
+                synchronized (this) {
+                    notifyAll();
+                }
                 join();
             } catch (InterruptedException ex) {
                 Exceptions.printStackTrace(ex);
