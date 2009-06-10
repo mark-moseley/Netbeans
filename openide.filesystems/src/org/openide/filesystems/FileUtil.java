@@ -48,17 +48,18 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.SyncFailedException;
+import java.lang.ref.WeakReference;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLStreamHandler;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Dictionary;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,7 @@ import java.util.logging.Logger;
 import javax.swing.Icon;
 import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileSystemView;
+import org.netbeans.modules.openide.filesystems.declmime.MIMEResolverImpl;
 import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
@@ -84,6 +86,9 @@ import org.openide.util.WeakListeners;
  * This is a dummy class; all methods are static.
  */
 public final class FileUtil extends Object {
+
+    /** Contains mapping of FileChangeListener to File. */
+    private static final Map<FileChangeListener,Map<File,Holder>> holders = new WeakHashMap<FileChangeListener,Map<File,Holder>>();
 
     private static final Logger LOG = Logger.getLogger(FileUtil.class.getName());
 
@@ -108,16 +113,6 @@ public final class FileUtil extends Object {
         transientAttributes.add("SystemFileSystem.icon"); // NOI18N
         transientAttributes.add("SystemFileSystem.icon32"); // NOI18N
         transientAttributes.add("position"); // NOI18N
-    }
-
-    /* mapping of file extensions to content-types */
-    private static Dictionary<String, String> map = new Hashtable<String, String>();
-
-    static {
-        // Set up at least this one statically, because it is so basic;
-        // we do not want to rely on Lookup, MIMEResolver, declarative resolvers,
-        // XML layers, etc. just to find this.
-        setMIMEType("xml", "text/xml"); // NOI18N
     }
 
     /** Cache for {@link #isArchiveFile(FileObject)}. */
@@ -165,7 +160,11 @@ public final class FileUtil extends Object {
      */
     public static void refreshAll() {
         refreshFor(File.listRoots());
-        Repository.getDefault().getDefaultFileSystem().refresh(true);
+        try {
+            getConfigRoot().getFileSystem().refresh(true);
+        } catch (FileStateInvalidException ex) {
+            Exceptions.printStackTrace(ex);
+        }
     }         
     
     /**
@@ -199,8 +198,230 @@ public final class FileUtil extends Object {
             fs.removeFileChangeListener(fcl);
         }
     }
-    
-    
+
+    /**
+     * Adds a listener to changes in a given path. It permits you to listen to a file
+     * which does not yet exist, or continue listening to it after it is deleted and recreated, etc.
+     * <br/>
+     * When given path represents a file ({@code path.isDirectory() == false})
+     * <ul>
+     * <li>fileDataCreated event is fired when the file is created</li>
+     * <li>fileDeleted event is fired when the file is deleted</li>
+     * <li>fileChanged event is fired when the file is modified</li>
+     * <li>fileRenamed event is fired when the file is renamed</li>
+     * <li>fileAttributeChanged is fired when FileObject's attribute is changed</li>
+     * </ul>
+     * When given path represents a folder ({@code path.isDirectory() == true})
+     * <ul>
+     * <li>fileFolderCreated event is fired when the folder is created or a child folder created</li>
+     * <li>fileDataCreated event is fired when a child file is created</li>
+     * <li>fileDeleted event is fired when the folder is deleted or a child file/folder removed</li>
+     * <li>fileChanged event is fired when a child file is modified</li>
+     * <li>fileRenamed event is fired when the folder is renamed or a child file/folder is renamed</li>
+     * <li>fileAttributeChanged is fired when FileObject's attribute is changed</li>
+     *</ul>
+     * Can only add a given [listener, path] pair once. However a listener can 
+     * listen to any number of paths. Note that listeners are always held weakly
+     * - if the listener is collected, it is quietly removed.
+     *
+     * @param listener FileChangeListener to listen to changes in path
+     * @param path File path to listen to (even not existing)
+     *
+     * @see FileObject#addFileChangeListener
+     * @since org.openide.filesystems 7.20
+     */
+    public static void addFileChangeListener(FileChangeListener listener, File path) {
+        assert path.equals(FileUtil.normalizeFile(path)) : "Need to normalize " + path + "!";  //NOI18N
+        synchronized (holders) {
+            Map<File, Holder> f2H = holders.get(listener);
+            if (f2H == null) {
+                f2H = new HashMap<File, Holder>();
+                holders.put(listener, f2H);
+            }
+            if (f2H.containsKey(path)) {
+                throw new IllegalArgumentException("Already listening to " + path); // NOI18N
+            }
+            f2H.put(path, new Holder(listener, path));
+        }
+    }
+
+    /**
+     * Removes a listener to changes in a given path.
+     * @param listener FileChangeListener to be removed
+     * @param path File path in which listener was listening
+     * @throws IllegalArgumentException if listener was not listening to given path
+     *
+     * @see FileObject#removeFileChangeListener
+     * @since org.openide.filesystems 7.20
+     */
+    public static void removeFileChangeListener(FileChangeListener listener, File path) {
+        assert path.equals(FileUtil.normalizeFile(path)) : "Need to normalize " + path + "!";  //NOI18N
+        synchronized (holders) {
+            Map<File, Holder> f2H = holders.get(listener);
+            if (f2H == null) {
+                throw new IllegalArgumentException("Was not listening to " + path); // NOI18N
+            }
+            if (!f2H.containsKey(path)) {
+                throw new IllegalArgumentException(listener + " was not listening to " + path + "; only to " + f2H.keySet()); // NOI18N
+            }
+            // remove Holder instance from map and call run to unregister its current listener
+            f2H.remove(path).run();
+        }
+    }
+
+    /** Holds FileChangeListener and File pair and handle movement of auxiliary
+     * FileChangeListener to the first existing upper folder and firing appropriate events.
+     */
+    private static final class Holder extends WeakReference<FileChangeListener> implements FileChangeListener, Runnable {
+
+        private final File path;
+        private FileObject current;
+        private File currentF;
+        /** Whether listener is seeded on target path. */
+        private boolean isOnTarget = false;
+
+        public Holder(FileChangeListener listener, File path) {
+            super(listener, Utilities.activeReferenceQueue());
+            assert path != null;
+            this.path = path;
+            locateCurrent();
+        }
+
+        private void locateCurrent() {
+            FileObject oldCurrent = current;
+            currentF = FileUtil.normalizeFile(path);
+            while (true) {
+                current = FileUtil.toFileObject(currentF);
+                if (current != null) {
+                    isOnTarget = path.equals(currentF);
+                    break;
+                }
+                currentF = currentF.getParentFile();
+                if (currentF == null) {
+                    // #47320: can happen on Windows in case the drive does not exist.
+                    // (Inside constructor for Holder.) In that case skip it.
+                    return;
+                }
+            }
+            assert current != null;
+            if (current != oldCurrent) {
+                if (oldCurrent != null) {
+                    oldCurrent.removeFileChangeListener(this);
+                }
+                current.addFileChangeListener(this);
+                current.getChildren();//to get events about children
+            }
+        }
+
+        private void someChange() {
+            FileChangeListener listener;
+            boolean wasOnTarget;
+            FileObject currentNew;
+            synchronized (this) {
+                if (current == null) {
+                    return;
+                }
+                listener = get();
+                if (listener == null) {
+                    return;
+                }
+                wasOnTarget = isOnTarget;
+                locateCurrent();
+                currentNew = current;
+            }
+            if (isOnTarget && !wasOnTarget) {
+                // fire events about itself creation (it is difference from FCL
+                // on FileOject - it cannot be fired because we attach FCL on already existing FileOject
+                if (currentNew.isFolder()) {
+                    listener.fileFolderCreated(new FileEvent(currentNew));
+                } else {
+                    listener.fileDataCreated(new FileEvent(currentNew));
+                }
+            }
+        }
+
+        public void fileChanged(FileEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileChanged(fe);
+                    }
+                } else {
+                    someChange();
+                }
+            }
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileDeleted(fe);
+                    }
+                }
+                someChange();
+            }
+        }
+
+        public void fileDataCreated(FileEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileDataCreated(fe);
+                    }
+                } else {
+                    someChange();
+                }
+            }
+        }
+
+        public void fileFolderCreated(FileEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileFolderCreated(fe);
+                    }
+                } else {
+                    someChange();
+                }
+            }
+        }
+
+        public void fileRenamed(FileRenameEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileRenamed(fe);
+                    }
+                }
+                someChange();
+            }
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            if (fe.getSource() == current) {
+                if (isOnTarget) {
+                    FileChangeListener listener = get();
+                    if (listener != null) {
+                        listener.fileAttributeChanged(fe);
+                    }
+                }
+            }
+        }
+
+        public synchronized void run() {
+            if (current != null) {
+                current.removeFileChangeListener(this);
+                current = null;
+            }
+        }
+    }
+
     /**
      * Executes atomic action. For more info see {@link FileSystem#runAtomicAction}. 
      * <p>
@@ -212,6 +433,7 @@ public final class FileUtil extends Object {
      * @throws java.io.IOException
      * @since 7.5
      */
+    @SuppressWarnings("deprecation")
     public static final void runAtomicAction(final AtomicAction atomicCode) throws IOException {
         Repository.getDefault().getDefaultFileSystem().runAtomicAction(atomicCode);
     }
@@ -656,14 +878,11 @@ public final class FileUtil extends Object {
         }
 
         FileObject retVal = null;
-
         try {
             URL url = file.toURI().toURL();
 
-            if (
-                (url.getAuthority() != null) &&
-                    (Utilities.isWindows() || (Utilities.getOperatingSystem() == Utilities.OS_OS2))
-            ) {
+            if ((url.getAuthority() != null) &&
+                    (Utilities.isWindows() || (Utilities.getOperatingSystem() == Utilities.OS_OS2))) {
                 return null;
             }
 
@@ -1080,102 +1299,103 @@ public final class FileUtil extends Object {
     */
     @Deprecated
     public static String getMIMEType(String ext) {
-        String s = map.get(ext);
-
-        if (s != null) {
-            return s;
-        } else {
-            return map.get(ext.toLowerCase());
+        assert false : "FileUtil.getMIMEType(String extension) is deprecated. Please, use FileUtil.getMIMEType(FileObject).";  //NOI18N
+        if (ext.toLowerCase().equals("xml")) {  //NOI18N
+            return "text/xml"; // NOI18N
         }
+        return null;
     }
 
     /** Resolves MIME type. Registered resolvers are invoked and used to achieve this goal.
-    * Resolvers must subclass MIMEResolver. If resolvers don't recognize MIME type then
-    * MIME type is obtained  for a well-known extension.
+    * Resolvers must subclass MIMEResolver.
     * @param fo whose MIME type should be recognized
-    * @return the MIME type for the FileObject, or <code>null</code> if the FileObject is unrecognized
+    * @return the MIME type for the FileObject, or {@code null} if the FileObject is unrecognized.
+     * It may return {@code content/unknown} instead of {@code null}.
     */
     public static String getMIMEType(FileObject fo) {
-        String retVal = MIMESupport.findMIMEType(fo, null);
-
-        if (retVal == null) {
-            retVal = getMIMEType(fo.getExt());
-        }
-
-        return retVal;
+        return MIMESupport.findMIMEType(fo);
     }
 
     /** Resolves MIME type. Registered resolvers are invoked and used to achieve this goal.
-     * Resolvers must subclass MIMEResolver. If resolvers don't recognize MIME type then
-     * MIME type is obtained  for a well-known extension.
+     * Resolvers must subclass MIMEResolver.
      * @param fo whose MIME type should be recognized
      * @param withinMIMETypes an array of MIME types. Only resolvers whose
      * {@link MIMEResolver#getMIMETypes} contain one or more of the requested
      * MIME types will be asked if they recognize the file. It is possible for
      * the resulting MIME type to not be a member of this list.
      * @return the MIME type for the FileObject, or <code>null</code> if 
-     * the FileObject is unrecognized. It is possible for the resulting MIME type
-     * to not be a member of given list.
+     * the FileObject is unrecognized. It may return {@code content/unknown} instead of {@code null}.
+     * It is possible for the resulting MIME type to not be a member of given list.
      * @since 7.13
      */
     public static String getMIMEType(FileObject fo, String... withinMIMETypes) {
         Parameters.notNull("withinMIMETypes", withinMIMETypes);  //NOI18N
-        String retVal = MIMESupport.findMIMEType(fo, null, withinMIMETypes);
-
-        if (retVal == null) {
-            retVal = getMIMEType(fo.getExt());
-        }
-
-        return retVal;
+        return MIMESupport.findMIMEType(fo, withinMIMETypes);
     }
     
-    /** Finds mime type by calling getMIMEType, but
-     * instead of returning null it fallbacks to default type
-     * either text/plain or content/unknown (even for folders)
-     */
-    static String getMIMETypeOrDefault(FileObject fo) {
-        String def = getMIMEType(fo.getExt());
-        String t = MIMESupport.findMIMEType(fo, def);
-
-        if (t == null) {
-            // #42965: never allowed
-            t = "content/unknown"; // NOI18N
-        }
-
-        return t;
-    }
-
-    /**
-     * Register MIME type for a new extension.
+    /** Registers specified extension to be recognized as specified MIME type.
+     * If MIME type parameter is null, it cancels previous registration.
      * Note that you may register a case-sensitive extension if that is
-     * relevant (for example <samp>*.C</samp> for C++) but if you register
+     * relevant (for example {@literal *.C} for C++) but if you register
      * a lowercase extension it will by default apply to uppercase extensions
-     * too (for use on Windows or generally for situations where filenames
-     * become accidentally uppercase).
-     * @param ext the file extension (should be lowercase unless you specifically care about case)
-     * @param mimeType the new MIME type
-     * @throws IllegalArgumentException if this extension was already registered with a <em>different</em> MIME type
-     * @see #getMIMEType
-     * @deprecated You should instead use the more general {@link MIMEResolver} system.
+     * too on Windows.
+     * @param extension the file extension to be registered
+     * @param mimeType the MIME type to be registered for the extension or {@code null} to deregister
+     * @see #getMIMEType(FileObject)
+     * @see #getMIMETypeExtensions(String)
      */
-    @Deprecated
-    public static void setMIMEType(String ext, String mimeType) {
-        synchronized (map) {
-            String old = map.get(ext);
-
-            if (old == null) {
-                map.put(ext, mimeType);
-            } else {
-                if (!old.equals(mimeType)) {
-                    throw new IllegalArgumentException(
-                        "Cannot overwrite existing MIME type mapping for extension `" + // NOI18N
-                        ext + "' with " + mimeType + " (was " + old + ")"
-                    ); // NOI18N
-                }
-
-                // else do nothing
+    public static void setMIMEType(String extension, String mimeType) {
+        Parameters.notEmpty("extension", extension);  //NOI18N
+        final Map<String, Set<String>> mimeToExtensions = new HashMap<String, Set<String>>();
+        FileObject userDefinedResolverFO = MIMEResolverImpl.getUserDefinedResolver();
+        if (userDefinedResolverFO != null) {
+            // add all previous content
+            mimeToExtensions.putAll(MIMEResolverImpl.getMIMEToExtensions(userDefinedResolverFO));
+            // exclude extension possibly registered for other MIME types
+            for (Set<String> extensions : mimeToExtensions.values()) {
+                extensions.remove(extension);
             }
         }
+        if (mimeType != null) {
+            // add specified extension to our structure
+            Set<String> previousExtensions = mimeToExtensions.get(mimeType);
+            if (previousExtensions != null) {
+                previousExtensions.add(extension);
+            } else {
+                mimeToExtensions.put(mimeType, Collections.singleton(extension));
+            }
+        }
+        MIMEResolverImpl.storeUserDefinedResolver(mimeToExtensions);
+    }
+
+    /** Returns list of file extensions associated with specified MIME type. In
+     * other words files with those extensions are recognized as specified MIME type
+     * in NetBeans' filesystem. It never returns {@code null}.
+     * @param mimeType the MIME type (e.g. image/gif)
+     * @return list of file extensions associated with specified MIME type, never {@code null}
+     * @see #setMIMEType(String, String)
+     * @since org.openide.filesystems 7.18
+     */
+    public static List<String> getMIMETypeExtensions(String mimeType) {
+        Parameters.notEmpty("mimeType", mimeType);  //NOI18N
+        HashMap<String, String> extensionToMime = new HashMap<String, String>();
+        for (FileObject mimeResolverFO : MIMEResolverImpl.getOrderedResolvers().values()) {
+            Map<String, Set<String>> mimeToExtensions = MIMEResolverImpl.getMIMEToExtensions(mimeResolverFO);
+            for (Map.Entry<String, Set<String>> entry : mimeToExtensions.entrySet()) {
+                String mimeKey = entry.getKey();
+                Set<String> extensions = entry.getValue();
+                for (String extension : extensions) {
+                    extensionToMime.put(extension, mimeKey);
+                }
+            }
+        }
+        List<String> registeredExtensions = new ArrayList<String>();
+        for (Map.Entry<String, String> entry : extensionToMime.entrySet()) {
+            if (entry.getValue().equals(mimeType)) {
+                registeredExtensions.add(entry.getKey());
+            }
+        }
+        return registeredExtensions;
     }
 
     /**
@@ -1337,6 +1557,7 @@ public final class FileUtil extends Object {
      * @since 4.48
      */
     public static File normalizeFile(final File file) {
+        // XXX should use NIO in JDK 7; see #6358641
         Parameters.notNull("file", file);  //NOI18N
         File retFile;
 
@@ -1436,10 +1657,10 @@ public final class FileUtil extends Object {
         try {
             retVal = file.getCanonicalFile();
         } catch (IOException e) {
+            String path = file.getPath();
             // report only other than UNC path \\ or \\computerName because these cannot be canonicalized
-            if (!file.getPath().equals("\\\\") && !("\\\\".equals(file.getParent()))) {  //NOI18N
-                LOG.warning("getCanonicalFile() on file " + file + " failed: " + e);  //NOI18N
-                LOG.log(Level.FINE, file.toString(), e);
+            if (!path.equals("\\\\") && !("\\\\".equals(file.getParent()))) {  //NOI18N
+                LOG.log(Level.FINE, path, e);
             }
         }
         // #135547 - on Windows Vista map "Documents and Settings\<username>\My Documents" to "Users\<username>\Documents"
@@ -1609,7 +1830,8 @@ public final class FileUtil extends Object {
                     in.close();
                 }
             } catch (IOException ioe) {
-                LOG.log(Level.INFO, null, ioe);
+                // #160507 - ignore exception (e.g. permission denied)
+                LOG.log(Level.FINE, null, ioe);
             }
 
             if (b == null) {
@@ -1769,6 +1991,36 @@ public final class FileUtil extends Object {
      */
     public static boolean affectsOrder(FileAttributeEvent event) {
         return Ordering.affectsOrder(event);
+    }
+
+    /**
+     * Returns {@code FileObject} from the NetBeans default (system, configuration)
+     * filesystem or {@code null} if does not exist.
+     * If you wish to create the file/folder when it does not already exist,
+     * start with {@link #getConfigRoot} and use {@link #createData(FileObject, String)}
+     * or {@link #createFolder(FileObject, String)} methods.
+     * @param path the path from the root of the NetBeans default (system, configuration)
+     * filesystem delimited by '/' or empty string to get root folder.
+     * @throws NullPointerException if the path is {@code null}
+     * @return a {@code FileObject} for given path in the NetBeans default (system, configuration)
+     * filesystem or {@code null} if does not exist
+     * @since org.openide.filesystems 7.19
+     */
+    @SuppressWarnings("deprecation")
+    public static FileObject getConfigFile(String path) {
+        Parameters.notNull("path", path);  //NOI18N
+        return Repository.getDefault().getDefaultFileSystem().findResource(path);
+    }
+
+    /**
+     * Returns the root of the NetBeans default (system, configuration)
+     * filesystem.
+     * @return a {@code FileObject} for the root of the NetBeans default (system, configuration)
+     * filesystem
+     * @since org.openide.filesystems 7.19
+     */
+    public static FileObject getConfigRoot() {
+        return getConfigFile("");  //NOI18N
     }
 
     private static File wrapFileNoCanonicalize(File f) {
