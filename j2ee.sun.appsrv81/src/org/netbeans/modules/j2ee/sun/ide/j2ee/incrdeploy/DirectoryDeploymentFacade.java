@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.enterprise.deploy.shared.CommandType;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.IncrementalDeployment;
 import javax.enterprise.deploy.spi.Target;
@@ -55,6 +56,7 @@ import javax.enterprise.deploy.spi.TargetModuleID;
 import javax.enterprise.deploy.spi.DeploymentManager;
 import javax.enterprise.deploy.spi.DeploymentConfiguration;
 import javax.enterprise.deploy.shared.ModuleType;
+import javax.enterprise.deploy.shared.StateType;
 import javax.enterprise.deploy.spi.status.ProgressObject;
 import org.netbeans.modules.j2ee.deployment.plugins.spi.config.ModuleConfiguration;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.Utils;
@@ -62,10 +64,13 @@ import org.netbeans.modules.j2ee.sun.ide.j2ee.runtime.actions.ViewLogAction;
 import org.netbeans.modules.j2ee.sun.share.configbean.SunONEDeploymentConfiguration;
 import org.netbeans.modules.j2ee.sun.api.SunDeploymentManagerInterface;
 import org.netbeans.modules.j2ee.deployment.plugins.api.AppChangeDescriptor;
+import org.netbeans.modules.j2ee.deployment.plugins.api.DeploymentChangeDescriptor;
 import org.netbeans.modules.j2ee.sun.api.ServerInterface;
 import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
+import org.netbeans.modules.j2ee.sun.ide.ShortCircuitProgressObject;
 import org.netbeans.modules.j2ee.sun.ide.j2ee.DeploymentManagerProperties;
 import org.openide.filesystems.FileObject;
+import org.openide.util.NbBundle;
 
 /**
  *
@@ -78,15 +83,17 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
     private DeploymentManager dm;
     private Boolean issue2999Fixed = null;
     
-    private static Map cache = new WeakHashMap();
+    private static final Map cache = new WeakHashMap();
 
     public static IncrementalDeployment get(DeploymentManager dm) {
-        IncrementalDeployment id = (IncrementalDeployment) cache.get(dm);
-        if (null == id) {
-            id = new DirectoryDeploymentFacade(dm);
-            cache.put(dm,id);
+        synchronized (cache) {
+            IncrementalDeployment id = (IncrementalDeployment) cache.get(dm);
+            if (null == id) {
+                id = new DirectoryDeploymentFacade(dm);
+                cache.put(dm,id);
+            }
+            return id;
         }
-        return id;
     }
     
     /** Creates a new instance of DirectoryDeploymentFacade */
@@ -134,6 +141,12 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         if (ServerLocationManager.getAppServerPlatformVersion(sdmi.getPlatformRoot()) <=
                 ServerLocationManager.GF_V2) {
             Target[] targs = manager.getTargets();
+            if (null == targs || targs.length == 0) {
+                // the server is not running.. so we cannot know what the
+                // status is for this issue... right now.
+                issue2999Fixed = null;
+                return;
+            }
             TargetModuleID tmids[] = null;
             try {
                 tmids = manager.getRunningModules(ModuleType.EAR, targs);
@@ -158,6 +171,8 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
             } catch (Exception ex) {
                 // better safe than sorry here
                 issue2999Fixed = false;
+                Logger.getLogger(DirectoryDeploymentFacade.class.getName()).
+                            log(Level.INFO, "", ex);
             }
         }        
     }
@@ -172,6 +187,7 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         return retVal;
     }
     
+    @Override
     public String getModuleUrl(javax.enterprise.deploy.spi.TargetModuleID module) {
         String retVal = null;
         if (null != inner){
@@ -180,7 +196,11 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         return retVal;
     }
     
-    public ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor changes) {
+    public ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor acd) {
+        return incrementalDeploy(module, acd, true);
+    }
+    
+    private ProgressObject incrementalDeploy(TargetModuleID module, AppChangeDescriptor acd, boolean userActivated) {
         //Register resources if any
         
         // XXX
@@ -191,24 +211,33 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
         if((resourceDirs != null) && (dm != null)){
             Utils.registerResources(resourceDirs, (ServerInterface)((SunDeploymentManagerInterface)dm).getManagement());
         }
-        if (null!=dm){
+        if (null!=dm && userActivated){
             ViewLogAction.viewLog((SunDeploymentManagerInterface)dm);
         }
-        
-        return ((IncrementalDeployment)inner).incrementalDeploy(module, changes);
+        // j2eeserver does this check for "regular" in-place deployment
+        // but not for "on-save" in-place deploymnent
+        if (acd.manifestChanged() || acd.descriptorChanged() || acd.classesChanged()
+            || acd.ejbsChanged() || acd.serverDescriptorChanged()) {
+            return ((IncrementalDeployment)inner).incrementalDeploy(module, acd);
+        } else {
+            return new ShortCircuitProgressObject(CommandType.REDEPLOY,
+                        NbBundle.getMessage(ShortCircuitProgressObject.class,"MESS_NO_DEPLOY_NECESSARY"),
+                        StateType.COMPLETED,new TargetModuleID[] { module });
+        }
+
     }
     
-    
-    
     public File getDirectoryForNewApplication(String deploymentName, Target target, DeploymentConfiguration configuration){
-        SunONEDeploymentConfiguration s1dc =(SunONEDeploymentConfiguration) configuration;
-        s1dc.setDeploymentModuleName(deploymentName);
+        if(configuration instanceof SunONEDeploymentConfiguration) {
+            SunONEDeploymentConfiguration s1dc =(SunONEDeploymentConfiguration) configuration;
+            s1dc.setDeploymentModuleName(deploymentName);
+        }
         return null;
     }
     
     public ProgressObject initialDeploy(Target target, J2eeModule app, ModuleConfiguration configuration, File dir) {
         //Register resources if any
-        File[] resourceDirs = Utils.getResourceDirs(app);
+        //File[] resourceDirs = Utils.getResourceDirs(app);
         if((resourceDirs != null) && (dm != null)) {
             Utils.registerResources(resourceDirs, (ServerInterface)((SunDeploymentManagerInterface)dm).getManagement());
         }
@@ -239,11 +268,11 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
             resourceDirs = Utils.getResourceDirs(module);
             
             //so far only WAR are supported for Directory based deployment
-            if ((module.getModuleType() == ModuleType.CAR)){
+            if ((module.getType() == J2eeModule.Type.CAR)){
                 retVal = false;
             }
-            if (retVal && !issue2999Fixed) {
-                retVal = module.getModuleType() != ModuleType.EAR;
+            if (retVal && null != issue2999Fixed && !issue2999Fixed) {
+                retVal = module.getType() != J2eeModule.Type.EAR;
             }
             
             // What is this ugliness?
@@ -263,10 +292,12 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
             // TODO :: remove this when https://glassfish.dev.java.net/issues/show_bug.cgi?id=3456
             // is fixed.
             //
-            if (retVal && module.getModuleType() == ModuleType.EAR) {
+            if (retVal && module.getType() == J2eeModule.Type.EAR) {
                 try {
                     FileObject fo = module.getContentDirectory();
-                    retVal = noChildrenWithInitialUnderscores(fo);
+                    if (null != fo) {
+                        retVal = noChildrenWithInitialUnderscores(fo);
+                    }
                 } catch (IOException ioe) {
                     Logger.getLogger(DirectoryDeploymentFacade.class.getName()).
                             log(Level.FINER, "", ioe);
@@ -279,8 +310,8 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
             }
         }
         DeploymentManagerProperties dmp = new DeploymentManagerProperties(dm);
-        if (!dmp.isDirectoryDeploymentPossible()) {
-            return false;
+        if (retVal && !dmp.isDirectoryDeploymentPossible()) {
+            retVal = false;
         }
         
         return retVal;
@@ -314,6 +345,16 @@ public class DirectoryDeploymentFacade  extends IncrementalDeployment {
     
     public void notifyDeployment(TargetModuleID module) {
         super.notifyDeployment(module);
+    }
+
+    @Override
+    public ProgressObject deployOnSave(TargetModuleID module, DeploymentChangeDescriptor desc) {
+        return incrementalDeploy(module, desc, false);
+    }
+
+    @Override
+    public boolean isDeployOnSaveSupported() {
+        return true;
     }
     
 }
