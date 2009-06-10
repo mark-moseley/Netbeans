@@ -53,6 +53,7 @@ import javax.xml.validation.Schema;
 import javax.xml.validation.SchemaFactory;
 import org.netbeans.installer.product.components.Group;
 import org.netbeans.installer.product.components.Product;
+import org.netbeans.installer.product.components.ProductConfigurationLogic;
 import org.netbeans.installer.product.dependencies.Conflict;
 import org.netbeans.installer.product.dependencies.InstallAfter;
 import org.netbeans.installer.product.dependencies.Requirement;
@@ -81,6 +82,7 @@ import org.netbeans.installer.utils.exceptions.ParseException;
 import org.netbeans.installer.utils.LogManager;
 import org.netbeans.installer.utils.helper.Platform;
 import org.netbeans.installer.utils.exceptions.XMLException;
+import org.netbeans.installer.utils.helper.EngineResources;
 import org.netbeans.installer.utils.helper.ExecutionMode;
 import org.netbeans.installer.utils.helper.Feature;
 import org.netbeans.installer.utils.helper.FinishHandler;
@@ -184,92 +186,7 @@ public class Registry implements PropertyContainer {
         
         setRegistryProperties();
         
-        final CompositeProgress compositeProgress = new CompositeProgress();
-        Progress childProgress;
-        
-        int percentageChunk = Progress.COMPLETE / (remoteRegistryUris.size() + 2);
-        int percentageLeak = Progress.COMPLETE % (remoteRegistryUris.size() + 2);
-        
-        compositeProgress.synchronizeTo(progress);
-        compositeProgress.synchronizeDetails(true);
-        
-        childProgress = new Progress();
-        compositeProgress.addChild(childProgress, percentageChunk + percentageLeak);
-        compositeProgress.setTitle(
-                ResourceUtils.getString(Registry.class,
-                LOADING_LOCAL_REGISTRY_KEY,
-                localRegistryFile));
-        
-        try {
-            loadProductRegistry(
-                    localRegistryFile.toURI().toString(),
-                    childProgress,
-                    RegistryType.LOCAL,
-                    false);
-        } catch (InitializationException e) {
-            if (!UiUtils.showYesNoDialog(
-                    ResourceUtils.getString(
-                    Registry.class, ERROR_LOADING_LOCAL_REGISTRY_TITLE_KEY),
-                    ResourceUtils.getString(Registry.class,
-                    ERROR_LOADING_LOCAL_REGISTRY_MESSAGE_KEY, localRegistryFile)
-                    )) {
-                finishHandler.criticalExit();
-            } else {
-                LogManager.log(ErrorLevel.ERROR, e);
-            }
-        }
-        
-        childProgress = new Progress();
-        compositeProgress.addChild(childProgress, percentageChunk);
-        compositeProgress.setTitle( ResourceUtils.getString(Registry.class,
-                LOADING_BUNDLED_REGISTRY_KEY,
-                bundledRegistryUri));
-        
-        try {
-            loadProductRegistry(
-                    bundledRegistryUri,
-                    childProgress,
-                    RegistryType.BUNDLED,
-                    true);
-        } catch (InitializationException e) {
-            if (!UiUtils.showYesNoDialog(
-                    ResourceUtils.getString(
-                    Registry.class, ERROR_LOADING_BUNDLED_REGISTRY_TITLE_KEY),
-                    ResourceUtils.getString(Registry.class,
-                    ERROR_LOADING_BUNDLED_REGISTRY_MESSAGE_KEY, bundledRegistryUri)
-                    )) {
-                finishHandler.criticalExit();
-            } else {
-                LogManager.log(ErrorLevel.ERROR, e);
-            }
-        }
-        
-        for (String remoteRegistryURI: remoteRegistryUris) {
-            childProgress = new Progress();
-            compositeProgress.addChild(childProgress, percentageChunk);
-            compositeProgress.setTitle(ResourceUtils.getString(Registry.class,
-                    LOADING_REMOTE_REGISTRY_KEY,
-                    remoteRegistryURI));
-            
-            try {
-                loadProductRegistry(
-                        remoteRegistryURI,
-                        childProgress,
-                        RegistryType.REMOTE,
-                        true);
-            } catch (InitializationException e) {
-                if (!UiUtils.showYesNoDialog(
-                        ResourceUtils.getString(
-                        Registry.class, ERROR_LOADING_REMOTE_REGISTRY_TITLE_KEY),
-                        ResourceUtils.getString(Registry.class,
-                        ERROR_LOADING_REMOTE_REGISTRY_MESSAGE_KEY, remoteRegistryURI)
-                        )) {
-                    finishHandler.criticalExit();
-                } else {
-                    LogManager.log(ErrorLevel.ERROR, e);
-                }
-            }
-        }
+        loadAllRegistries(progress);
         
         validateDependencies();
         
@@ -280,11 +197,119 @@ public class Registry implements PropertyContainer {
         }
         
         applyRegistryFilters();
-        changeStatuses();
+	if (System.getProperty(SOURCE_STATE_FILE_PATH_PROPERTY) == null) {
+            changeStatuses();
+	}
         
         LogManager.logExit("... product registry initialization complete");
     }
     
+    private void loadAllRegistries (Progress progress) {
+        final CompositeProgress compositeProgress = new CompositeProgress();
+        int percentageChunk = Progress.COMPLETE / (remoteRegistryUris.size() + 2);
+        int percentageLeak = Progress.COMPLETE % (remoteRegistryUris.size() + 2);
+
+        compositeProgress.synchronizeTo(progress);
+        compositeProgress.synchronizeDetails(true);
+        compositeProgress.setPercentage(percentageLeak);
+
+        loadProductRegistry(compositeProgress, localRegistryFile, RegistryType.LOCAL, percentageChunk, false);
+        loadProductRegistry(compositeProgress, bundledRegistryUri, RegistryType.BUNDLED, percentageChunk, true);
+
+        for (String remoteRegistryURI: remoteRegistryUris) {
+            loadProductRegistry(compositeProgress, remoteRegistryURI, RegistryType.REMOTE, percentageChunk, true);
+        }
+    }
+    
+    private String getLoadingRegistryMessageKey (RegistryType type) {
+        switch (type) {
+            case BUNDLED : return LOADING_BUNDLED_REGISTRY_KEY;
+            case LOCAL   : return LOADING_LOCAL_REGISTRY_KEY;
+            case REMOTE  : return LOADING_REMOTE_REGISTRY_KEY;
+            default: return null;
+        }
+    }
+    
+    private String getErrorLoadingRegistryTitleKey (RegistryType type) {
+        switch (type) {
+            case BUNDLED : return ERROR_LOADING_BUNDLED_REGISTRY_TITLE_KEY;
+            case LOCAL   : return ERROR_LOADING_LOCAL_REGISTRY_TITLE_KEY;
+            case REMOTE  : return ERROR_LOADING_REMOTE_REGISTRY_TITLE_KEY;
+            default: return null;
+        }
+    }
+    private String getErrorLoadingRegistryMessageKey (RegistryType type) {
+        switch (type) {
+            case BUNDLED : return ERROR_LOADING_BUNDLED_REGISTRY_MESSAGE_KEY;
+            case LOCAL   : return ERROR_LOADING_LOCAL_REGISTRY_MESSAGE_KEY;
+            case REMOTE  : return ERROR_LOADING_REMOTE_REGISTRY_MESSAGE_KEY;
+            default: return null;
+        }
+    }
+
+    private void loadProductRegistry (
+            CompositeProgress compositeProgress,
+            File registryFile,
+            RegistryType type,
+            int percentageChunk,
+            boolean includes) {
+
+        loadProductRegistry (compositeProgress,
+                registryFile.toURI().toString(),
+                registryFile,
+                type,
+                percentageChunk,
+                includes);
+    }
+    
+    private void loadProductRegistry (
+            CompositeProgress compositeProgress,
+            String registryUri,
+            RegistryType type,
+            int percentageChunk,
+            boolean includes) {
+
+        loadProductRegistry (compositeProgress,
+                registryUri,
+                registryUri,
+                type,
+                percentageChunk,
+                includes);
+    }
+
+    private void loadProductRegistry(
+            CompositeProgress compositeProgress,
+            String registryUri,
+            Object registryDisplayName,
+            RegistryType type,
+            int percentageChunk,
+            boolean includes) {
+        
+        Progress childProgress = new Progress();
+        compositeProgress.addChild(childProgress, percentageChunk);
+        compositeProgress.setTitle(ResourceUtils.getString(Registry.class,
+                getLoadingRegistryMessageKey(type),
+                registryDisplayName));
+
+        try {
+            loadProductRegistry(
+                    registryUri,
+                    childProgress,
+                    type,
+                    includes);
+        } catch (InitializationException e) {
+            if (!UiUtils.showYesNoDialog(
+                    ResourceUtils.getString(
+                    Registry.class, getErrorLoadingRegistryTitleKey(type)),
+                    ResourceUtils.getString(Registry.class,
+                    getErrorLoadingRegistryMessageKey(type), registryDisplayName))) {
+                finishHandler.criticalExit();
+            } else {
+                LogManager.log(ErrorLevel.ERROR, e);
+            }
+        }
+    }
+
     public void finalizeRegistry(
             final Progress progress) throws FinalizationException {
         LogManager.logEntry("finalizing product registry");
@@ -482,13 +507,16 @@ public class Registry implements PropertyContainer {
         LogManager.logExit("initializing product registry properties");
     }
     
-    private void validateDependencies(
-            ) throws InitializationException {
+    private void validateDependencies() throws InitializationException {
         for (Product product: getProducts()) {
-            validateRequirements(product);
-            validateConflicts(product);
-            validateInstallAfters(product);
+            validateDependencies(product);
         }
+    }
+
+    private void validateDependencies(final Product product) throws InitializationException {
+        validateRequirements(product);
+        validateConflicts(product);
+        validateInstallAfters(product);        
     }
     
     private void applyRegistryFilters() {
@@ -782,17 +810,69 @@ public class Registry implements PropertyContainer {
         return new ArrayList<Product>(dependents);
     }
     
-    private void validateInstallations(
-            ) throws InitializationException {
+    private void validateInstallations() throws InitializationException {
+        LogManager.logEntry("validating previous installations");
+        
+        final String LIST_ONE_PRODUCT_MESSAGE = "-> {0} ({1}/{2})";//NOI18N
+        final String CANNOT_GET_LOGIC_MAKE_INVISIBLE_MESSAGE =
+                            "Cannot load configuration logic for {0} ({1}/{2}), marking it as invisible";//NOI18N
+        final String INSTALLATION_VALIDATION_MESSAGE = 
+                            "Installation validation of {0} ({1}/{2}):";//NOI18N                            
+        
         for (Product product: getProducts()) {
-            if (product.getStatus() == Status.INSTALLED) {
-                final String message = product.getLogic().validateInstallation();
-                
+            if (product.getStatus() == Status.INSTALLED && product.isVisible()) {
+                ProductConfigurationLogic logic = null;
+                try {
+                    logic = product.getLogic();
+                } catch (InitializationException e) {
+                    LogManager.log(ErrorLevel.WARNING,
+                            StringUtils.format(CANNOT_GET_LOGIC_MAKE_INVISIBLE_MESSAGE,
+                            product.getDisplayName(), product.getUid(), product.getVersion()));
+
+                    LogManager.log(ErrorLevel.WARNING, e);
+                    product.setVisible(false);
+
+                    final List<Product> inavoidableDependents =
+                            getInavoidableDependents(product);
+                    if (!inavoidableDependents.isEmpty()) {
+                        LogManager.indent();
+                        LogManager.log(ErrorLevel.WARNING, 
+                                "Also make the dependent products invisible: ");//NOI18N                        
+
+                        for (Product p : inavoidableDependents) {
+                            LogManager.log(ErrorLevel.WARNING,
+                                    StringUtils.format(LIST_ONE_PRODUCT_MESSAGE,
+                                    p.getDisplayName(), p.getUid(), p.getVersion()));
+                            p.setVisible(false);
+                        }
+                        LogManager.unindent();
+                    }                    
+                    continue;
+                }
+
+                final String message = logic.validateInstallation();
+
                 if (message != null) {
                     final List<Product> inavoidableDependents =
                             getInavoidableDependents(product);
+                    LogManager.logIndent(
+                            StringUtils.format(INSTALLATION_VALIDATION_MESSAGE,
+                            product.getDisplayName(), product.getUid(), product.getVersion()));
                     
-                    boolean result = UiUtils.showYesNoDialog(
+                    LogManager.log(message);
+                    if(!inavoidableDependents.isEmpty()) {
+                        LogManager.logIndent("Dependent Products: ");
+                        for(Product p : inavoidableDependents) {
+                            LogManager.log(StringUtils.format(LIST_ONE_PRODUCT_MESSAGE,
+                            p.getDisplayName(), p.getUid(), p.getVersion()));
+                        }
+                        LogManager.unindent();
+                    }
+                    LogManager.unindent();
+
+
+                    boolean result = Boolean.getBoolean(REMOVE_CORRUPTED_PRODUCTS_SILENTLY_PROPERTY) || 
+                            UiUtils.showYesNoDialog(
                             ResourceUtils.getString(Registry.class,
                             ERROR_VALIDATION_TITLE_KEY),
                             ResourceUtils.getString(Registry.class,
@@ -800,8 +880,9 @@ public class Registry implements PropertyContainer {
                             product.getDisplayName(),
                             message ,
                             product.getDisplayName(),
-                            StringUtils.asString(inavoidableDependents)));
-                    
+                            StringUtils.asString(inavoidableDependents)),
+                            true);
+
                     if (result) {
                         product.setStatus(Status.NOT_INSTALLED);
                         product.getParent().removeChild(product);
@@ -815,6 +896,7 @@ public class Registry implements PropertyContainer {
                 }
             }
         }
+        LogManager.logExit("... validating installations finished");
     }
     
     // registry <-> dom <-> xml operations //////////////////////////////////////////
@@ -834,6 +916,7 @@ public class Registry implements PropertyContainer {
             final RegistryType registryType,
             final boolean loadIncludes) throws InitializationException {
         try {
+            LogManager.log("... loading registry from " + uri);
             final Element registryElement =
                     loadRegistryDocument(uri).getDocumentElement();
             
@@ -1040,7 +1123,12 @@ public class Registry implements PropertyContainer {
                         parentNode.addChild(product);
                         loadRegistryComponents(product, child, registryType);
                     } else {
-                        loadRegistryComponents(existing.get(0), child, registryType);
+                        final RegistryNode existingNode = existing.get(0);
+                        if(!existingNode.getParent().getUid().equals(parentNode.getUid())){                            
+                            existingNode.getParent().removeChild(existingNode);                                                       
+                            parentNode.addChild(existingNode);                                                                             
+                        }                                                
+                        loadRegistryComponents(existingNode, child, registryType);
                     }
                 }
                 
@@ -1670,6 +1758,8 @@ public class Registry implements PropertyContainer {
     
     public static final String DEFAULT_LOCAL_REGISTRY_FILE_NAME =
             "registry.xml";
+    public static final String DEFAULT_BUNDLED_REGISTRY_FILE_NAME =
+            "registry.xml";
     
     public static final String LOCAL_PRODUCT_REGISTRY_PROPERTY =
             "nbi.product.local.registry.file.name";
@@ -1683,7 +1773,8 @@ public class Registry implements PropertyContainer {
     
     public static final String DEFAULT_BUNDLED_PRODUCT_REGISTRY_URI =
             FileProxy.RESOURCE_SCHEME_PREFIX +
-            "data/registry.xml";
+            EngineResources.DATA_DIRECTORY + StringUtils.FORWARD_SLASH + 
+            DEFAULT_BUNDLED_REGISTRY_FILE_NAME;
     
     public static final String BUNDLED_PRODUCT_REGISTRY_URI_PROPERTY =
             "nbi.product.bundled.registry.uri";
@@ -1741,10 +1832,21 @@ public class Registry implements PropertyContainer {
     
     public static final String CREATE_BUNDLE_PATH_PROPERTY =
             "nbi.create.bundle.path";
+    public static final String CREATE_BUNDLE_SKIP_NATIVE_LAUNCHER_PROPERTY =
+            "nbi.create.bundle.skip.native.launcher";
     
     public static final String LAZY_LOAD_ICONS_PROPERTY =
             "nbi.product.lazy.load.icons";
-    
+    /**
+     * If this property is set to true then all products which 
+     * ProductConfigurationLogic.validateInstallation() invokation returned not-null message 
+     * will be removed (together with all dependent products) silently from the registry.
+     * Such removal do nothing with the product uninstallation.
+     * 
+     */
+    public static final String REMOVE_CORRUPTED_PRODUCTS_SILENTLY_PROPERTY =
+            "nbi.product.remove.corrupted.products.silently";//NOI18N
+            
     private static final String LOADING_LOCAL_REGISTRY_KEY =
             "R.loading.local.registry"; //NOI18N
     private static final String ERROR_LOADING_LOCAL_REGISTRY_TITLE_KEY =
@@ -1805,8 +1907,6 @@ public class Registry implements PropertyContainer {
             "R.error.cannot.create.registry";//NOI18N
     private static final String ERROR_REGISTRY_IS_DIRECTORY_KEY =
             "R.error.registry.is.dir";//NOI18N
-    private static final String ERROR_CANNOT_READ_REGISTRY_KEY =
-            "R.error.cannot.read.registry";//NOI18N
     private static final String ERROR_CANNOT_WRITE_REGISTRY_KEY =
             "R.error.cannot.write.registry";//NOI18N
     private static final String ERROR_CANNOT_PARSE_PLATFORM_KEY =
