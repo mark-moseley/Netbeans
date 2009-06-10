@@ -65,9 +65,9 @@ import org.openide.filesystems.FileUtil;
  * Test's adding generate source in addons directory to source classpath.
  */
 public class SourcePathImplAddonsTest extends NbTestCase{
-    private static final String SRC_ROOT_1 = "generated/addons/srcroot1";  // No I18N
-    private static final String SRC_ROOT_2 = "generated/addons/srcroot2";  // No I18N    
-    private static final String SRC_ROOT_3 = "generated/addons/srcroot3";  // No I18N    
+    private static final String SRC_ROOT_1 = "generated-sources/jaxb";  // No I18N
+    private static final String SRC_ROOT_2 = "generated-sources/jax-ws";  // No I18N
+    private static final String SRC_ROOT_3 = "generated-sources/jax-rpc";  // No I18N
     private static final String DEFAULT_PLATFORM_ROOT = "DefaultPlatformRoot"; // No I18N
     
     private FileObject scratchFO;
@@ -266,8 +266,8 @@ public class SourcePathImplAddonsTest extends NbTestCase{
         assertContainsURL(entries, url2, false);
         assertContainsURL(entries, url3, false);        
         
-        addonModuleDir1.mkdirs();
-        addonModuleDir2.mkdirs();
+        FileUtil.createFolder(addonModuleDir1);
+        FileUtil.createFolder(addonModuleDir2);
         FileUtil.refreshFor(helper.resolveFile(buildDir));
         
         // Simulate folder creation thru NB task.
