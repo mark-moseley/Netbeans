@@ -40,16 +40,14 @@
  */
 package org.netbeans.modules.subversion.ui.history;
 
+import org.netbeans.modules.subversion.ui.history.RepositoryRevision.Event;
 import org.openide.util.RequestProcessor;
 import org.openide.util.NbBundle;
-import org.openide.util.Cancellable;
 import org.openide.explorer.ExplorerManager;
 import org.openide.nodes.Node;
 import org.openide.windows.TopComponent;
-import org.netbeans.api.diff.DiffView;
 import org.netbeans.api.diff.Diff;
 import org.netbeans.modules.versioning.util.NoContentPanel;
-import org.netbeans.modules.subversion.ui.diff.DiffStreamSource;
 import org.netbeans.modules.subversion.ui.diff.DiffSetupSource;
 import javax.swing.event.AncestorListener;
 import javax.swing.event.AncestorEvent;
@@ -61,7 +59,11 @@ import java.awt.Component;
 import java.io.File;
 import java.io.IOException;
 import java.util.logging.Level;
+import org.netbeans.api.diff.DiffController;
 import org.netbeans.modules.subversion.Subversion;
+import org.netbeans.modules.subversion.client.SvnProgressSupport;
+import org.openide.util.Cancellable;
+import org.tigris.subversion.svnclientadapter.SVNUrl;
 
 /**
  * Shows Search History results in a table with Diff pane below it.
@@ -70,19 +72,19 @@ import org.netbeans.modules.subversion.Subversion;
  */
 class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffSetupSource {
 
-    private final SearchHistoryPanel parent;
+    protected final SearchHistoryPanel parent;
 
-    private DiffTreeTable treeView;
+    protected DiffTreeTable treeView;
     private JSplitPane    diffView;
     
-    private ShowDiffTask            currentTask;
-    private RequestProcessor.Task   currentShowDiffTask;
+    protected SvnProgressSupport        currentTask;
+    private RequestProcessor.Task       currentShowDiffTask;
     
-    private DiffView                currentDiff;
-    private int                     currentDifferenceIndex;
-    private int                     currentIndex;
-    private boolean                 dividerSet;
-    private List<RepositoryRevision> results;
+    protected DiffController            currentDiff;
+    private int                         currentDifferenceIndex;
+    protected int                       currentIndex;
+    private boolean                     dividerSet;
+    protected List<RepositoryRevision>  results;
     private static final RequestProcessor rp = new RequestProcessor("SubversionDiff", 1, true);  // NOI18N
 
     public DiffResultsView(SearchHistoryPanel parent, List<RepositoryRevision> results) {
@@ -149,13 +151,27 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
                                 showRevisionDiff(r1, onSelectionshowLastDifference);
                             }
                         } else if (nodes.length == 2) {
-                            RepositoryRevision.Event r2 = (RepositoryRevision.Event) nodes[1].getLookup().lookup(RepositoryRevision.Event.class);
-                            if (r2.getFile() == null || !r2.getFile().equals(r1.getFile())) {
+                            RepositoryRevision.Event revOlder = null;
+                            if (container1 != null) {
+                                /**
+                                 * second repository revision is acquired from a container, not through a Lookup as before,
+                                 * since only two containers are present in the lookup
+                                 */
+                                RepositoryRevision container2 = nodes[1].getLookup().lookup(RepositoryRevision.class);
+                                r1 = getEventForRoots(container1);
+                                revOlder = getEventForRoots(container2);
+                            } else {
+                                revOlder = (RepositoryRevision.Event) nodes[1].getLookup().lookup(RepositoryRevision.Event.class);
+                            }
+                            if (r1 == null || revOlder == null || revOlder.getFile() == null || 
+                                    (!revOlder.getFile().equals(r1.getFile()) 
+                                        && (revOlder.getChangedPath() == null || r1.getChangedPath() == null || !revOlder.getChangedPath().getPath().equals(r1.getChangedPath().getCopySrcPath())) // two files with different names, fileA is copied to fileB
+                                    )) {
                                 throw new Exception();
                             }
-                            long revision2 = r1.getLogInfoHeader().getLog().getRevision().getNumber();
-                            long revision1 = r2.getLogInfoHeader().getLog().getRevision().getNumber();
-                            showDiff(r1, Long.toString(revision1), Long.toString(revision2), false);
+                            long revisionNumberOlder = r1.getLogInfoHeader().getLog().getRevision().getNumber();
+                            long revisionNumberNewer = revOlder.getLogInfoHeader().getLog().getRevision().getNumber();
+                            showDiff(r1, Long.toString(revisionNumberNewer), Long.toString(revisionNumberOlder), false);
                         }
                     } catch (Exception e) {
                         showDiffError(NbBundle.getMessage(DiffResultsView.class, "MSG_DiffPanel_IllegalSelection")); // NOI18N
@@ -192,75 +208,85 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
         return null;
     }
 
-    private void showDiffError(String s) {
+    protected void showDiffError(String s) {
         setBottomComponent(new NoContentPanel(s));
     }
 
-    private void setBottomComponent(Component component) {
+    protected SvnProgressSupport createShowDiffTask(Event header, String revision1, String revision2, boolean showLastDifference) {
+        return new ShowDiffTask(header, revision1, revision2, showLastDifference);
+    }
+
+    protected void setBottomComponent(Component component) {
         int dl = diffView.getDividerLocation();
         diffView.setBottomComponent(component);
         diffView.setDividerLocation(dl);
     }
 
-    private void showDiff(RepositoryRevision.Event header, String revision1, String revision2, boolean showLastDifference) {
+    protected void showDiff(RepositoryRevision.Event header, String revision1, String revision2, boolean showLastDifference) {
         synchronized(this) {
             cancelBackgroundTasks();
-            currentTask = new ShowDiffTask(header, revision1, revision2, showLastDifference);
-            currentShowDiffTask = rp.create(currentTask);
-            currentShowDiffTask.schedule(0);
+            currentTask = createShowDiffTask(header, revision1, revision2, showLastDifference);
+            currentShowDiffTask = currentTask.start(rp, header.getLogInfoHeader().getRepositoryRootUrl(), NbBundle.getMessage(DiffResultsView.class, "LBL_SearchHistory_Diffing"));
         }
     }
 
     private synchronized void cancelBackgroundTasks() {
         if (currentShowDiffTask != null && !currentShowDiffTask.isFinished()) {
-            currentShowDiffTask.cancel();  // it almost always late it's enqueued, so:
             currentTask.cancel();
+            currentShowDiffTask.cancel();  // it almost always late it's enqueued, so:
         }
     }
 
     private boolean onSelectionshowLastDifference;
 
-    private void setDiffIndex(int idx, boolean showLastDifference) {
+    protected void setDiffIndex(int idx, boolean showLastDifference) {
         currentIndex = idx;
         onSelectionshowLastDifference = showLastDifference;
         treeView.setSelection(idx);
     }
 
-    private void showRevisionDiff(RepositoryRevision.Event rev, boolean showLastDifference) {
+    protected void showRevisionDiff(RepositoryRevision.Event rev, boolean showLastDifference) {
         if (rev.getFile() == null) return;
         long revision2 = rev.getLogInfoHeader().getLog().getRevision().getNumber();
         long revision1 = revision2 - 1;
         showDiff(rev, Long.toString(revision1), Long.toString(revision2), showLastDifference);
     }
 
-    private void showContainerDiff(RepositoryRevision container, boolean showLastDifference) {        
+    protected void showContainerDiff(RepositoryRevision container, boolean showLastDifference) {
         List<RepositoryRevision.Event> revs = container.getEvents();
-        
-        RepositoryRevision.Event newest = null;
-        //try to get the root        
+
+        RepositoryRevision.Event newest = getEventForRoots(container);
+        if(newest == null) {
+            newest = revs.get(0);
+        }
+        showRevisionDiff(newest, showLastDifference);
+    }
+
+    protected RepositoryRevision.Event getEventForRoots(RepositoryRevision container) {
+        RepositoryRevision.Event event = null;
+        List<RepositoryRevision.Event> revs = container.getEvents();
+
+        //try to get the root
         File[] roots = parent.getRoots();
         for(File root : roots) {
             for(RepositoryRevision.Event evt : revs) {
                 if(root.equals(evt.getFile())) {
-                    newest = evt;   
-                }   
-            }            
+                    event = evt;
+                }
+            }
         }
-        if(newest == null) {
-            newest = revs.get(0);   
-        }        
-        if (newest.getFile() == null) return;
-        long rev = newest.getLogInfoHeader().getLog().getRevision().getNumber();
-        showDiff(newest, Long.toString(rev - 1), Long.toString(rev), showLastDifference);
+
+        return event;
     }
     
     void onNextButton() {
         if (currentDiff != null) {
             if (++currentDifferenceIndex >= currentDiff.getDifferenceCount()) {
+                currentDifferenceIndex = 0; // preventing exception when only one item is showed
                 if (++currentIndex >= treeView.getRowCount()) currentIndex = 0;
                 setDiffIndex(currentIndex, false);
             } else {
-                currentDiff.setCurrentDifference(currentDifferenceIndex);
+                currentDiff.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, currentDifferenceIndex);
             }
         } else {
             if (++currentIndex >= treeView.getRowCount()) currentIndex = 0;
@@ -271,10 +297,11 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
     void onPrevButton() {
         if (currentDiff != null) {
             if (--currentDifferenceIndex < 0) {
+                currentDifferenceIndex = 0; // preventing exception when only one item is showed
                 if (--currentIndex < 0) currentIndex = treeView.getRowCount() - 1;
                 setDiffIndex(currentIndex, true);
             } else {
-                currentDiff.setCurrentDifference(currentDifferenceIndex);
+                currentDiff.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, currentDifferenceIndex);
             }
         } else {
             if (--currentIndex < 0) currentIndex = treeView.getRowCount() - 1;
@@ -283,15 +310,11 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
     }
 
     boolean isNextEnabled() {
-        if (currentDiff != null) {
-            return currentIndex < treeView.getRowCount() - 1 || currentDifferenceIndex < currentDiff.getDifferenceCount() - 1;
-        } else {
-            return false;
-        }
+        return currentDiff != null;
     }
 
     boolean isPrevEnabled() {
-        return currentIndex > 0 || currentDifferenceIndex > 0;
+        return currentDiff != null;
     }
     
     /**
@@ -309,13 +332,12 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
         treeView.setSelection(container);
     }
 
-    private class ShowDiffTask implements Runnable, Cancellable {
+    private class ShowDiffTask extends SvnProgressSupport {
         
         private final RepositoryRevision.Event header;
         private final String revision1;
         private final String revision2;
         private boolean showLastDifference;
-        private volatile boolean cancelled;
 
         public ShowDiffTask(RepositoryRevision.Event header, String revision1, String revision2, boolean showLastDifference) {
             this.header = header;
@@ -324,19 +346,33 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
             this.showLastDifference = showLastDifference;
         }
 
-        public void run() { 
+        @Override
+        protected void perform() {
+            showDiffError(NbBundle.getMessage(DiffResultsView.class, "MSG_DiffPanel_LoadingDiff")); // NOI18N
             final Diff diff = Diff.getDefault();
-            final DiffStreamSource s1 = new DiffStreamSource(header.getFile(), null, revision1, revision1);
-            final DiffStreamSource s2 = new DiffStreamSource(header.getFile(), null, revision2, revision2);
-
+            SVNUrl repotUrl = header.getLogInfoHeader().getRepositoryRootUrl();
+            SVNUrl fileUrl = repotUrl.appendPath(header.getChangedPath().getPath());
+            // through peg revision always except from 'deleting the file', since the file does not exist in the newver revision
+            final DiffStreamSource s1 = new DiffStreamSource(header.getFile(), repotUrl, fileUrl, revision1,
+                    header.getChangedPath().getAction() == 'D' ? revision1 : revision2, revision1);
+            final DiffStreamSource s2 = new DiffStreamSource(header.getFile(), repotUrl, fileUrl, revision2, revision2);
+            this.setCancellableDelegate(new Cancellable() {
+                public boolean cancel() {
+                    s1.cancel();
+                    s2.cancel();
+                    return true;
+                }
+            });
             // it's enqueued at ClientRuntime queue and does not return until previous request handled
             s1.getMIMEType();  // triggers s1.init()
-            if (cancelled) {
+            if (isCanceled()) {
+                showDiffError(NbBundle.getMessage(DiffResultsView.class, "MSG_DiffPanel_NoRevisions")); // NOI18N
                 return;
             }
 
             s2.getMIMEType();  // triggers s2.init()
-            if (cancelled) {
+            if (isCanceled()) {
+                showDiffError(NbBundle.getMessage(DiffResultsView.class, "MSG_DiffPanel_NoRevisions")); // NOI18N
                 return;
             }
 
@@ -345,16 +381,17 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     try {
-                        if (cancelled) {
+                        if (isCanceled()) {
+                            showDiffError(NbBundle.getMessage(DiffResultsView.class, "MSG_DiffPanel_NoRevisions")); // NOI18N
                             return;
                         }
-                        final DiffView view = diff.createDiff(s1, s2);
+                        final DiffController view = DiffController.create(s1, s2);
                         if (currentTask == ShowDiffTask.this) {
                             currentDiff = view;
-                            setBottomComponent(currentDiff.getComponent());
+                            setBottomComponent(currentDiff.getJComponent());
                             if (currentDiff.getDifferenceCount() > 0) {
                                 currentDifferenceIndex = showLastDifference ? currentDiff.getDifferenceCount() - 1 : 0;
-                                currentDiff.setCurrentDifference(currentDifferenceIndex);
+                                currentDiff.setLocation(DiffController.DiffPane.Base, DiffController.LocationType.DifferenceIndex, currentDifferenceIndex);
                             }
                             parent.refreshComponents(false);
                         }
@@ -363,11 +400,6 @@ class DiffResultsView implements AncestorListener, PropertyChangeListener, DiffS
                     }
                 }
             });
-        }
-
-        public boolean cancel() {
-            cancelled = true;            
-            return true;
         }
     }
     
