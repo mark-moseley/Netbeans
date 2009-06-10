@@ -44,6 +44,8 @@ package org.netbeans.modules.options;
 
 import java.awt.Component;
 import java.awt.Dialog;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
@@ -57,6 +59,8 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.options.OptionsDisplayer;
+import org.netbeans.modules.options.classic.OptionsAction;
+import org.netbeans.modules.options.export.OptionsChooserPanel;
 import org.netbeans.spi.options.OptionsPanelController;
 
 import org.openide.DialogDescriptor;
@@ -64,11 +68,18 @@ import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.NotifyDescriptor.Confirmation;
 import org.openide.awt.Mnemonics;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
-import org.openide.util.Lookup;
 import org.openide.util.LookupEvent;
 import org.openide.util.LookupListener;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 import org.openide.util.actions.CallableSystemAction;
@@ -84,16 +95,49 @@ public class OptionsDisplayerImpl {
     private static Logger log = Logger.getLogger(OptionsDisplayerImpl.class.getName ());    
     private boolean modal;
     static final LookupListener lookupListener = new LookupListenerImpl();
+    /** OK button. */
+    private JButton bOK;
+    /** Advanced Options button. */
+    private JButton bClassic;
+    /** Export Options button */
+    private JButton btnExport;
+    /** Import Options button */
+    private JButton btnImport;
     
     public OptionsDisplayerImpl (boolean modal) {
         this.modal = modal;
+        try {
+            // 91106 - listen to default FS changes to update Advanced Options button
+            FileUtil.getConfigRoot().getFileSystem().addFileChangeListener(new AdvancedOptionsListener());
+        } catch (FileStateInvalidException ex) {
+            Exceptions.printStackTrace(ex);
+        }
     }
     
     public boolean isOpen() {
         return dialog != null;
     }
-        
-    public void showOptionsDialog (String categoryID) {
+
+    /** Selects requested category or subcategory in opened Options dialog.
+     * It is used in QuickSearchprovider.
+     * @param path path of category and subcategories to be selected. Path is
+     * composed from registration names divided by slash. See {OptionsDisplayer#open}.
+     */
+    static void selectCategory(String path) {
+        DialogDescriptor descriptor = null;
+        synchronized (lookupListener) {
+            descriptor = (DialogDescriptor) descriptorRef.get();
+        }
+        if (descriptor != null) {
+            OptionsPanel optionsPanel = (OptionsPanel) descriptor.getMessage();
+            String categoryId = path.indexOf('/') == -1 ? path : path.substring(0, path.indexOf('/'));
+            String subpath = path.indexOf('/') == -1 ? null : path.substring(path.indexOf('/') + 1);
+            optionsPanel.initCurrentCategory(categoryId, subpath);
+        }
+        dialog.toFront();
+    }
+
+    public void showOptionsDialog (String categoryID, String subpath) {
         if (isOpen()) {
             // dialog already opened
             dialog.setVisible (true);
@@ -106,22 +150,27 @@ public class OptionsDisplayerImpl {
         synchronized(lookupListener) {
             descriptor = (DialogDescriptor)descriptorRef.get ();
         }
-        
+
         OptionsPanel optionsPanel = null;
         if (descriptor == null) {
             optionsPanel = categoryID == null ? new OptionsPanel () : new OptionsPanel(categoryID);            
-            JButton bOK = (JButton) loc(new JButton(), "CTL_OK");//NOI18N
+            bOK = (JButton) loc(new JButton(), "CTL_OK");//NOI18N
             bOK.getAccessibleContext().setAccessibleDescription(loc("ACS_OKButton"));//NOI18N
-            JButton bClassic = (JButton) loc(new JButton(), "CTL_Classic");//NOI18N
+            bClassic = (JButton) loc(new JButton(), "CTL_Classic");//NOI18N
             bClassic.getAccessibleContext().setAccessibleDescription(loc("ACS_ClassicButton"));//NOI18N
+            setVisibleAdvancedOptionsButton();
+            btnExport = (JButton) loc(new JButton(), "CTL_Export");//NOI18N
+            btnExport.getAccessibleContext().setAccessibleDescription(loc("ACS_Export"));//NOI18N
+            btnImport = (JButton) loc(new JButton(), "CTL_Import");//NOI18N
+            btnImport.getAccessibleContext().setAccessibleDescription(loc("ACS_Import"));//NOI18N
             boolean isMac = Utilities.isMac();
             Object[] options = new Object[2];            
             options[0] = isMac ? DialogDescriptor.CANCEL_OPTION : bOK;
             options[1] = isMac ? bOK : DialogDescriptor.CANCEL_OPTION;
-            descriptor = new DialogDescriptor(optionsPanel,title,modal,options,DialogDescriptor.OK_OPTION,DialogDescriptor.DEFAULT_ALIGN, null, null);
-            descriptor.setAdditionalOptions(new Object[] {bClassic});
+            descriptor = new DialogDescriptor(optionsPanel,title,modal,options,DialogDescriptor.OK_OPTION,DialogDescriptor.DEFAULT_ALIGN, null, null, false);
+            descriptor.setAdditionalOptions(new Object[] {bClassic, btnExport, btnImport});
             descriptor.setHelpCtx(optionsPanel.getHelpCtx());
-            OptionsPanelListener listener = new OptionsPanelListener(descriptor, optionsPanel, bOK, bClassic);
+            OptionsPanelListener listener = new OptionsPanelListener(descriptor, optionsPanel, bOK, bClassic, btnExport, btnImport);
             descriptor.setButtonListener(listener);
             optionsPanel.addPropertyChangeListener(listener);
             synchronized(lookupListener) {
@@ -137,11 +186,52 @@ public class OptionsDisplayerImpl {
         }
         
         dialog = DialogDisplayer.getDefault ().createDialog (descriptor);
-        optionsPanel.initCurrentCategory(categoryID);
+        optionsPanel.initCurrentCategory(categoryID, subpath);
         dialog.addWindowListener (new MyWindowListener (optionsPanel));
-        dialog.setVisible (true);        
+        Point userLocation = getUserLocation();
+        if (userLocation != null) {
+            dialog.setLocation(userLocation);
+        }
+        dialog.setVisible (true);     
     }
-    
+
+    /** Set visibility of Advanced Options button (AKA classic) according to
+     * existence of advanced options. */
+    private void setVisibleAdvancedOptionsButton() {
+        if(bClassic != null) {
+            bClassic.setVisible(advancedOptionsNotEmpty());
+        }
+    }
+
+    /** Returns true if some non hidden advanced options are registered
+     * under UI/Services folder.
+     * @return true if exists some advanced options, false otherwise
+     */
+    private boolean advancedOptionsNotEmpty() {
+        FileObject servicesFO = FileUtil.getConfigFile("UI/Services");  //NOI18N
+        if(servicesFO != null) {
+            FileObject[] advancedOptions = servicesFO.getChildren();
+            for (FileObject advancedOption : advancedOptions) {
+                Object hidden = advancedOption.getAttribute("hidden");  //NOI18N
+                if(hidden == null || !(Boolean)hidden) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private Point getUserLocation() {
+        final Rectangle screenBounds = Utilities.getUsableScreenBounds();
+        int x = NbPreferences.forModule(OptionsDisplayerImpl.class).getInt("OptionsX", Integer.MAX_VALUE);//NOI18N
+        int y = NbPreferences.forModule(OptionsDisplayerImpl.class).getInt("OptionsY", Integer.MAX_VALUE);//NOI18N
+        if (x > screenBounds.getWidth() || y > screenBounds.getHeight()) {
+            return null;
+        } else {
+            return new Point(x, y);
+        }
+    }
+
     private static String loc (String key) {
         return NbBundle.getMessage (OptionsDisplayerImpl.class, key);
     }
@@ -166,18 +256,24 @@ public class OptionsDisplayerImpl {
         private OptionsPanel        optionsPanel;
         private JButton             bOK;
         private JButton             bClassic;
+        private JButton             btnExport;
+        private JButton             btnImport;
         
         
         OptionsPanelListener (
             DialogDescriptor    descriptor, 
             OptionsPanel        optionsPanel,
             JButton             bOK,
-            JButton             bClassic
+            JButton             bClassic,
+            JButton             btnExport,
+            JButton             btnImport
         ) {
             this.descriptor = descriptor;
             this.optionsPanel = optionsPanel;
             this.bOK = bOK;
             this.bClassic = bClassic;
+            this.btnExport = btnExport;
+            this.btnImport = btnImport;
         }
         
         public void propertyChange (PropertyChangeEvent ev) {
@@ -206,6 +302,7 @@ public class OptionsDisplayerImpl {
                 Dialog d = dialog;
                 dialog = null;
                 optionsPanel.cancel ();
+                bOK.setEnabled(true);
                 d.dispose ();                
             } else
             if (e.getSource () == bClassic) {
@@ -213,13 +310,13 @@ public class OptionsDisplayerImpl {
                 Dialog d = dialog;
                 dialog = null;
                 if (optionsPanel.isChanged ()) {
-                    Confirmation descriptor = new Confirmation (
+                    Confirmation confirmationDescriptor = new Confirmation (
                         loc ("CTL_Some_values_changed"), 
                         NotifyDescriptor.YES_NO_CANCEL_OPTION,
                         NotifyDescriptor.QUESTION_MESSAGE
                     );
                     Object result = DialogDisplayer.getDefault ().
-                        notify (descriptor);
+                        notify (confirmationDescriptor);
                     if (result == NotifyDescriptor.YES_OPTION) {
                         optionsPanel.save ();
                         d.dispose ();                        
@@ -236,9 +333,7 @@ public class OptionsDisplayerImpl {
                     optionsPanel.cancel ();
                 }
                 try {
-                    ClassLoader cl = (ClassLoader) Lookup.getDefault ().lookup (ClassLoader.class);
-                    Class<CallableSystemAction> clz = (Class<CallableSystemAction>)cl.loadClass("org.netbeans.core.actions.OptionsAction");
-                    CallableSystemAction a = SystemAction.findObject(clz, true);
+                    CallableSystemAction a = SystemAction.get(OptionsAction.class);
                     a.putValue ("additionalActionName", loc ("CTL_Modern"));
                     a.putValue ("optionsDialogTitle", loc ("CTL_Classic_Title"));
                     a.putValue ("additionalActionListener", new OpenOptionsListener ()
@@ -248,13 +343,18 @@ public class OptionsDisplayerImpl {
                     Exceptions.printStackTrace(ex);
                 }
             } // classic
+            else if (e.getSource() == btnExport) {
+                OptionsChooserPanel.showExportDialog();
+            } else if (e.getSource() == btnImport) {
+                OptionsChooserPanel.showImportDialog();
+            }
         }
     }
     
     private class MyWindowListener implements WindowListener {        
         private OptionsPanel optionsPanel;
         private Dialog originalDialog;
-        
+
                 
         MyWindowListener (OptionsPanel optionsPanel) {
             this.optionsPanel = optionsPanel;
@@ -265,6 +365,7 @@ public class OptionsDisplayerImpl {
             if (dialog == null) return;
             log.fine("Options Dialog - windowClosing "); //NOI18N
             optionsPanel.cancel ();
+            bOK.setEnabled(true);
             if (this.originalDialog == dialog) {
                 dialog = null;            
             }
@@ -272,6 +373,9 @@ public class OptionsDisplayerImpl {
 
         public void windowClosed(WindowEvent e) {
             optionsPanel.storeUserSize();
+            // store location of dialog
+            NbPreferences.forModule(OptionsDisplayerImpl.class).putInt("OptionsX", originalDialog.getX());//NOI18N
+            NbPreferences.forModule(OptionsDisplayerImpl.class).putInt("OptionsY", originalDialog.getY());//NOI18N
             if (optionsPanel.needsReinit()) {
                 synchronized (lookupListener) {
                     descriptorRef = new WeakReference<DialogDescriptor>(null);
@@ -309,9 +413,42 @@ public class OptionsDisplayerImpl {
         public void resultChanged(LookupEvent ev) {
             synchronized (lookupListener) {
                 descriptorRef = new WeakReference<DialogDescriptor>(null);
+                // #156947 - close dialog when categories change
+                if (dialog != null) {
+                    dialog.setVisible(false);
+                    dialog = null;
+                }
             }
         }
         
     }
+
+    /** 91106 - used to listen to default FS changes to update Advanced Options button. */
+    private class AdvancedOptionsListener implements FileChangeListener {
+
+        public void fileRenamed(FileRenameEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+
+        public void fileChanged(FileEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+
+        public void fileFolderCreated(FileEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+
+        public void fileDataCreated(FileEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            setVisibleAdvancedOptionsButton();
+        }
+    };
 }
 
