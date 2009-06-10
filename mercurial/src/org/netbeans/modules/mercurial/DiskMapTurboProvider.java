@@ -42,9 +42,7 @@ package org.netbeans.modules.mercurial;
 
 import org.netbeans.modules.turbo.TurboProvider;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
-import org.netbeans.modules.mercurial.Mercurial;
 import java.util.logging.Level;
 
 import java.io.*;
@@ -72,10 +70,21 @@ class DiskMapTurboProvider implements TurboProvider {
         initCacheStore();
     }
 
+    Map<File, FileInformation> getCachedValues() {
+        if (cachedValues != null) {
+            return cachedValues;
+        }
+        return Collections.emptyMap();
+    }
+
     synchronized Map<File, FileInformation>  getAllModifiedValues() {
-        if (cachedStoreSerial != storeSerial || cachedValues == null) {
+        if (modifiedFilesChanged() || cachedValues == null) {
             cachedValues = new HashMap<File, FileInformation>();
             File [] files = cacheStore.listFiles();
+            if(files == null) {
+                cachedValues = Collections.unmodifiableMap(cachedValues);
+                return cachedValues;
+            }
             for (int i = 0; i < files.length; i++) {
                 File file = files[i];
                 if (file.getName().endsWith(".bin") == false) { // NOI18N
@@ -124,7 +133,7 @@ class DiskMapTurboProvider implements TurboProvider {
         }
         return cachedValues;
     }
-
+    
     public boolean recognizesAttribute(String name) {
         return DiskMapTurboProvider.ATTR_STATUS_MAP.equals(name);
     }
@@ -267,6 +276,10 @@ class DiskMapTurboProvider implements TurboProvider {
         return true;
     }
 
+    boolean modifiedFilesChanged() {
+        return cachedStoreSerial != storeSerial;
+    }
+
     private void skip(InputStream is, long len) throws IOException {
         while (len > 0) {
             long n = is.skip(len);
@@ -341,7 +354,7 @@ class DiskMapTurboProvider implements TurboProvider {
         if (userDir != null) {
             cacheStore = new File(new File(new File (userDir, "var"), "cache"), DiskMapTurboProvider.CACHE_DIRECTORY); // NOI18N
         } else {
-            File cachedir = FileUtil.toFile(Repository.getDefault().getDefaultFileSystem().getRoot());
+            File cachedir = FileUtil.toFile(FileUtil.getConfigRoot());
             cacheStore = new File(cachedir, DiskMapTurboProvider.CACHE_DIRECTORY); // NOI18N
         }
         cacheStore.mkdirs();
