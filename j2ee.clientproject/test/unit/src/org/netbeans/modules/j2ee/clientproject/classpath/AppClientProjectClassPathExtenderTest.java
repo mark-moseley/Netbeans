@@ -47,8 +47,9 @@ import org.netbeans.api.project.ProjectManager;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.modules.j2ee.clientproject.api.AppClientProjectGenerator;
 import org.netbeans.modules.j2ee.clientproject.test.TestUtil;
-import org.netbeans.modules.j2ee.clientproject.ui.customizer.AppClientProjectProperties;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.impl.ServerRegistry;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.filesystems.FileChangeAdapter;
@@ -57,6 +58,7 @@ import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.Exceptions;
+import org.openide.util.test.MockLookup;
 
 /**
  *
@@ -64,7 +66,6 @@ import org.openide.util.Exceptions;
  */
 public class AppClientProjectClassPathExtenderTest extends NbTestCase {
 
-    private String serverID;
     private FileObject workDir;
 
     public AppClientProjectClassPathExtenderTest(String testName) {
@@ -75,13 +76,14 @@ public class AppClientProjectClassPathExtenderTest extends NbTestCase {
     protected void setUp() throws Exception {
         super.setUp();
         workDir = TestUtil.makeScratchDir(this);
-        serverID = TestUtil.registerSunAppServer(this);
+
+        MockLookup.setLayersAndInstances();
     }
 
     public void testPropertyChangeDeadlock74204() throws Exception {
         File prjDirF = new File(FileUtil.toFile(workDir), "test");
         AntProjectHelper helper = AppClientProjectGenerator.createProject(prjDirF, "test-project",
-                "test.MyMain", J2eeModule.JAVA_EE_5, serverID);
+                "test.MyMain", J2eeModule.JAVA_EE_5, TestUtil.SERVER_URL);
         final Project project = ProjectManager.getDefault().findProject(helper.getProjectDirectory());
         
         final Object privateLock = new Object();
@@ -123,7 +125,7 @@ public class AppClientProjectClassPathExtenderTest extends NbTestCase {
         
         EditableProperties ep = new EditableProperties();
         
-        ep.put(AppClientProjectProperties.JAVAC_CLASSPATH, "y");
+        ep.put(ProjectProperties.JAVAC_CLASSPATH, "y");
         
         helper.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
     }
