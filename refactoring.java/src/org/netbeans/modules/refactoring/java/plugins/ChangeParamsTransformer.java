@@ -45,29 +45,60 @@ import org.netbeans.modules.refactoring.java.spi.RefactoringVisitor;
 import com.sun.source.tree.*;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreePath;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.*;
+import org.netbeans.api.java.source.ClassIndex;
+import org.netbeans.api.java.source.ClassIndex.NameKind;
 import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.SourceUtils;
 import org.netbeans.modules.refactoring.java.api.ChangeParametersRefactoring;
 import org.netbeans.modules.refactoring.java.api.ChangeParametersRefactoring.ParameterInfo;
+import org.openide.util.Exceptions;
 
 /**
+ * <b>!!! Do not use {@link Element} parameter of visitXXX methods. Use {@link #allMethods} instead!!!</b>
  *
  * @author Jan Becicka
  */
 public class ChangeParamsTransformer extends RefactoringVisitor {
 
     private Set<ElementHandle<ExecutableElement>> allMethods;
+    /** refactored element is a synthetic default constructor */
+    private boolean synthConstructor;
+    /**
+     * refactored element is a constructor; {@code null} if it is has not been initialized yet
+     * @see #init()
+     */
+    private Boolean constructorRefactoring;
 
     public ChangeParamsTransformer(ChangeParametersRefactoring refactoring, Set<ElementHandle<ExecutableElement>> am) {
         this.refactoring = refactoring;
         this.allMethods = am;
+    }
+
+    private void init() {
+        if (constructorRefactoring == null) {
+            ElementHandle<ExecutableElement> handle = allMethods.iterator().next();
+            constructorRefactoring = handle.getKind() == ElementKind.CONSTRUCTOR;
+            Element el;
+            synthConstructor = constructorRefactoring
+                    && (el = handle.resolve(workingCopy)) != null
+                    && workingCopy.getElementUtilities().isSynthetic(el);
+        }
+    }
+
+    @Override
+    public Tree visitCompilationUnit(CompilationUnitTree node, Element p) {
+        init();
+        return super.visitCompilationUnit(node, p);
     }
     
     @Override
@@ -92,24 +123,32 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
     private List<ExpressionTree> getNewArguments(List<? extends ExpressionTree> currentArguments) {
         List<ExpressionTree> arguments = new ArrayList();
         ParameterInfo[] pi = refactoring.getParameterInfo();
-        for (int i=0; i<pi.length; i++) {
+        for (int i = 0; i < pi.length; i++) {
             int originalIndex = pi[i].getOriginalIndex();
             ExpressionTree vt;
-            if (originalIndex <0) {
+            if (originalIndex < 0) {
                 String value = pi[i].getDefaultValue();
                 SourcePositions pos[] = new SourcePositions[1];
                 vt = workingCopy.getTreeUtilities().parseExpression(value, pos);
             } else {
-                vt = currentArguments.get(pi[i].getOriginalIndex());
+                if (i == pi.length - 1 && pi[i].getType().endsWith("...")) { // NOI18N
+                    // last param is vararg, so copy all remaining arguments
+                    for (int j = originalIndex; j < currentArguments.size(); j++) {
+                        arguments.add(currentArguments.get(j));
+                    }
+                    break;
+                } else {
+                    vt = currentArguments.get(originalIndex);
+                }
             }
             arguments.add(vt);
         }
         return arguments;
     }
-    
 
+    @Override
     public Tree visitMethodInvocation(MethodInvocationTree tree, Element p) {
-        if (!workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
+        if (constructorRefactoring || !workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
             Element el = workingCopy.getTrees().getElement(getCurrentPath());
             if (el!=null) {
                 if (isMethodMatch(el)) {
@@ -119,13 +158,49 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
                             (List<ExpressionTree>)tree.getTypeArguments(),
                             tree.getMethodSelect(),
                             arguments);
-                    rewrite(tree, nju);
+                    
+                    if (constructorRefactoring && workingCopy.getTreeUtilities().isSynthetic(getCurrentPath())) {
+                        rewriteSyntheticConstructor(nju);
+                    } else {
+                        // rewrite existing super(); statement
+                        rewrite(tree, nju);
+                    }
                 }
             }
         }
         return super.visitMethodInvocation(tree, p);
     }
-    
+
+    /** workaround to rewrite synthetic super(); statement */
+    private void rewriteSyntheticConstructor(MethodInvocationTree nju) {
+        TreePath constructorPath = getCurrentPath();
+        while (constructorPath != null && constructorPath.getLeaf().getKind() != Tree.Kind.METHOD) {
+            constructorPath = constructorPath.getParentPath();
+        }
+        if (constructorPath != null) {
+            MethodTree constrTree = (MethodTree) constructorPath.getLeaf();
+            BlockTree body = constrTree.getBody();
+            body = make.removeBlockStatement(body, 0);
+            body = make.insertBlockStatement(body, 0, make.ExpressionStatement(nju));
+            if (workingCopy.getTreeUtilities().isSynthetic(constructorPath)) {
+                // in case of synthetic default constructor declaration the whole constructor has to be rewritten
+                MethodTree njuConstructor = make.Method(
+                        make.Modifiers(constrTree.getModifiers().getFlags(),
+                        constrTree.getModifiers().getAnnotations()),
+                        constrTree.getName(),
+                        constrTree.getReturnType(),
+                        constrTree.getTypeParameters(),
+                        constrTree.getParameters(),
+                        constrTree.getThrows(),
+                        body,
+                        (ExpressionTree) constrTree.getDefaultValue());
+                rewrite(constrTree, njuConstructor);
+            } else {
+                // declared default constructor => body rewrite is sufficient
+                rewrite(constrTree.getBody(), body);
+            }
+        }
+    }
     
     @Override
     public Tree visitMethod(MethodTree tree, Element p) {
@@ -135,14 +210,14 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
 
     ChangeParametersRefactoring refactoring;
     private void renameDeclIfMatch(TreePath path, Tree tree, Element elementToFind) {
-        if (workingCopy.getTreeUtilities().isSynthetic(path))
+        if (!synthConstructor && workingCopy.getTreeUtilities().isSynthetic(path))
             return;
         MethodTree current = (MethodTree) tree;
         Element el = workingCopy.getTrees().getElement(path);
         if (isMethodMatch(el)) {
             
             List<? extends VariableTree> currentParameters = current.getParameters();
-            List<VariableTree> newParameters = new ArrayList();
+            List<VariableTree> newParameters = new ArrayList<VariableTree>();
             
             ParameterInfo[] p = refactoring.getParameterInfo();
             for (int i=0; i<p.length; i++) {
@@ -161,6 +236,54 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
             }
             ClassTree enclosingClass = (ClassTree) workingCopy.getTrees().getTree(el.getEnclosingElement());                                
             if(workingCopy.getTreeUtilities().isInterface(enclosingClass)) modifiers.remove(Modifier.ABSTRACT);
+
+            //Compute new imports
+            for (VariableTree vt : newParameters) {
+                Set<ElementHandle<TypeElement>> declaredTypes = workingCopy.getClasspathInfo().getClassIndex().getDeclaredTypes(vt.getType().toString(), NameKind.SIMPLE_NAME, EnumSet.allOf(ClassIndex.SearchScope.class));
+                Set<ElementHandle<TypeElement>> declaredTypesMirr = new HashSet<ElementHandle<TypeElement>>(declaredTypes);
+                TypeElement type = null;
+
+                //remove private types
+                //TODO: and possibly package private?
+                for (ElementHandle<TypeElement> typeName : declaredTypes) {
+                    TypeElement te = workingCopy.getElements().getTypeElement(typeName.getQualifiedName());
+
+                    if (te == null) {
+                        Logger.getLogger(ChangeParamsTransformer.class.getName()).log(Level.INFO, "Cannot resolve type element \"" + typeName + "\".");
+                        continue;
+                    }
+                    if (te.getModifiers().contains(Modifier.PRIVATE)) {
+                        declaredTypesMirr.remove(typeName);
+                    }
+
+                }
+
+                if (declaredTypesMirr.size() == 1) { //creates import if there is just one proposed type
+                    ElementHandle<TypeElement> typeName = declaredTypesMirr.iterator().next();
+                    TypeElement te = workingCopy.getElements().getTypeElement(typeName.getQualifiedName());
+
+                    if (te == null) {
+                        Logger.getLogger(ChangeParamsTransformer.class.getName()).log(Level.INFO, "Cannot resolve type element \"" + typeName + "\".");
+                        continue;
+                    }
+                    type = te;
+                }
+
+                if (type != null) {
+                    PackageElement packageOf = workingCopy.getElements().getPackageOf(type);
+                    if (packageOf.getQualifiedName().toString().equals("java.lang")) {
+                        continue;
+                    }
+                    try {
+                        SourceUtils.resolveImport(workingCopy, path, type.getQualifiedName().toString());
+                    } catch (NullPointerException ex) {
+                        Exceptions.printStackTrace(ex);
+                    } catch (IOException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
+                }
+            }
+
             MethodTree nju = make.Method(
                     make.Modifiers(modifiers, current.getModifiers().getAnnotations()),
                     current.getName(),
@@ -171,10 +294,11 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
                     current.getBody(),
                     (ExpressionTree) current.getDefaultValue());
             rewrite(tree, nju);
+
             return;
         }
     }
-    
+
     private boolean isMethodMatch(Element method) {
         if ((method.getKind() == ElementKind.METHOD || method.getKind() == ElementKind.CONSTRUCTOR) && allMethods !=null) {
             for (ElementHandle<ExecutableElement> mh: allMethods) {
@@ -183,7 +307,7 @@ public class ChangeParamsTransformer extends RefactoringVisitor {
                     Logger.getLogger("org.netbeans.modules.refactoring.java").info("ChangeParamsTransformer cannot resolve " + mh);
                     continue;
                 }
-                if (baseMethod.equals(method) || workingCopy.getElements().overrides((ExecutableElement)method, baseMethod, SourceUtils.getEnclosingTypeElement(baseMethod))) {
+                if (baseMethod.equals(method) || workingCopy.getElements().overrides((ExecutableElement)method, baseMethod, workingCopy.getElementUtilities().enclosingTypeElement(baseMethod))) {
                     return true;
                 }
             }
