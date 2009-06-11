@@ -54,12 +54,17 @@ import antlr.*;
 import antlr.collections.*;
 import antlr.debug.misc.*;
 import org.netbeans.modules.cnd.apt.support.APTMacroCallback;
+import org.netbeans.modules.cnd.apt.support.APTBaseToken;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 }
 
 options {
 	language = "Java"; // NOI18N
 } 
 
+{
+@SuppressWarnings({"unchecked", "cast", "fallthrough"})
+}
 class APTExprParser extends Parser;
 
 options {
@@ -75,13 +80,14 @@ options {
     private APTMacroCallback callback = null;
     
     public APTExprParser(TokenStream lexer, APTMacroCallback callback) {
-        this(lexer,1);
+        super(lexer, 1, 16);
+        tokenNames = _tokenNames;
         this.callback = callback;
     }
 
     private boolean isDefined(Token id) {
         if (id != null && callback != null) {
-            return callback.isDefined(id);
+            return callback.isDefined((APTToken)id);
         }
         return false;
     }
@@ -90,8 +96,11 @@ options {
         return r == 0 ? false : true;
     }
 
+    // Fixup: workaround is added due to bug in jdk6 Update 10 (see IZ#150693)
+    private static long one = 1;
+    private static long zero = 0;
     private long toLong(boolean b) {
-        return b ? 1 : 0;
+        return b ? one : zero;
     }
 
     private long toLong(String str) {
@@ -206,8 +215,8 @@ class APTExpressionWalker extends TreeParser;
         return false;
     }
 
-    private Token astToken = new CommonToken();
-    private Token getToken(AST ast) {
+    private APTToken astToken = new APTBaseToken();
+    private APTToken getToken(AST ast) {
         astToken.setType(ast.getType());
         astToken.setText(ast.getText());
         return astToken;
