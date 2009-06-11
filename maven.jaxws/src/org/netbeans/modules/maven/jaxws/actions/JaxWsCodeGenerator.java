@@ -38,7 +38,7 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.websvc.core.jaxws.actions;
+package org.netbeans.modules.maven.jaxws.actions;
 
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.ClassTree;
@@ -66,7 +66,6 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
-import javax.swing.JEditorPane;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.StyledDocument;
@@ -74,10 +73,10 @@ import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.TreeMaker;
-import org.netbeans.modules.j2ee.api.ejbjar.Car;
+import org.netbeans.modules.editor.indent.api.Indent;
+import org.netbeans.modules.maven.jaxws.nodes.OperationNode;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
-import org.netbeans.modules.websvc.api.support.InvokeOperationCookie;
-import org.openide.util.Lookup;
+import org.netbeans.modules.websvc.jaxws.light.api.JaxWsService;
 import org.openide.util.RequestProcessor;
 import static org.netbeans.api.java.source.JavaSource.Phase;
 import static com.sun.source.tree.Tree.Kind.*;
@@ -89,23 +88,16 @@ import org.netbeans.modules.editor.NbEditorUtilities;
 import org.netbeans.modules.j2ee.common.queries.api.InjectionTargetQuery;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
-import org.netbeans.modules.websvc.api.jaxws.project.config.Client;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlOperation;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlParameter;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlService;
-import org.netbeans.modules.websvc.core.JaxWsUtils;
-import org.netbeans.modules.websvc.core.jaxws.nodes.OperationNode;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
 import org.openide.NotifyDescriptor;
-import org.openide.cookies.EditorCookie;
 import org.openide.filesystems.FileObject;
-import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
-import org.openide.text.IndentEngine;
 import org.openide.text.NbDocument;
-import org.openide.util.Exceptions;
 import org.openide.util.NbBundle;
 
 /** JaxWsCodeGenerator.java
@@ -334,56 +326,55 @@ public class JaxWsCodeGenerator {
             "    %>\n" + //NOI18N
             "    <%-- end web service invocation --%><hr/>\n"; //NOI18N
 
-    public static void insertMethodCall(InvokeOperationCookie.TargetSourceType targetSourceType,
-            DataObject dataObj, Lookup sourceNodeLookup) {
+//    public static void insertMethodCall(int targetSourceType, DataObject dataObj, Node sourceNode, Node operationNode) {
+//        EditorCookie cookie = sourceNode.getCookie(EditorCookie.class);
+//        OperationNode opNode = operationNode.getLookup().lookup(OperationNode.class);
+//        boolean inJsp = InvokeOperationCookie.TARGET_SOURCE_JSP == targetSourceType;
+//        Node portNode = operationNode.getParentNode();
+//        Node serviceNode = portNode.getParentNode();
+////        addProjectReference(serviceNode, sourceNode);
+//        final Document document;
+//        int position = -1;
+//        if (inJsp) {
+//            //TODO:
+//            //this should be handled differently, see issue 60609
+//            document = cookie.getDocument();
+//            try {
+//                String content = document.getText(0, document.getLength());
+//                position = content.lastIndexOf("</body>"); //NOI18N
+//                if (position < 0) {
+//                    position = content.lastIndexOf("</html>"); //NOI18N
+//                }
+//                if (position >= 0) { //find where line begins
+//                    while (position > 0 && content.charAt(position - 1) != '\n' && content.charAt(position - 1) != '\r') {
+//                        position--;
+//                    }
+//                } else {
+//                    position = document.getLength();
+//                }
+//            } catch (BadLocationException ble) {
+//                Exceptions.printStackTrace(ble);
+//            }
+//        } else {
+//            EditorCookie ec = dataObj.getCookie(EditorCookie.class);
+//            JEditorPane pane = ec.getOpenedPanes()[0];
+//            document = pane.getDocument();
+//            position = pane.getCaretPosition();
+//        }
+//        final int pos = position;
+//        insertMethod(document, pos, opNode);
+//    }
 
-        EditorCookie cookie = dataObj.getCookie(EditorCookie.class);
-        OperationNode opNode = sourceNodeLookup.lookup(OperationNode.class);
-        boolean inJsp = InvokeOperationCookie.TargetSourceType.JSP == targetSourceType;
-        Node portNode = opNode.getParentNode();
-        Node serviceNode = portNode.getParentNode();
-        addProjectReference(serviceNode, dataObj);
-        final Document document;
-        int position = -1;
-        if (inJsp) {
-            //TODO:
-            //this should be handled differently, see issue 60609
-            document = cookie.getDocument();
-            try {
-                String content = document.getText(0, document.getLength());
-                position = content.lastIndexOf("</body>"); //NOI18N
-                if (position < 0) {
-                    position = content.lastIndexOf("</html>"); //NOI18N
-                }
-                if (position >= 0) { //find where line begins
-                    while (position > 0 && content.charAt(position - 1) != '\n' && content.charAt(position - 1) != '\r') {
-                        position--;
-                    }
-                } else {
-                    position = document.getLength();
-                }
-            } catch (BadLocationException ble) {
-                Exceptions.printStackTrace(ble);
-            }
-        } else {
-            EditorCookie ec = dataObj.getCookie(EditorCookie.class);
-            JEditorPane pane = ec.getOpenedPanes()[0];
-            document = pane.getDocument();
-            position = pane.getCaretPosition();
-        }
-        final int pos = position;
-        insertMethod(document, pos, opNode);
-    }
-
-    private static void addProjectReference(Node serviceNode, DataObject dObj) {
-        Node clientNode = serviceNode.getParentNode();
-        FileObject srcRoot = clientNode.getLookup().lookup(FileObject.class);
-        Project clientProject = FileOwnerQuery.getOwner(srcRoot);
-        if (dObj != null) {
-            FileObject targetFo = dObj.getPrimaryFile();
-            JaxWsUtils.addProjectReference(clientProject, targetFo);
-        }
-    }
+//    private static void addProjectReference(Node serviceNode, Node sourceNode) {
+//        Node clientNode = serviceNode.getParentNode();
+//        FileObject srcRoot = clientNode.getLookup().lookup(FileObject.class);
+//        Project clientProject = FileOwnerQuery.getOwner(srcRoot);
+//        DataObject dObj = sourceNode.getCookie(DataObject.class);
+//        if (dObj != null) {
+//            FileObject targetFo = dObj.getPrimaryFile();
+//            JaxWsUtils.addProjectReference(clientProject, targetFo);
+//        }
+//    }
 
     /**
      * Determines the initialization value of a variable of type "type"
@@ -442,12 +433,10 @@ public class JaxWsCodeGenerator {
             return;
         }
         JavaSource targetSource = JavaSource.forFileObject(targetFile);
-
         if (targetSource == null) {
             result.setResult("null;"); //NOI18N
             return;
         }
-        
         CancellableTask<CompilationController> task = new CancellableTask<CompilationController>() {
 
             public void run(CompilationController controller) throws IOException {
@@ -539,15 +528,15 @@ public class JaxWsCodeGenerator {
         WsdlOperation operation = operationNode.getLookup().lookup(WsdlOperation.class);
         WsdlPort port = portNode.getLookup().lookup(WsdlPort.class);
         WsdlService service = serviceNode.getLookup().lookup(WsdlService.class);
-        Client client = wsdlNode.getLookup().lookup(Client.class);
+        JaxWsService client = wsdlNode.getLookup().lookup(JaxWsService.class);
 
         String wsdlUrl = findWsdlLocation(client, NbEditorUtilities.getFileObject(document));
         
-        if (client.getUseDispatch()) {
-            insertDispatchMethod(document, pos, service, port, operation, wsdlUrl);
-        } else {
+//        if (client.getUseDispatch()) {
+//            insertDispatchMethod(document, pos, service, port, operation, wsdlUrl);
+//        } else {
             insertMethod(document, pos, service, port, operation, wsdlUrl);
-        }
+//        }
     }
 
     public static void insertMethod(final Document document, final int pos,
@@ -635,6 +624,13 @@ public class JaxWsCodeGenerator {
                     });
                 } else {
                     document.insertString(pos, invocationBody, null);
+                                Indent indent = Indent.get(document);
+                    indent.lock();
+                    try {
+                        indent.reindent(pos, pos+invocationBody.length());
+                    } finally {
+                        indent.unlock();
+                    }
                 }
 
 
@@ -661,9 +657,9 @@ public class JaxWsCodeGenerator {
             targetSource.runUserActionTask(task, true);
 
             // create & format inserted text
-            IndentEngine eng = IndentEngine.find(document);
-            StringWriter textWriter = new StringWriter();
-            Writer indentWriter = eng.createWriter(document, pos, textWriter);
+//            IndentEngine eng = IndentEngine.find(document);
+//            StringWriter textWriter = new StringWriter();
+//            Writer indentWriter = eng.createWriter(document, pos, textWriter);
 
             // create the inserted text
             String invocationBody = task.getJavaInvocationBody(
@@ -674,14 +670,27 @@ public class JaxWsCodeGenerator {
                     operationJavaName,
                     respType);
 
-            indentWriter.write(invocationBody);
-            indentWriter.close();
-            String textToInsert = textWriter.toString();
+//            indentWriter.write(invocationBody);
+//            indentWriter.close();
+//            String textToInsert = textWriter.toString();
 
+//            try {
+//                document.insertString(pos, textToInsert, null);
+//            } catch (BadLocationException badLoc) {
+//                document.insertString(pos + 1, textToInsert, null);
+//            }
+            
             try {
-                document.insertString(pos, textToInsert, null);
+                document.insertString(pos, invocationBody, null);
             } catch (BadLocationException badLoc) {
-                document.insertString(pos + 1, textToInsert, null);
+                document.insertString(pos + 1, invocationBody, null);
+            }            
+            Indent indent = Indent.get(document);
+            indent.lock();
+            try {
+                indent.reindent(pos, pos+invocationBody.length());
+            } finally {
+                indent.unlock();
             }
 
             // @insert WebServiceRef injection
@@ -696,13 +705,13 @@ public class JaxWsCodeGenerator {
         }
     }
 
-    private static String findWsdlLocation(Client client, FileObject targetFo) {
+    private static String findWsdlLocation(JaxWsService client, FileObject targetFo) {
         Project targetProject = FileOwnerQuery.getOwner(targetFo);
         J2eeModuleProvider moduleProvider = targetProject.getLookup().lookup(J2eeModuleProvider.class);
         if (moduleProvider != null && J2eeModule.Type.WAR.equals(moduleProvider.getJ2eeModule().getType())) {
-            return "WEB-INF/wsdl/" + client.getLocalWsdlFile(); //NOI18N
+            return "WEB-INF/wsdl/"+ client.getLocalWsdl(); //NOI18N
         } else {
-            return "META-INF/wsdl/" + client.getLocalWsdlFile(); //NOI18N
+            return "META-INF/wsdl/"+client.getLocalWsdl(); //NOI18N
         }
     }
 
@@ -755,11 +764,11 @@ public class JaxWsCodeGenerator {
                 ClassTree javaClass = controller.getTrees().getTree(thisTypeEl);
                 // find if class is Injection Target
                 generateWsRefInjection[0] = InjectionTargetQuery.isInjectionTarget(controller, thisTypeEl);
-                if (generateWsRefInjection[0]) {
-                    // issue 126014 : check if J2EE Container supports EJBs (e.g. Tomcat 6 doesn't)
-                    Project project = FileOwnerQuery.getOwner(controller.getFileObject());
-                    generateWsRefInjection[0] = JaxWsUtils.isEjbSupported(project);
-                }
+//                if (generateWsRefInjection[0]) {
+//                    // issue 126014 : check if J2EE Container supports EJBs (e.g. Tomcat 6 doesn't)
+//                    Project project = FileOwnerQuery.getOwner(controller.getFileObject());
+//                    generateWsRefInjection[0] = JaxWsUtils.isEjbSupported(project);
+//                }
 
                 insertServiceDef[0] = !generateWsRefInjection[0];
                 if (isServletClass(controller, thisTypeEl)) {
@@ -921,9 +930,9 @@ public class JaxWsCodeGenerator {
                 // create field modifier: private(static) with @WebServiceRef annotation
                 FileObject targetFo = workingCopy.getFileObject();
                 Set<Modifier> modifiers = new HashSet<Modifier>();
-                if (Car.getCar(targetFo) != null) {
-                    modifiers.add(Modifier.STATIC);
-                }
+//                if (Car.getCar(targetFo) != null) {
+//                    modifiers.add(Modifier.STATIC);
+//                }
                 modifiers.add(Modifier.PRIVATE);
                 ModifiersTree methodModifiers = make.Modifiers(
                         modifiers,
@@ -932,8 +941,7 @@ public class JaxWsCodeGenerator {
                 VariableTree serviceRefInjection = make.Variable(
                 methodModifiers,
                 serviceFName,
-                (typeElement != null ?
-                    make.Type(typeElement.asType()) : make.Identifier(serviceJavaName)),
+                make.Type(typeElement.asType()),
                 null);
                 
                 ClassTree modifiedClass = make.insertClassMember(javaClass, 0, serviceRefInjection);
@@ -1176,69 +1184,69 @@ public class JaxWsCodeGenerator {
     }
 
 
-    public static void insertDispatchMethod(final Document document, final int pos,
-            WsdlService service, WsdlPort port, WsdlOperation operation, String wsdlUrl) {
-        boolean inJsp = "text/x-jsp".equals(document.getProperty("mimeType")); //NOI18N
-        if (inJsp) {
-            Object[] args = new Object[]{service.getJavaName(), port.getNamespaceURI(), port.getJavaName(), generateXMLMessage(port, operation)};
-            final String invocationBody = getJSPDispatchBody(args);
-            try {
-                document.insertString(pos, invocationBody, null);
-            } catch (javax.swing.text.BadLocationException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return;
-        }
-        try {
-
-            final FileObject targetFo = NbEditorUtilities.getFileObject(document);
-            JavaSource targetSource = JavaSource.forFileObject(targetFo);
-
-            String serviceJavaName = service.getJavaName();
-            String[] serviceFName = new String[]{"service"};
-            String[] argumentDeclPart = new String[]{""};
-            String[] argumentInitPart = new String[]{""};
-            CompilerTask compilerTask = new CompilerTask(serviceJavaName, serviceFName, argumentDeclPart, argumentInitPart);
-            targetSource.runUserActionTask(compilerTask, true);
-
-
-            IndentEngine eng = IndentEngine.find(document);
-            StringWriter textWriter = new StringWriter();
-            Writer indentWriter = eng.createWriter(document, pos, textWriter);
-
-            if (compilerTask.containsWsRefInjection()) { //if in J2SE
-                Object[] args = new Object[]{service.getJavaName(), null, null, null, null, null, null, "service"}; //TODO: compute proper var name
-                String serviceDeclForJava = MessageFormat.format(JAVA_SERVICE_DEF, args);
-                indentWriter.write(serviceDeclForJava);
-            }
-            // create the inserted text
-            String invocationBody = getDispatchInvocationMethod(port, operation);
-            indentWriter.write(invocationBody);
-            indentWriter.close();
-            String textToInsert = textWriter.toString();
-
-            try {
-                document.insertString(pos, textToInsert, null);
-            } catch (BadLocationException badLoc) {
-                try {
-                    document.insertString(pos + 1, textToInsert, null);
-                } catch (BadLocationException ex) {
-                    ErrorManager.getDefault().notify(ex);
-                }
-            }
-
-            // @insert WebServiceRef injection
-            if (!compilerTask.containsWsRefInjection()) {
-                InsertTask modificationTask = new InsertTask(serviceJavaName, serviceFName[0], wsdlUrl);
-                targetSource.runModificationTask(modificationTask).commit();
-            }
-
-            DispatchCompilerTask task = new DispatchCompilerTask();
-            targetSource.runModificationTask(task).commit();
-
-
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-    }
+//    public static void insertDispatchMethod(final Document document, final int pos,
+//            WsdlService service, WsdlPort port, WsdlOperation operation, String wsdlUrl) {
+//        boolean inJsp = "text/x-jsp".equals(document.getProperty("mimeType")); //NOI18N
+//        if (inJsp) {
+//            Object[] args = new Object[]{service.getJavaName(), port.getNamespaceURI(), port.getJavaName(), generateXMLMessage(port, operation)};
+//            final String invocationBody = getJSPDispatchBody(args);
+//            try {
+//                document.insertString(pos, invocationBody, null);
+//            } catch (javax.swing.text.BadLocationException ex) {
+//                ErrorManager.getDefault().notify(ex);
+//            }
+//            return;
+//        }
+//        try {
+//
+//            final FileObject targetFo = NbEditorUtilities.getFileObject(document);
+//            JavaSource targetSource = JavaSource.forFileObject(targetFo);
+//
+//            String serviceJavaName = service.getJavaName();
+//            String[] serviceFName = new String[]{"service"};
+//            String[] argumentDeclPart = new String[]{""};
+//            String[] argumentInitPart = new String[]{""};
+//            CompilerTask compilerTask = new CompilerTask(serviceJavaName, serviceFName, argumentDeclPart, argumentInitPart);
+//            targetSource.runUserActionTask(compilerTask, true);
+//
+//
+//            IndentEngine eng = IndentEngine.find(document);
+//            StringWriter textWriter = new StringWriter();
+//            Writer indentWriter = eng.createWriter(document, pos, textWriter);
+//
+//            if (compilerTask.containsWsRefInjection()) { //if in J2SE
+//                Object[] args = new Object[]{service.getJavaName(), null, null, null, null, null, null, "service"}; //TODO: compute proper var name
+//                String serviceDeclForJava = MessageFormat.format(JAVA_SERVICE_DEF, args);
+//                indentWriter.write(serviceDeclForJava);
+//            }
+//            // create the inserted text
+//            String invocationBody = getDispatchInvocationMethod(port, operation);
+//            indentWriter.write(invocationBody);
+//            indentWriter.close();
+//            String textToInsert = textWriter.toString();
+//
+//            try {
+//                document.insertString(pos, textToInsert, null);
+//            } catch (BadLocationException badLoc) {
+//                try {
+//                    document.insertString(pos + 1, textToInsert, null);
+//                } catch (BadLocationException ex) {
+//                    ErrorManager.getDefault().notify(ex);
+//                }
+//            }
+//
+//            // @insert WebServiceRef injection
+//            if (!compilerTask.containsWsRefInjection()) {
+//                InsertTask modificationTask = new InsertTask(serviceJavaName, serviceFName[0], wsdlUrl);
+//                targetSource.runModificationTask(modificationTask).commit();
+//            }
+//
+//            DispatchCompilerTask task = new DispatchCompilerTask();
+//            targetSource.runModificationTask(task).commit();
+//
+//
+//        } catch (IOException ex) {
+//            Exceptions.printStackTrace(ex);
+//        }
+//    }
 }

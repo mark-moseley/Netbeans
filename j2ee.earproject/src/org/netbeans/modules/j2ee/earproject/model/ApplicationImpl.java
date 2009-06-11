@@ -55,6 +55,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ant.AntArtifact;
+import org.netbeans.modules.java.api.common.classpath.ClassPathSupport;
 import org.netbeans.modules.j2ee.dd.api.application.Application;
 import org.netbeans.modules.j2ee.dd.api.application.Module;
 import org.netbeans.modules.j2ee.dd.api.application.Web;
@@ -68,8 +69,8 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.earproject.EarProject;
 import org.netbeans.modules.j2ee.earproject.model.WebImpl;
+import org.netbeans.modules.j2ee.earproject.ui.customizer.CustomizerRun;
 import org.netbeans.modules.j2ee.earproject.ui.customizer.EarProjectProperties;
-import org.netbeans.modules.j2ee.earproject.ui.customizer.VisualClassPathItem;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.openide.filesystems.FileObject;
 import org.openide.util.Exceptions;
@@ -131,27 +132,23 @@ public class ApplicationImpl implements Application {
             return modules;
         }
         
-        EarProjectProperties epp = earProject.getProjectProperties();
-        List<VisualClassPathItem> vcpis = epp.getJarContentAdditional();
+        List<ClassPathSupport.Item> vcpis = EarProjectProperties.getJarContentAdditional(earProject);
         modules = new ArrayList<Module>(vcpis.size());
-        for (VisualClassPathItem vcpi : vcpis) {
+        for (ClassPathSupport.Item vcpi : vcpis) {
             addModuleFromVcpi(vcpi);
         }
         
         return modules;
     }
     
-    private void addModuleFromVcpi(VisualClassPathItem vcpi) {
-        Object obj = vcpi.getObject();
-        String path = vcpi.getCompletePathInArchive();
+    private void addModuleFromVcpi(ClassPathSupport.Item vcpi) {
         Module mod = null;
-        if (obj instanceof AntArtifact) {
-            mod = getModFromAntArtifact((AntArtifact) obj, path);
-        } else if (obj instanceof File) {
-           mod = getModFromFile((File) obj, path);
-        }
-        if (mod != null && mod.getWeb() != null) {
-            replaceEmptyClientModuleUri(path);
+        String path = EarProjectProperties.getCompletePathInArchive(earProject, vcpi);
+        if (vcpi.getType() == ClassPathSupport.Item.TYPE_ARTIFACT) {
+            mod = getModFromAntArtifact(vcpi.getArtifact(), path);
+            // TODO: init clientModule/appClient
+        } else if (vcpi.getType() == ClassPathSupport.Item.TYPE_JAR) {
+           mod = getModFromFile(vcpi.getResolvedFile(), path);
         }
         Module prevMod = searchForModule(path);
         if (prevMod == null && mod != null) {
@@ -177,9 +174,9 @@ public class ApplicationImpl implements Application {
                 return null;
             }
             
-            if (jm.getModuleType() == J2eeModule.EJB) {
+            if (J2eeModule.Type.EJB.equals(jm.getType())) {
                 ejb = path;
-            } else if (jm.getModuleType() == J2eeModule.WAR) {
+            } else if (J2eeModule.Type.WAR.equals(jm.getType())) {
                 FileObject tmp = aa.getScriptFile();
                 if (tmp != null) {
                     tmp = tmp.getParent().getFileObject("web/WEB-INF/web.xml"); // NOI18N
@@ -200,9 +197,9 @@ public class ApplicationImpl implements Application {
                     contextPath = path.substring(0, endex);
                 }
                 web = new WebImpl(path, contextPath);
-            } else if (jm.getModuleType() == J2eeModule.CONN) {
+            } else if (J2eeModule.Type.RAR.equals(jm.getType())) {
                 connector = path;
-            } else if (jm.getModuleType() == J2eeModule.CLIENT) {
+            } else if (J2eeModule.Type.CAR.equals(jm.getType())) {
                 car = path;
             }
             mod = new ModuleImpl(connector, ejb, car, web);
@@ -273,16 +270,6 @@ public class ApplicationImpl implements Application {
         return mod;
     }
     
-    private void replaceEmptyClientModuleUri(String path) {
-        // set the context path if it is not set...
-        EarProjectProperties epp = earProject.getProjectProperties();
-        Object current = epp.get(EarProjectProperties.CLIENT_MODULE_URI);
-        if (current == null
-                || (current instanceof String && ((String) current).length() == 0)) {
-            epp.put(EarProjectProperties.CLIENT_MODULE_URI, path);
-        }
-    }
-
     private Module searchForModule(String path) {
         assert path != null;
         

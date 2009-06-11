@@ -46,8 +46,6 @@ import java.awt.Component;
 import java.util.logging.Level;
 import javax.swing.JLabel;
 import java.awt.Container;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -57,41 +55,22 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import javax.swing.JComponent;
 import java.util.*;
-import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.queries.UnitTestForSourceQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.URLMapper;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.security.Key;
-import java.security.KeyStore;
-import java.security.cert.Certificate;
 import javax.xml.namespace.QName;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 import org.netbeans.modules.j2ee.dd.api.web.Servlet;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.websvc.jaxwsruntimemodel.JavaWsdlMapper;
-import org.netbeans.modules.websvc.wsitconf.ui.service.profiles.UsernameAuthenticationProfile;
-import org.netbeans.modules.websvc.wsitconf.ui.service.subpanels.KeystorePanel;
+import org.netbeans.modules.websvc.wsitconf.spi.WsitProvider;
 import org.netbeans.modules.xml.retriever.catalog.Utilities;
 import org.netbeans.modules.xml.wsdl.model.Binding;
 import org.netbeans.modules.xml.wsdl.model.BindingOperation;
@@ -100,37 +79,15 @@ import org.netbeans.modules.xml.wsdl.model.PortType;
 import org.netbeans.modules.xml.wsdl.model.WSDLComponentFactory;
 import org.netbeans.modules.xml.wsdl.model.WSDLModel;
 import org.netbeans.modules.xml.xam.ModelSource;
-import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
-import org.openide.loaders.DataFolder;
-import org.openide.loaders.DataObject;
-import org.openide.util.Exceptions;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
 
 public class Util {
-    private static final String LOGGER_GLOBAL = "global";
-    private static final String WSSIP = "wssip";
-    private static final String XWS_SECURITY_CLIENT = "xws-security-client";
-    private static final String XWS_SECURITY_SERVER = "xws-security-server";
 
-    private static final String SERVER_KEYSTORE_BUNDLED = "/org/netbeans/modules/websvc/wsitconf/resources/server-keystore.jks"; //NOI18N
-    private static final String SERVER_TRUSTSTORE_BUNDLED = "/org/netbeans/modules/websvc/wsitconf/resources/server-truststore.jks"; //NOI18N
-    private static final String CLIENT_KEYSTORE_BUNDLED = "/org/netbeans/modules/websvc/wsitconf/resources/client-keystore.jks"; //NOI18N
-    private static final String CLIENT_TRUSTSTORE_BUNDLED = "/org/netbeans/modules/websvc/wsitconf/resources/client-truststore.jks"; //NOI18N
+    public static final String MEX_CLASS_NAME = "com.sun.xml.ws.mex.server.MEXEndpoint";
+    public static final String MEX_NAME = "MEXEndpoint";
 
-    private static final String PASSWORD = "changeit";
-
-    private static final String STORE_FOLDER_NAME = "certs";
-    
-    public enum ProjectType {
-        WEB, EJB, CLIENT, UNKNOWN
-    };
-    
     private static final Logger logger = Logger.getLogger(Util.class.getName());
 
     /*
@@ -286,28 +243,6 @@ public class Util {
         return false;
     }
 
-    public static String getServerStoreLocation(Project project, boolean trust) {
-        String storeLocation = null;
-        J2eeModuleProvider mp = project.getLookup().lookup(J2eeModuleProvider.class);
-        if (mp != null) {
-            InstanceProperties ip = mp.getInstanceProperties();
-            if ("".equals(ip.getProperty("LOCATION"))) {    //NOI18N
-                return null;
-            }
-            
-            J2eePlatform j2eePlatform = getJ2eePlatform(project);
-            if (j2eePlatform != null) {
-                File[] keyLocs = null;
-                keyLocs = trust ? j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_TRUSTSTORE_CLIENT) :
-                                  j2eePlatform.getToolClasspathEntries(J2eePlatform.TOOL_KEYSTORE_CLIENT);
-                if ((keyLocs != null) && (keyLocs.length > 0)) {
-                    storeLocation = keyLocs[0].getAbsolutePath();
-                }
-            }
-        }
-        return storeLocation;
-    }
-    
     public static List<String> getAliases(String storePath, char[] password, String type) throws IOException {
         if ((storePath == null) || (type == null)) return null;
         FileInputStream iStream = null;
@@ -351,40 +286,6 @@ public class Util {
         return "";
     }
 
-    private static String getServerInstanceID(Project p) {
-        if (p != null) {
-            J2eeModuleProvider mp = p.getLookup().lookup(J2eeModuleProvider.class);
-            if (mp != null) {
-                return mp.getServerInstanceID();
-            }
-        }
-        return null;
-    }
-    
-    public static final boolean isWsitSupported(Project p) {
-
-        // check if the wsimport class is already present - this means we don't need to add the library
-        SourceGroup[] sgs = ProjectUtils.getSources(p).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-        ClassPath classPath = ClassPath.getClassPath(sgs[0].getRootFolder(),ClassPath.COMPILE);
-        FileObject wsimportFO = classPath.findResource("com/sun/xml/ws/policy/Policy.class"); // NOI18N
-        
-        if (wsimportFO == null) {
-            J2eePlatform j2eePlatform = getJ2eePlatform(p);
-            if (j2eePlatform != null) {
-                return j2eePlatform.isToolSupported(J2eePlatform.TOOL_WSIT); //NOI18N
-            }
-        }
-        return true;
-    }
-
-    public static J2eePlatform getJ2eePlatform(Project project) {
-        String serverInstanceID = getServerInstanceID(project);
-        if ((serverInstanceID != null) && (serverInstanceID.length() > 0)) {
-            return Deployment.getDefault().getJ2eePlatform(serverInstanceID);
-        }
-        return null;
-    }
-    
     /**
      * Is J2EE version of a given project JavaEE 5 or higher?
      *
@@ -399,15 +300,15 @@ public class Util {
         if (j2eeModuleProvider != null) {
             J2eeModule j2eeModule = j2eeModuleProvider.getJ2eeModule();
             if (j2eeModule != null) {
-                Object type = j2eeModule.getModuleType();
+                J2eeModule.Type type = j2eeModule.getType();
                 double version = Double.parseDouble(j2eeModule.getModuleVersion());
-                if (J2eeModule.EJB.equals(type) && (version > 2.1)) {
+                if (J2eeModule.Type.EJB.equals(type) && (version > 2.1)) {
                     return true;
                 }
-                if (J2eeModule.WAR.equals(type) && (version > 2.4)) {
+                if (J2eeModule.Type.WAR.equals(type) && (version > 2.4)) {
                     return true;
                 }
-                if (J2eeModule.CLIENT.equals(type) && (version > 1.4)) {
+                if (J2eeModule.Type.CAR.equals(type) && (version > 1.4)) {
                     return true;
                 }
             }
@@ -415,371 +316,10 @@ public class Util {
         return false;
     }
     
-    public static String getServerName(Project p) {
-        String sID = getServerInstanceID(p);
-        if (sID != null) {
-            J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(sID);
-            return j2eePlatform.getDisplayName();
-        }
-        return null;
-    }
-
-    public static String getStoreLocation(Project project, boolean trust, boolean client) {
-        String storeLocation = null;
-        J2eeModuleProvider mp = project.getLookup().lookup(J2eeModuleProvider.class);
-        if (mp != null) {
-            String sID = mp.getServerInstanceID();
-            InstanceProperties ip = mp.getInstanceProperties();
-            if ((ip == null) || ("".equals(ip.getProperty("LOCATION")))) {
-                return "";
-            }
-            storeLocation = getStoreLocation(sID, trust, client);
-        }
-        return storeLocation;
-    }
-
-    private static String getStoreLocation(String serverInstanceID, boolean trust, boolean client) {
-        String storeLocation = null;
-        J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstanceID);
-        File[] keyLocs = null;
-        String store = null;
-        if (client) {
-            store = trust ? J2eePlatform.TOOL_TRUSTSTORE_CLIENT : J2eePlatform.TOOL_KEYSTORE_CLIENT;
-        } else {
-            store = trust ? J2eePlatform.TOOL_TRUSTSTORE : J2eePlatform.TOOL_KEYSTORE;
-        }
-        keyLocs = j2eePlatform.getToolClasspathEntries(store);
-        if ((keyLocs != null) && (keyLocs.length > 0)) {
-            storeLocation = keyLocs[0].getAbsolutePath();
-        }
-        return storeLocation;
-    }
-    
-    public static FileObject getTomcatLocation(Project project) {
-        J2eeModuleProvider mp = project.getLookup().lookup(J2eeModuleProvider.class);
-        FileObject folder = null;
-        String id = null;
-        if (mp != null) { 
-            try {
-                id = mp.getServerInstanceID();
-                folder = getTomcatLocation(id);
-            } catch (Exception ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, id, ex);
-            }    
-        }
-        return folder;
-    }
-
-    public static FileObject getTomcatLocation(String serverID) {
-        if (serverID == null) return null;
-        FileObject folder = null;
-        try {
-            int begin = serverID.indexOf("home=") + 5;
-            int end = serverID.indexOf(":", serverID.indexOf("home=") + 1);
-            if (end <= begin) {
-                end = serverID.length();
-            }
-            String location = serverID.substring(begin, end);
-            File f = new File(location);
-            if (f != null) {
-                folder = FileUtil.toFileObject(f);
-            }
-        } catch (Exception ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, serverID, ex);
-        }    
-        return folder;
-    }
-        
-    public static final void fillDefaultsToDefaultServer() {
-
-        String sID = Deployment.getDefault().getDefaultServerInstanceID();
-        boolean glassfish = isGlassfish(sID);
-
-        String serverKeyStorePath = getStoreLocation(sID, false, false);
-        String serverTrustStorePath = getStoreLocation(sID, true, false);
-        String clientKeyStorePath = getStoreLocation(sID, false, true);
-        String clientTrustStorePath = getStoreLocation(sID, true, true);
-
-        if (!glassfish) {
-            FileObject tomcatLocation = getTomcatLocation(sID);
-            try {
-                FileObject targetFolder = FileUtil.createFolder(tomcatLocation, STORE_FOLDER_NAME);
-                DataFolder folderDO = (DataFolder) DataObject.find(targetFolder);
-                FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-                FileObject foClientKey = fs.findResource("Templates/WebServices/client-keystore.jks"); // NOI18N
-                FileObject foClientTrust = fs.findResource("Templates/WebServices/client-truststore.jks"); // NOI18N
-                FileObject foServerKey = fs.findResource("Templates/WebServices/server-keystore.jks"); // NOI18N
-                FileObject foServerTrust = fs.findResource("Templates/WebServices/server-truststore.jks"); // NOI18N
-                FileObject[] filesToCreate = {foClientKey, foClientTrust, foServerKey, foServerTrust };
-                for (FileObject fo : filesToCreate) {
-                    if (fo != null) {
-                        DataObject template = DataObject.find(fo);
-                        if (template != null) {
-                            if (targetFolder.getFileObject(fo.getName(), fo.getExt()) == null) {
-                                template.createFromTemplate(folderDO, fo.getNameExt());
-                            }
-                        }
-                    }
-                }
-
-                FileObject tomcatUsers = tomcatLocation.getFileObject("conf/tomcat-users.xml");
-
-                DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-                DocumentBuilder builder = dbf.newDocumentBuilder();
-                Document document = builder.parse(FileUtil.toFile(tomcatUsers));
-
-                NodeList nodes = document.getElementsByTagName("tomcat-users");
-                if ((nodes != null) && (nodes.getLength() > 0)) {
-                    Node n = nodes.item(0);
-                    NodeList users = document.getElementsByTagName("user");
-                    boolean foundUser = false;
-                    for (int i=0; i < users.getLength(); i++) {
-                        Node node = users.item(i);
-                        if (node instanceof Element) {
-                            Element u = (Element)node;
-                            String userAttr = u.getAttribute("name");
-                            if (UsernameAuthenticationProfile.DEFAULT_USERNAME.equals(userAttr)) {
-                                foundUser = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!foundUser) {
-                        if (tomcatUsers.getParent().getFileObject("tomcat-users.backup", "xml") == null) {
-                            FileUtil.copyFile(tomcatUsers, tomcatUsers.getParent(), "tomcat-users.backup");
-                        }
-
-                        Element user = document.createElement("user");
-                        user.setAttribute("name", UsernameAuthenticationProfile.DEFAULT_USERNAME);
-                        user.setAttribute("password", UsernameAuthenticationProfile.DEFAULT_PASSWORD);
-                        user.setAttribute("roles", "tomcat");
-                        n.appendChild(user);
-
-                        Transformer transformer = TransformerFactory.newInstance().newTransformer();
-                        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-
-                        //initialize StreamResult with File object to save to file
-                        StreamResult result = new StreamResult(FileUtil.toFile(tomcatUsers));
-                        DOMSource source = new DOMSource(document);
-                        transformer.transform(source, result);
-                    }
-                }
-            } catch (Exception ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            }
-            return;
-        }
-
-        String dstPasswd = getDefaultPassword(sID);
-        try {
-            copyKey(SERVER_KEYSTORE_BUNDLED, XWS_SECURITY_SERVER, PASSWORD, PASSWORD, serverKeyStorePath,XWS_SECURITY_SERVER, dstPasswd, false);
-            copyKey(SERVER_KEYSTORE_BUNDLED, WSSIP, PASSWORD, PASSWORD, serverKeyStorePath,WSSIP, dstPasswd, false);
-            copyKey(SERVER_TRUSTSTORE_BUNDLED, "certificate-authority", PASSWORD, PASSWORD, serverTrustStorePath, "xwss-certificate-authority", dstPasswd, true);
-            copyKey(SERVER_TRUSTSTORE_BUNDLED, XWS_SECURITY_CLIENT, PASSWORD, PASSWORD, serverTrustStorePath,XWS_SECURITY_CLIENT, dstPasswd, true);
-            copyKey(CLIENT_KEYSTORE_BUNDLED, XWS_SECURITY_CLIENT, PASSWORD, PASSWORD, clientKeyStorePath,XWS_SECURITY_CLIENT, dstPasswd, false);
-            copyKey(CLIENT_TRUSTSTORE_BUNDLED, XWS_SECURITY_SERVER, PASSWORD, PASSWORD, clientTrustStorePath,XWS_SECURITY_SERVER, dstPasswd, true);
-            copyKey(CLIENT_TRUSTSTORE_BUNDLED, WSSIP, PASSWORD, PASSWORD, clientTrustStorePath,WSSIP, dstPasswd, true);
-        } catch (Exception ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        }
-    }
-    
-    public static final void fillDefaults(Project project, boolean client, boolean refreshScript) {
-        
-        boolean tomcat = isTomcat(project);
-        boolean glassfish = isGlassfish(project);
-                
-        if (tomcat) {
-            if (project != null) {
-                FileObject tomcatLocation = getTomcatLocation(project);
-                try {
-                    FileObject targetFolder = FileUtil.createFolder(tomcatLocation, STORE_FOLDER_NAME);
-                    DataFolder folderDO = (DataFolder) DataObject.find(targetFolder);
-                    FileSystem fs = Repository.getDefault().getDefaultFileSystem();
-                    FileObject foClientKey = fs.findResource("Templates/WebServices/client-keystore.jks"); // NOI18N
-                    FileObject foClientTrust = fs.findResource("Templates/WebServices/client-truststore.jks"); // NOI18N
-                    FileObject foServerKey = fs.findResource("Templates/WebServices/server-keystore.jks"); // NOI18N
-                    FileObject foServerTrust = fs.findResource("Templates/WebServices/server-truststore.jks"); // NOI18N
-                    FileObject[] filesToCreate = {foClientKey, foClientTrust, foServerKey, foServerTrust };
-                    for (FileObject fo : filesToCreate) {
-                        if (fo != null) {
-                            DataObject template = DataObject.find(fo);
-                            if (template != null) {
-                                if (targetFolder.getFileObject(fo.getName(), fo.getExt()) == null) {
-                                    template.createFromTemplate(folderDO, fo.getNameExt());
-                                }
-                            }
-                        }
-                    }
-
-                    if (!client) {
-                        FileObject tomcatUsers = tomcatLocation.getFileObject("conf/tomcat-users.xml");
-
-                        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-                        DocumentBuilder builder = dbf.newDocumentBuilder();
-                        Document document = builder.parse(FileUtil.toFile(tomcatUsers));
-
-                        NodeList nodes = document.getElementsByTagName("tomcat-users");
-                        if ((nodes != null) && (nodes.getLength() > 0)) {
-                            Node n = nodes.item(0);
-                            NodeList users = document.getElementsByTagName("user");
-                            boolean foundUser = false;
-                            for (int i=0; i < users.getLength(); i++) {
-                                Node node = users.item(i);
-                                if (node instanceof Element) {
-                                    Element u = (Element)node;
-                                    String userAttr = u.getAttribute("name");
-                                    if (UsernameAuthenticationProfile.DEFAULT_USERNAME.equals(userAttr)) {
-                                        foundUser = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!foundUser) {
-                                if (tomcatUsers.getParent().getFileObject("tomcat-users.backup", "xml") == null) {
-                                    FileUtil.copyFile(tomcatUsers, tomcatUsers.getParent(), "tomcat-users.backup");
-                                }
-
-                                Element user = document.createElement("user");
-                                user.setAttribute("name", UsernameAuthenticationProfile.DEFAULT_USERNAME);
-                                user.setAttribute("password", UsernameAuthenticationProfile.DEFAULT_PASSWORD);
-                                user.setAttribute("roles", "tomcat");
-                                n.appendChild(user);
-
-                                Transformer transformer = TransformerFactory.newInstance().newTransformer();
-                                transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-
-                                //initialize StreamResult with File object to save to file
-                                StreamResult result = new StreamResult(FileUtil.toFile(tomcatUsers));
-                                DOMSource source = new DOMSource(document);
-                                transformer.transform(source, result);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-                }
-            }
-            return;
-        }
-
-        String dstPasswd = getDefaultPassword(project);
-        if (glassfish) {
-            try {
-                if (!client && refreshScript) refreshBuildScript(project);
-                String serverKeyStorePath = getStoreLocation(project, false, false);
-                String serverTrustStorePath = getStoreLocation(project, true, false);
-                String clientKeyStorePath = getStoreLocation(project, false, true);
-                String clientTrustStorePath = getStoreLocation(project, true, true);
-                copyKey(SERVER_KEYSTORE_BUNDLED, XWS_SECURITY_SERVER, PASSWORD, PASSWORD, serverKeyStorePath,XWS_SECURITY_SERVER, dstPasswd, false);
-                copyKey(SERVER_KEYSTORE_BUNDLED, WSSIP, PASSWORD, PASSWORD, serverKeyStorePath,WSSIP, dstPasswd, false);
-                copyKey(SERVER_TRUSTSTORE_BUNDLED, "certificate-authority", PASSWORD, PASSWORD, serverTrustStorePath, "xwss-certificate-authority", dstPasswd, true);
-                copyKey(SERVER_TRUSTSTORE_BUNDLED, XWS_SECURITY_CLIENT, PASSWORD, PASSWORD, serverTrustStorePath,XWS_SECURITY_CLIENT, dstPasswd, true);
-                copyKey(CLIENT_KEYSTORE_BUNDLED, XWS_SECURITY_CLIENT, PASSWORD, PASSWORD, clientKeyStorePath,XWS_SECURITY_CLIENT, dstPasswd, false);
-                copyKey(CLIENT_TRUSTSTORE_BUNDLED, XWS_SECURITY_SERVER, PASSWORD, PASSWORD, clientTrustStorePath,XWS_SECURITY_SERVER, dstPasswd, true);
-                copyKey(CLIENT_TRUSTSTORE_BUNDLED, WSSIP, PASSWORD, PASSWORD, clientTrustStorePath,WSSIP, dstPasswd, true);
-            } catch (Exception ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            }
-        }
-    }
-    
-    public static void copyKey(String srcPath, String srcAlias, String srcPasswd, String srcKeyPasswd, 
-                               String dstPath, String dstAlias, String dstPasswd,  
-                               boolean trustedCertEntry) throws Exception {
-        KeyStore srcStore = KeyStore.getInstance("JKS");
-        KeyStore dstStore = KeyStore.getInstance("JKS");
-        srcStore.load(Util.class.getResourceAsStream(srcPath), srcPasswd.toCharArray());
-        InputStream is = new FileInputStream(dstPath);
-        try {
-            dstStore.load(is, dstPasswd.toCharArray());
-            Key privKey = srcStore.getKey(srcAlias, srcKeyPasswd.toCharArray());
-
-            if (is != null) is.close();
-            
-            OutputStream os = new FileOutputStream(dstPath);
-            try {
-                if (privKey == null || trustedCertEntry) {
-                    //this is a cert-entry
-                    dstStore.setCertificateEntry(dstAlias, srcStore.getCertificate(srcAlias));
-                } else {              
-                    Certificate cert = srcStore.getCertificate(srcAlias);
-                    Certificate[] chain = new Certificate[] {cert};
-                    dstStore.setKeyEntry(dstAlias, privKey, dstPasswd.toCharArray(), chain);
-                }
-                dstStore.store(os, dstPasswd.toCharArray());
-            } finally {
-                if (os != null) os.close();
-            }
-        } finally {
-            if (is != null) is.close();
-        }
-    }
-    
-    public static final boolean isTomcat(Project project) {
-        String sID = getServerInstanceID(project);
-        if (sID != null) {
-            if ((sID != null) && (sID.toLowerCase().contains("tomcat"))) {     //NOI18N
-                return true;
-            }
-        }
+    public static boolean isEqual(Object a, Object b) {
+        if ((a == null) && (b == null)) return true;
+        if ((a != null) && (b != null)) return a.equals(b);
         return false;
-    }
-
-    public static final boolean isGlassfish(Project project) {
-        if (project != null) {
-            J2eeModuleProvider mp = project.getLookup().lookup(J2eeModuleProvider.class);
-            if (mp == null) return false;
-            return isGlassfish(mp.getServerInstanceID());
-        }
-        return false;
-    }
-    
-    public static final boolean isGlassfish(String serverID) {
-        if ((serverID != null) && (serverID.toLowerCase().contains("appserv"))) {     //NOI18N
-            return true;
-        }
-        return false;
-    }
-    
-    public static final boolean isWebProject(Project project) {
-        if (getProjectType(project) == ProjectType.WEB) {
-            return true;
-        }
-        return false;
-    }
-
-    public static final boolean isJsr109Project(Project project) {
-        if ((getProjectType(project) == ProjectType.WEB) || 
-            (getProjectType(project) == ProjectType.EJB)) {
-            return true;
-        }
-        return false;
-    }
-    
-    private static J2eeModuleProvider getProvider(Project p) {
-        if (p != null) {
-            return p.getLookup().lookup(J2eeModuleProvider.class);
-        }
-        return null;
-    }
-    
-    public static final ProjectType getProjectType(Project project) {
-        J2eeModuleProvider mp = getProvider(project);
-        if (mp != null) {
-            J2eeModule jm = mp.getJ2eeModule();
-            if (jm != null) {
-                Object moduleType = jm.getModuleType();
-                if (J2eeModule.WAR.equals(moduleType)) {
-                    return ProjectType.WEB;
-                } else if (J2eeModule.EJB.equals(moduleType)) {
-                    return ProjectType.EJB;
-                } else if (J2eeModule.CLIENT.equals(moduleType)) {
-                    return ProjectType.CLIENT;
-                }
-            }
-        }
-        return ProjectType.UNKNOWN;
     }
 
     private static boolean isOperationInList(String operName, Collection<BindingOperation> operations) {
@@ -901,181 +441,8 @@ public class Util {
         return Utilities.getFileObject(ms);
     }
 
-    private static final String BUILD_SCRIPT = "/build.xml";       //NOI18N
-    private static final String BACKUP_EXT = ".bak";        //NOI18N
-    private static final String IMPORT_WSIT_DEPLOY_XML = "<import file=\"nbproject/wsit-deploy.xml\"/>";    //NOI18N
-    private static final String IMPORT_TAG = "<import"; //NOI18N
-    private static final String WSIT_DEPLOY_XML_PATH = "nbproject/wsit-deploy.xml"; //NOI18N
-    private static final String WSIT_DEPLOY_XSL = "org/netbeans/modules/websvc/wsitconf/resources/wsit-deploy.xsl";  //NOI18N
-    
-    public static void refreshBuildScript(Project p) {
-        String buildScript = FileUtil.toFile(p.getProjectDirectory()).getPath() + BUILD_SCRIPT;
-        
-        BufferedReader reader = null;
-        BufferedWriter writer = null;
-        String line = null;
-        boolean added = false;
-        
-        // First check to see if our import statement has already been added.
-        try {
-            reader = new BufferedReader(new FileReader(buildScript));
-            while ((line = reader.readLine()) != null) {
-                if (line.indexOf(IMPORT_WSIT_DEPLOY_XML) != -1) {
-                    added = true;
-                    break;
-                }
-            }
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (IOException ex) {
-                    Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-                }
-            }
-        }
-        
-        // If our import statement has not been added, add it now.
-        if (!added) {
-            try {
-                // Rename the original to build.xml.bak
-                File backupBuildScript = new File(buildScript);
-                backupBuildScript.renameTo(new File(buildScript + BACKUP_EXT));
-                
-                reader = new BufferedReader(new FileReader(buildScript + BACKUP_EXT));
-                writer = new BufferedWriter(new FileWriter(buildScript));
-                added = false;
-                int index = 0;
-                
-                while ((line = reader.readLine()) != null) {
-                    if (!added && (index = line.indexOf(IMPORT_TAG)) != -1) {
-                        StringBuffer buf = new StringBuffer(line);
-                        buf = buf.replace(index, line.length(), IMPORT_WSIT_DEPLOY_XML);
-                        writer.write(buf.toString());
-                        writer.newLine();
-                        added = true;
-                    }
-                    
-                    writer.write(line);
-                    writer.newLine();
-                }
-            } catch (FileNotFoundException ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            } catch (IOException ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            } finally {
-                try {
-                    if (writer != null) {
-                        writer.flush();
-                        writer.close();
-                    }
-                    
-                    if (reader != null) {
-                        reader.close();
-                    }
-                } catch (IOException ex) {
-                    Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-                }
-            }
-        }
-        
-        // Now refresh the wsit-deploy.xml itself.
-        GeneratedFilesHelper genFilesHelper = new GeneratedFilesHelper(p.getProjectDirectory());
-        
-        try {
-            genFilesHelper.refreshBuildScript(
-                    WSIT_DEPLOY_XML_PATH,
-                    Util.class.getClassLoader().getResource(WSIT_DEPLOY_XSL),
-                    false);
-        } catch (IOException ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        }
-    }
-    
-    public static void unfillDefaults(Project p) {
-        String buildScript = FileUtil.toFile(p.getProjectDirectory()).getPath() + BUILD_SCRIPT;
-    
-        FileObject createUserFile = p.getProjectDirectory().getFileObject("nbproject/wsit.createuser");
-        if ((createUserFile != null) && (createUserFile.isValid()) && !(createUserFile.isVirtual())) {
-            try {
-                createUserFile.delete();
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
-            }
-        }
-        
-        BufferedReader reader = null;
-        BufferedWriter writer = null;
-        String line = null;
-        boolean added = false;
-        
-        // First check to see if our import statement has already been added.
-        try {
-            reader = new BufferedReader(new FileReader(buildScript));
-            while ((line = reader.readLine()) != null) {
-                if (line.indexOf(IMPORT_WSIT_DEPLOY_XML) != -1) {
-                    added = true;
-                    break;
-                }
-            }
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (IOException ex) {
-                    Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-                }
-            }
-        }
-        
-        // If our import statement has not been added, add it now.
-        if (added) {
-            try {
-                // Rename the original to build.xml.bak
-                File backupBuildScript = new File(buildScript);
-                backupBuildScript.renameTo(new File(buildScript + BACKUP_EXT));
-                
-                reader = new BufferedReader(new FileReader(buildScript + BACKUP_EXT));
-                writer = new BufferedWriter(new FileWriter(buildScript));
-                added = false;
-                
-                while ((line = reader.readLine()) != null) {
-                    if ((line.indexOf(IMPORT_WSIT_DEPLOY_XML)) == -1) {
-                        writer.write(line);
-                        writer.newLine();
-                    }
-                }
-            } catch (FileNotFoundException ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            } catch (IOException ex) {
-                Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-            } finally {
-                try {
-                    if (writer != null) {
-                        writer.flush();
-                        writer.close();
-                    }
-                    
-                    if (reader != null) {
-                        reader.close();
-                    }
-                } catch (IOException ex) {
-                    Logger.getLogger(LOGGER_GLOBAL).log(Level.INFO, null, ex);
-                }
-            }
-        }
-    }
-
     public static FileObject getSunDDFO(Project p) {
-        J2eeModuleProvider provider = getProvider(p);
+        J2eeModuleProvider provider = ServerUtils.getProvider(p);
         if (provider == null) return null;
         FileObject[] fobjs = provider.getConfigurationFiles();
         if (fobjs.length > 0) {
@@ -1093,42 +460,21 @@ public class Util {
         }
         return null;
     }
-    
-    public static String getDefaultPassword(Project p) {
-        String password = KeystorePanel.DEFAULT_PASSWORD;
-        if (isGlassfish(p)) {
-            String storeLoc = getStoreLocation(p, false, false);
-            if (!passwordOK(storeLoc, password)) {
-                password = Util.getPassword(p);
-                if (!passwordOK(storeLoc, password)) {
-                    password = "";
-                }
+
+    public static void checkMetroLibrary(Project p) {
+        if (p == null) {
+            return;
+        }
+        WsitProvider wsitProvider = p.getLookup().lookup(WsitProvider.class);
+        if (wsitProvider == null) return;
+        if (!wsitProvider.isWsitSupported()) {
+            Object button = DialogDisplayer.getDefault().notify(
+                    new NotifyDescriptor.Confirmation(
+                            NbBundle.getMessage(Util.class, "TXT_AddLibraries"), NotifyDescriptor.YES_NO_OPTION));
+            if (NotifyDescriptor.OK_OPTION.equals(button)) {
+                wsitProvider.addMetroLibrary();
             }
         }
-        return password;
     }
 
-    public static String getDefaultPassword(String serverID) {
-        String password = KeystorePanel.DEFAULT_PASSWORD;
-        if (isGlassfish(serverID)) {
-            String storeLoc = getStoreLocation(serverID, false, false);
-            if (!passwordOK(storeLoc, password)) {
-                password = KeystorePanel.DEFAULT_PASSWORD2;
-                if (!passwordOK(storeLoc, password)) {
-                    password = "";
-                }
-            }
-        }
-        return password;
-    }
-    
-    private static boolean passwordOK(String storePath, String password) {
-        try {
-            Util.getAliases(storePath, password.toCharArray(), KeystorePanel.JKS);
-        } catch (Exception ex) {
-            return false;
-        }
-        return true;
-    }
-    
 }

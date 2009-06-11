@@ -61,6 +61,7 @@ import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
+import org.netbeans.modules.j2ee.persistence.spi.server.ServerStatusProvider;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.java.queries.SourceLevelQueryImplementation;
 
@@ -155,15 +156,15 @@ public class Util {
         if (j2eeModuleProvider != null) {
             J2eeModule j2eeModule = j2eeModuleProvider.getJ2eeModule();
             if (j2eeModule != null) {
-                Object type = j2eeModule.getModuleType();
+                J2eeModule.Type type = j2eeModule.getType();
                 double version = Double.parseDouble(j2eeModule.getModuleVersion());
-                if (J2eeModule.EJB.equals(type) && (version > 2.1)) {
+                if (J2eeModule.Type.EJB.equals(type) && (version > 2.1)) {
                     return true;
                 }
-                if (J2eeModule.WAR.equals(type) && (version > 2.4)) {
+                if (J2eeModule.Type.WAR.equals(type) && (version > 2.4)) {
                     return true;
                 }
-                if (J2eeModule.CLIENT.equals(type) && (version > 1.4)) {
+                if (J2eeModule.Type.CAR.equals(type) && (version > 1.4)) {
                     return true;
                 }
             }
@@ -248,8 +249,18 @@ public class Util {
         return Deployment.getDefault().getServerID(serverInstanceID) != null;
     }
     
+    /**
+     * Default implementation of ServerStatusProvider.
+     */
+    public static ServerStatusProvider createServerStatusProvider(final J2eeModuleProvider j2eeModuleProvider) {
+        return new ServerStatusProvider() {
+            public boolean validServerInstancePresent() {
+                return isValidServerInstance(j2eeModuleProvider);
+            }
+        };
+    }
+    
     public static File[] getJ2eePlatformClasspathEntries(Project project) {
-        List<FileObject> j2eePlatformRoots = new ArrayList<FileObject>();
         if (project != null) {
             J2eeModuleProvider j2eeModuleProvider = project.getLookup().lookup(J2eeModuleProvider.class);
             if (j2eeModuleProvider != null) {
@@ -371,6 +382,7 @@ public class Util {
      *         is not known specification version constant
      * 
      * @since 1.18
+     * @deprecated 
      */    
     public static String getJ2eeSpecificationLabel(String specificationVersion) {
         Parameters.notNull("specificationVersion", specificationVersion); // NOI18N

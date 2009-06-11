@@ -52,8 +52,11 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.ExecutableElement;
@@ -73,12 +76,12 @@ import org.netbeans.modules.j2ee.dd.api.web.ServletMapping;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.ServerInstance;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
 import org.netbeans.modules.web.api.webmodule.WebModule;
-import org.netbeans.modules.websvc.api.jaxws.project.GeneratedFilesHelper;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Endpoints;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Handler;
 import org.netbeans.modules.websvc.api.jaxws.project.config.HandlerChain;
@@ -87,20 +90,22 @@ import org.netbeans.modules.websvc.api.jaxws.project.config.HandlerChainsProvide
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlModeler;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
 import org.netbeans.modules.websvc.core.JaxWsUtils;
+import org.netbeans.modules.websvc.core.ServerType;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 import org.netbeans.modules.websvc.core.WebServiceReference;
 import org.netbeans.modules.websvc.core.WebServiceTransferable;
-import org.netbeans.modules.websvc.core.dev.wizard.PlatformUtil;
 import org.netbeans.modules.websvc.core.jaxws.actions.AddOperationAction;
 import org.netbeans.modules.websvc.core.jaxws.actions.JaxWsRefreshAction;
 import org.netbeans.modules.websvc.core.jaxws.actions.WsTesterPageAction;
-import org.netbeans.modules.websvc.core.ConfigureHandlerAction;
-import org.netbeans.modules.websvc.core.ConfigureHandlerCookie;
-import org.netbeans.modules.websvc.core.webservices.ui.panels.MessageHandlerPanel;
+import org.netbeans.modules.websvc.spi.support.ConfigureHandlerAction;
+import org.netbeans.modules.websvc.api.support.ConfigureHandlerCookie;
+import org.netbeans.modules.websvc.spi.support.MessageHandlerPanel;
 import org.netbeans.modules.websvc.core.wseditor.support.WSEditAttributesAction;
 import org.netbeans.modules.websvc.jaxws.api.JaxWsRefreshCookie;
 import org.netbeans.modules.websvc.jaxws.api.JaxWsTesterCookie;
 import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
+import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.ErrorManager;
@@ -114,6 +119,7 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.AbstractNode;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.AbstractLookup;
@@ -121,13 +127,21 @@ import org.openide.util.lookup.InstanceContent;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Endpoint;
 import org.netbeans.modules.websvc.api.jaxws.project.config.EndpointsProvider;
 import org.netbeans.modules.websvc.core.WsWsdlCookie;
+import org.netbeans.modules.websvc.core.jaxws.actions.ConvertToRestAction;
+import org.netbeans.modules.websvc.core.jaxws.actions.ConvertToRestCookieImpl;
+import org.netbeans.modules.websvc.core.jaxws.actions.JaxWsGenWSDLAction;
+import org.netbeans.modules.websvc.core.jaxws.actions.JaxWsGenWSDLImpl;
 import org.netbeans.modules.websvc.core.wseditor.support.EditWSAttributesCookieImpl;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.Lookup;
+import org.openide.util.RequestProcessor;
+import org.openide.util.lookup.Lookups;
 
-public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTesterCookie, ConfigureHandlerCookie {
+public class JaxWsNode extends AbstractNode implements
+        WsWsdlCookie, JaxWsTesterCookie, ConfigureHandlerCookie {
 
     Service service;
     FileObject srcRoot;
@@ -147,21 +161,36 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         this.srcRoot = srcRoot;
         this.content = content;
         this.implBeanClass = implBeanClass;
-        if (implBeanClass.getAttribute("jax-ws-service") == null) {
+        project = FileOwnerQuery.getOwner(srcRoot);
+        if (implBeanClass.getAttribute("jax-ws-service") == null ||
+                service.isUseProvider() && implBeanClass.getAttribute("jax-ws-service-provider") == null) {
             try {
-                implBeanClass.setAttribute("jax-ws-service", java.lang.Boolean.TRUE);
+                if (implBeanClass.getAttribute("jax-ws-service") == null) {
+                    implBeanClass.setAttribute("jax-ws-service", Boolean.TRUE);
+                }
+                if (service.isUseProvider() && implBeanClass.getAttribute("jax-ws-service-provider") == null) {
+                    implBeanClass.setAttribute("jax-ws-service-provider", Boolean.TRUE);
+                }
                 getDataObject().setValid(false);
             } catch (PropertyVetoException ex) {
+                ErrorManager.getDefault().notify(ex);
             } catch (IOException ex) {
+                ErrorManager.getDefault().notify(ex);
             }
         }
-        setName(service.getName());
+        String serviceName = service.getName();
+        setName(serviceName);
         content.add(this);
         content.add(service);
         content.add(implBeanClass);
         content.add(new EditWSAttributesCookieImpl(this, jaxWsModel));
-        if (service.getWsdlUrl() != null) {
+        if (service.getWsdlUrl() != null && !service.isUseProvider()) {
             content.add(new RefreshServiceImpl());
+        } else {
+            content.add(new JaxWsGenWSDLImpl(project, serviceName));
+        }
+        if (isWebProject()) {
+            content.add(new ConvertToRestCookieImpl(this));
         }
         OpenCookie cookie = new OpenCookie() {
 
@@ -173,7 +202,23 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
             }
         };
         content.add(cookie);
-        project = FileOwnerQuery.getOwner(srcRoot);
+        RequestProcessor.getDefault().post(new Runnable() {
+
+            public void run() {
+                JaxWsNode.this.setValue("wsdl-url", getWsdlURL());
+            }
+        });
+    }
+
+    private boolean isWebProject() {
+        J2eeModuleProvider provider = project.getLookup().lookup(J2eeModuleProvider.class);
+        if (provider != null) {
+            J2eeModule.Type moduleType = provider.getJ2eeModule().getType();
+            if (J2eeModule.Type.WAR.equals(moduleType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -189,16 +234,13 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
     public String getShortDescription() {
         return getWsdlURL();
     }
-    
     private static final String WAITING_BADGE = "org/netbeans/modules/websvc/core/webservices/ui/resources/waiting.png"; // NOI18N
     private static final String ERROR_BADGE = "org/netbeans/modules/websvc/core/webservices/ui/resources/error-badge.gif"; //NOI18N
-    private static final String SERVICE_BADGE = "org/netbeans/modules/websvc/core/webservices/ui/resources/XMLServiceDataIcon.gif"; //NOI18N
-
-    
+    private static final String SERVICE_BADGE = "org/netbeans/modules/websvc/core/webservices/ui/resources/XMLServiceDataIcon.png"; //NOI18N
     private java.awt.Image cachedWaitingBadge;
     private java.awt.Image cachedErrorBadge;
     private java.awt.Image cachedServiceBadge;
-    
+
     @Override
     public java.awt.Image getIcon(int type) {
         WsdlModeler wsdlModeler = ((JaxWsChildren) getChildren()).getWsdlModeler();
@@ -208,35 +250,37 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
             if (((JaxWsChildren) getChildren()).isModelGenerationFinished()) {
                 return getServiceImage();
             } else {
-                return org.openide.util.Utilities.mergeImages(getServiceImage(), getWaitingBadge(), 15, 8);
+                return ImageUtilities.mergeImages(getServiceImage(), getWaitingBadge(), 15, 8);
             }
         } else {
-            Image dirtyNodeImage = org.openide.util.Utilities.mergeImages(getServiceImage(), getErrorBadge(), 6, 6);
+            Image dirtyNodeImage = ImageUtilities.mergeImages(getServiceImage(), getErrorBadge(), 6, 6);
             if (((JaxWsChildren) getChildren()).isModelGenerationFinished()) {
                 return dirtyNodeImage;
             } else {
-                return org.openide.util.Utilities.mergeImages(dirtyNodeImage, getWaitingBadge(), 15, 8);
+                return ImageUtilities.mergeImages(dirtyNodeImage, getWaitingBadge(), 15, 8);
             }
         }
     }
-    
+
     private java.awt.Image getServiceImage() {
         if (cachedServiceBadge == null) {
-            cachedServiceBadge = org.openide.util.Utilities.loadImage(SERVICE_BADGE);
-        }            
-        return cachedServiceBadge;        
+            cachedServiceBadge = ImageUtilities.loadImage(SERVICE_BADGE);
+        }
+        return cachedServiceBadge;
     }
+
     private java.awt.Image getErrorBadge() {
         if (cachedErrorBadge == null) {
-            cachedErrorBadge = org.openide.util.Utilities.loadImage(ERROR_BADGE);
-        }            
-        return cachedErrorBadge;        
+            cachedErrorBadge = ImageUtilities.loadImage(ERROR_BADGE);
+        }
+        return cachedErrorBadge;
     }
+
     private java.awt.Image getWaitingBadge() {
         if (cachedWaitingBadge == null) {
-            cachedWaitingBadge = org.openide.util.Utilities.loadImage(WAITING_BADGE);
-        }            
-        return cachedWaitingBadge;        
+            cachedWaitingBadge = ImageUtilities.loadImage(WAITING_BADGE);
+        }
+        return cachedWaitingBadge;
     }
 
     void changeIcon() {
@@ -282,7 +326,39 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
     // Create the popup menu:
     @Override
     public Action[] getActions(boolean context) {
-        return new SystemAction[]{SystemAction.get(OpenAction.class), SystemAction.get(JaxWsRefreshAction.class), null, SystemAction.get(AddOperationAction.class), null, SystemAction.get(WsTesterPageAction.class), null, SystemAction.get(WSEditAttributesAction.class), null, SystemAction.get(ConfigureHandlerAction.class), null, SystemAction.get(DeleteAction.class), null, SystemAction.get(PropertiesAction.class)};
+        DataObject dobj = getCookie(DataObject.class);
+        ArrayList<Action> actions = new ArrayList<Action>(Arrays.asList(
+                SystemAction.get(OpenAction.class),
+                SystemAction.get(JaxWsRefreshAction.class),
+                null,
+                SystemAction.get(AddOperationAction.class),
+                null,
+                SystemAction.get(WsTesterPageAction.class),
+                null,
+                SystemAction.get(WSEditAttributesAction.class),
+                null,
+                SystemAction.get(ConfigureHandlerAction.class),
+                null,
+                SystemAction.get(JaxWsGenWSDLAction.class),
+                null,
+                SystemAction.get(ConvertToRestAction.class),
+                null,
+                SystemAction.get(DeleteAction.class),
+                null,
+                SystemAction.get(PropertiesAction.class)));
+        addFromLayers(actions, "WebServices/Services/Actions");
+        return actions.toArray(new Action[actions.size()]);
+    }
+
+    private void addFromLayers(List<Action> actions, String path) {
+        Lookup look = Lookups.forPath(path);
+        for (Object next : look.lookupAll(Object.class)) {
+            if (next instanceof Action) {
+                actions.add((Action) next);
+            } else if (next instanceof javax.swing.JSeparator) {
+                actions.add(null);
+            }
+        }
     }
 
     @Override
@@ -299,46 +375,60 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
     /**
      * get URL for Web Service WSDL file
      */
-    public String getWebServiceURL() {
+    private String getWebServiceURL() {
         J2eeModuleProvider provider = project.getLookup().lookup(J2eeModuleProvider.class);
-        InstanceProperties instanceProperties = provider.getInstanceProperties();
-        if (instanceProperties == null) {
-            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(NbBundle.getMessage(JaxWsNode.class, "MSG_MissingServer"), NotifyDescriptor.ERROR_MESSAGE));
+        String serverInstanceID = provider.getServerInstanceID();
+        if (serverInstanceID == null) {
+            Logger.getLogger(JaxWsNode.class.getName()).log(Level.INFO, "Can not detect target J2EE server"); //NOI18N
             return "";
         }
-        // getting port
-        String portNumber = instanceProperties.getProperty(InstanceProperties.HTTP_PORT_NUMBER);
-        if (portNumber == null || portNumber.equals("")) {
-            portNumber = "8080"; //NOI18N
-        }
-
-        // getting hostName
-        String serverUrl = instanceProperties.getProperty(InstanceProperties.URL_ATTR);
+        // getting port and host name
+        ServerInstance serverInstance = Deployment.getDefault().getServerInstance(serverInstanceID);
+        String portNumber = "8080"; //NOI18N
         String hostName = "localhost"; //NOI18N
-        if (serverUrl != null && serverUrl.indexOf("::") > 0) {
-            //NOI18N
-            int index1 = serverUrl.indexOf("::"); //NOI18N
-            int index2 = serverUrl.lastIndexOf(":"); //NOI18N
-            if (index2 > index1 + 2) {
-                hostName = serverUrl.substring(index1 + 2, index2);
+        try {
+            ServerInstance.Descriptor instanceDescriptor = serverInstance.getDescriptor();
+            if (instanceDescriptor != null) {
+                int port = instanceDescriptor.getHttpPort();
+                portNumber = port == 0 ? "8080" : String.valueOf(port); //NOI18N
+                String hstName = instanceDescriptor.getHostname();
+                if (hstName != null) {
+                    hostName = hstName;
+                }
+            } else {
+                // using the old way to obtain port name and host name
+                // should be removed if ServerInstance.Descriptor is implemented in server plugins
+                InstanceProperties instanceProperties = provider.getInstanceProperties();
+                if (instanceProperties == null) {
+                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(NbBundle.getMessage(JaxWsNode.class, "MSG_MissingServer"), NotifyDescriptor.ERROR_MESSAGE));
+                    return "";
+                } else {
+                    portNumber = getPortNumber(instanceProperties);
+                    hostName = getHostName(instanceProperties);
+                }
             }
+        } catch (InstanceRemovedException ex) {
+            Logger.getLogger(getClass().getName()).log(Level.INFO, "Removed ServerInstance", ex); //NOI18N
         }
 
         String contextRoot = null;
-        Object moduleType = provider.getJ2eeModule().getModuleType();
+        J2eeModule.Type moduleType = provider.getJ2eeModule().getType();
         // need to compute from annotations
         String wsURI = null;
-        if (J2eeModule.WAR.equals(moduleType) && PlatformUtil.isJaxWsInJ2ee14Supported(project)) {
+
+        WSStackUtils stackUtils = new WSStackUtils(project);
+        boolean isJsr109Supported = stackUtils.isJsr109Supported();
+        if (J2eeModule.Type.WAR.equals(moduleType) && ServerType.JBOSS == stackUtils.getServerType()) {
             // JBoss type
             try {
                 wsURI = getUriFromDD(moduleType);
             } catch (UnsupportedEncodingException ex) {
                 // this shouldn't happen'
             }
-        } else if (J2eeModule.EJB.equals(moduleType) && PlatformUtil.isJaxWsInJ2ee14Supported(project)) {
+        } else if (J2eeModule.Type.EJB.equals(moduleType) && ServerType.JBOSS == stackUtils.getServerType()) {
             // JBoss type
             wsURI = getNameFromPackageName(service.getImplementationClass());
-        } else if (isJsr109Supported(project) && Util.isJavaEE5orHigher(project) || JaxWsUtils.isEjbJavaEE5orHigher(project)) {
+        } else if (isJsr109Supported && Util.isJavaEE5orHigher(project) || JaxWsUtils.isEjbJavaEE5orHigher(project)) {
             try {
                 wsURI = getServiceUri(moduleType);
             } catch (UnsupportedEncodingException ex) {
@@ -352,7 +442,7 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
                 // this shouldn't happen'
             }
         }
-        if (J2eeModule.WAR.equals(moduleType)) {
+        if (J2eeModule.Type.WAR.equals(moduleType)) {
             J2eeModuleProvider.ConfigSupport configSupport = provider.getConfigSupport();
             try {
                 contextRoot = configSupport.getWebContextRoot();
@@ -363,7 +453,7 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
                 //NOI18N
                 contextRoot = contextRoot.substring(1);
             }
-        } else if (J2eeModule.EJB.equals(moduleType) && PlatformUtil.isJaxWsInJ2ee14Supported(project)) {
+        } else if (J2eeModule.Type.EJB.equals(moduleType) && ServerType.JBOSS == stackUtils.getServerType()) {
             // JBoss type
             contextRoot = project.getProjectDirectory().getName();
         }
@@ -371,8 +461,8 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         return "http://" + hostName + ":" + portNumber + "/" + (contextRoot != null && !contextRoot.equals("") ? contextRoot + "/" : "") + wsURI; //NOI18N
     }
 
-    private String getNonJsr109Uri(Object moduleType) throws UnsupportedEncodingException {
-        if (J2eeModule.WAR.equals(moduleType)) {
+    private String getNonJsr109Uri(J2eeModule.Type moduleType) throws UnsupportedEncodingException {
+        if (J2eeModule.Type.WAR.equals(moduleType)) {
             WebModule webModule = WebModule.getWebModule(project.getProjectDirectory());
             FileObject webInfFo = webModule.getWebInf();
             if (webInfFo != null) {
@@ -395,7 +485,7 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         return URLEncoder.encode(getNameFromPackageName(service.getImplementationClass()), "UTF-8"); //NOI18N
     }
 
-    private String getUriFromDD(Object moduleType) throws UnsupportedEncodingException {
+    private String getUriFromDD(J2eeModule.Type moduleType) throws UnsupportedEncodingException {
         WebModule webModule = WebModule.getWebModule(project.getProjectDirectory());
         if (webModule != null) {
             FileObject ddFo = webModule.getDeploymentDescriptor();
@@ -446,7 +536,7 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         return null;
     }
 
-    private String getServiceUri(final Object moduleType) throws UnsupportedEncodingException {
+    private String getServiceUri(final J2eeModule.Type moduleType) throws UnsupportedEncodingException {
         final String[] serviceName = new String[1];
         final String[] name = new String[1];
         final boolean[] isProvider = {false};
@@ -487,9 +577,9 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         if (serviceName[0] == null) {
             serviceName[0] = URLEncoder.encode(implClassName + "Service", "UTF-8"); //NOI18N
         }
-        if (J2eeModule.WAR.equals(moduleType)) {
+        if (J2eeModule.Type.WAR.equals(moduleType)) {
             return serviceName[0];
-        } else if (J2eeModule.EJB.equals(moduleType)) {
+        } else if (J2eeModule.Type.EJB.equals(moduleType)) {
             if (name[0] == null) {
                 if (isProvider[0]) {
                     //per JSR 109, use qualified impl class name for EJB
@@ -505,14 +595,14 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         }
     }
 
-    private boolean resolveServiceUrl(Object moduleType, CompilationController controller, TypeElement targetElement, TypeElement wsElement, String[] serviceName, String[] name) throws IOException {
+    private boolean resolveServiceUrl(J2eeModule.Type moduleType, CompilationController controller, TypeElement targetElement, TypeElement wsElement, String[] serviceName, String[] name) throws IOException {
         boolean foundWsAnnotation = false;
         List<? extends AnnotationMirror> annotations = targetElement.getAnnotationMirrors();
         for (AnnotationMirror anMirror : annotations) {
             if (controller.getTypes().isSameType(wsElement.asType(), anMirror.getAnnotationType())) {
                 foundWsAnnotation = true;
                 Map<? extends ExecutableElement, ? extends AnnotationValue> expressions = anMirror.getElementValues();
-                for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry: expressions.entrySet()) {
+                for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : expressions.entrySet()) {
                     if (entry.getKey().getSimpleName().contentEquals("serviceName")) {
                         serviceName[0] = (String) expressions.get(entry.getKey()).getValue();
                         if (serviceName[0] != null) {
@@ -548,7 +638,9 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
      * get URL for Web Service Tester Page
      */
     public String getTesterPageURL() {
-        if (isJsr109Supported(project) && (Util.isJavaEE5orHigher(project) || JaxWsUtils.isEjbJavaEE5orHigher(project))) {
+        WSStackUtils stackUtils = new WSStackUtils(project);
+        boolean isJsr109Supported = stackUtils.isJsr109Supported();
+        if (isJsr109Supported && (Util.isJavaEE5orHigher(project) || JaxWsUtils.isEjbJavaEE5orHigher(project))) {
             return getWebServiceURL() + "?Tester"; //NOI18N
         } else {
             return getWebServiceURL(); //NOI18N
@@ -592,7 +684,7 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
                         }
                     }
                     // cleaning java artifacts
-                    FileObject buildImplFo = project.getProjectDirectory().getFileObject(GeneratedFilesHelper.BUILD_IMPL_XML_PATH);
+                    FileObject buildImplFo = project.getProjectDirectory().getFileObject(GeneratedFilesHelper.BUILD_XML_PATH);
                     try {
                         ExecutorTask wsimportTask = ActionUtils.runTarget(buildImplFo, new String[]{"wsimport-service-clean-" + serviceName}, null); //NOI18N
                         wsimportTask.waitFinished();
@@ -656,6 +748,14 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
      */
     public void configureHandler() {
         FileObject implBeanFo = getImplBean();
+        if (implBeanFo == null) {
+            // unable to find implementation class
+            NotifyDescriptor.Message dialogDesc = new NotifyDescriptor.Message(
+                    NbBundle.getMessage(JaxWsNode.class, "ERR_missingImplementationClass"),
+                    NotifyDescriptor.ERROR_MESSAGE);
+            DialogDisplayer.getDefault().notify(dialogDesc);
+            return;
+        }
         List<String> handlerClasses = new ArrayList<String>();
         FileObject handlerFO = null;
         HandlerChains handlerChains = null;
@@ -746,21 +846,6 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
         return null;
     }
 
-    private boolean isJsr109Supported(Project project) {
-        JAXWSSupport wss = JAXWSSupport.getJAXWSSupport(project.getProjectDirectory());
-        if (wss != null) {
-            Map properties = wss.getAntProjectHelper().getStandardPropertyEvaluator().getProperties();
-            String serverInstance = (String) properties.get("j2ee.server.instance"); //NOI18N
-            if (serverInstance != null) {
-                J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstance);
-                if (j2eePlatform != null) {
-                    return j2eePlatform.isToolSupported(J2eePlatform.TOOL_JSR109);
-                }
-            }
-        }
-        return false;
-    }
-
     void refreshImplClass() {
         if (implBeanClass != null) {
             content.remove(implBeanClass);
@@ -843,5 +928,66 @@ public class JaxWsNode extends AbstractNode implements WsWsdlCookie, JaxWsTester
                 }
             }
         }
+    }
+
+    /** Old way to obtain port number from server instance (using instance properties)
+     * 
+     * @param instanceProperties
+     * @return port number
+     */
+    private String getPortNumber(InstanceProperties instanceProperties) {
+        String portNumber = instanceProperties.getProperty(InstanceProperties.HTTP_PORT_NUMBER);
+        if (portNumber == null || portNumber.equals("")) { //NOI18N
+            String serverURL = instanceProperties.getProperty(InstanceProperties.URL_ATTR);
+            if (serverURL == null) {
+                return "8080"; //NOI18N
+            } else {
+                String port = parseServerURL(serverURL);
+                return (port == null ? "8080" : port); //NOI18N
+            }
+        } else {
+            return portNumber;
+        }
+    }
+
+    private String parseServerURL(String serverURL) {
+        int index1 = serverURL.indexOf("http://"); //NOI18N
+        if (index1 >= 0) {
+            String s = serverURL.substring(index1+7);
+            int index2 = s.indexOf(":");
+            if (index2 > 0) {
+                s = s.substring(index2+1);
+                if (s.length() > 0) {
+                    StringBuffer buf = new StringBuffer();
+                    int i=0;
+                    while (Character.isDigit(s.charAt(i)) && i < s.length()) {
+                        buf.append(s.charAt(i++));
+                    }
+                    if (buf.length() > 0) {
+                        return buf.toString();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Old way to obtain host name from server instance (using instance properties)
+     * 
+     * @param instanceProperties
+     * @return host name
+     */
+    private String getHostName(InstanceProperties instanceProperties) {
+        String serverUrl = instanceProperties.getProperty(InstanceProperties.URL_ATTR);
+        String hostName = "localhost"; //NOI18N
+        if (serverUrl != null && serverUrl.indexOf("::") > 0) { //NOI18N
+            //NOI18N
+            int index1 = serverUrl.indexOf("::"); //NOI18N
+            int index2 = serverUrl.lastIndexOf(":"); //NOI18N
+            if (index2 > index1 + 2) {
+                hostName = serverUrl.substring(index1 + 2, index2);
+            }
+        }
+        return hostName;
     }
 }

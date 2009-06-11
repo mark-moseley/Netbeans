@@ -54,7 +54,13 @@ import javax.swing.JPanel;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ProjectUtils;
+import org.netbeans.modules.java.api.common.classpath.ClassPathSupport;
+import org.netbeans.modules.j2ee.common.project.ui.J2eePlatformUiSupport;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.ServerInstance;
 import org.netbeans.modules.j2ee.earproject.EarProject;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
@@ -117,13 +123,13 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
         jTextArgs.setDocument(uiProperties.ARUGMENTS_MODEL);
         jTextVMOptions.setDocument(uiProperties.VM_OPTIONS_MODEL);
         clientModuleUriCombo.setModel(uiProperties.CLIENT_MODULE_MODEL);
+        jCheckBoxDeployOnSave.setModel(uiProperties.DEPLOY_ON_SAVE_MODEL);
 
-        String j2eeVersion = uiProperties.getProject().getJ2eePlatformVersion();
-        if (J2eeModule.JAVA_EE_5.equals(j2eeVersion)) {
-            jTextFieldVersion.setText(EarProjectProperties.JAVA_EE_SPEC_50_LABEL);
-        } else if (J2eeModule.J2EE_14.equals(j2eeVersion)) {
-            jTextFieldVersion.setText(EarProjectProperties.J2EE_SPEC_14_LABEL);
+        Profile j2eeProfile = uiProperties.getProject().getJ2eeProfile();
+        if (j2eeProfile != null) {
+            jTextFieldVersion.setText(j2eeProfile.getDisplayName());
         }
+        setDeployOnSaveState();
         handleWebModuleRelated();
         initialized = true;
     }
@@ -140,9 +146,8 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
     }
     
     private int getLongestVersionLength() {
-        return Math.max(
-                EarProjectProperties.JAVA_EE_SPEC_50_LABEL.length(),
-                EarProjectProperties.J2EE_SPEC_14_LABEL.length());
+        // FIXME fix UI to handle the case without this stuff :/
+        return Profile.JAVA_EE_6_FULL.getDisplayName().length();
     }
     
     /** This method is called from within the constructor to
@@ -173,6 +178,8 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
         filler = new javax.swing.JLabel();
         jLabelVersion = new javax.swing.JLabel();
         jTextFieldVersion = new javax.swing.JTextField();
+        jCheckBoxDeployOnSave = new javax.swing.JCheckBox();
+        dosDescription = new javax.swing.JLabel();
 
         jLabelContextPath.setLabelFor(clientModuleUriCombo);
         org.openide.awt.Mnemonics.setLocalizedText(jLabelContextPath, NbBundle.getMessage(CustomizerRun.class, "LBL_CustomizeRun_ClientModuleURI_JLabel")); // NOI18N
@@ -212,7 +219,7 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
                     .add(webInfoPanelLayout.createSequentialGroup()
                         .add(jLabelRelativeURL)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jTextFieldRelativeURL, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 511, Short.MAX_VALUE)))
+                        .add(jTextFieldRelativeURL, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 514, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         webInfoPanelLayout.setVerticalGroup(
@@ -257,11 +264,11 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(clientInfoPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
                     .add(jLabelVMOptionsExample)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jTextVMOptions, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 514, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jTextArgs, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 514, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jTextVMOptions, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 518, Short.MAX_VALUE)
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, jTextArgs, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 518, Short.MAX_VALUE)
                     .add(org.jdesktop.layout.GroupLayout.TRAILING, clientInfoPanelLayout.createSequentialGroup()
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(jTextMainClass, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 514, Short.MAX_VALUE)))
+                        .add(jTextMainClass, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 518, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         clientInfoPanelLayout.setVerticalGroup(
@@ -288,18 +295,16 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
         jTextFieldVersion.setColumns(getLongestVersionLength());
         jTextFieldVersion.setEditable(false);
 
+        org.openide.awt.Mnemonics.setLocalizedText(jCheckBoxDeployOnSave, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "LBL_CustomizeRun_DeployOnSave_JCheckBox")); // NOI18N
+
+        org.openide.awt.Mnemonics.setLocalizedText(dosDescription, org.openide.util.NbBundle.getMessage(CustomizerRun.class, "LBL_CustomizeRun_DeployOnSave_Description")); // NOI18N
+
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(webInfoPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                        .addContainerGap()
-                        .add(clientInfoPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                     .add(filler)
                     .add(layout.createSequentialGroup()
                         .addContainerGap()
@@ -313,7 +318,20 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                                 .add(clientModuleUriCombo, 0, 530, Short.MAX_VALUE))
                             .add(jComboBoxServer, 0, 530, Short.MAX_VALUE)
-                            .add(jTextFieldVersion, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))))
+                            .add(jTextFieldVersion, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)))
+                    .add(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                            .add(layout.createSequentialGroup()
+                                .add(21, 21, 21)
+                                .add(dosDescription, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 623, Short.MAX_VALUE))
+                            .add(jCheckBoxDeployOnSave)))
+                    .add(layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(webInfoPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                        .addContainerGap()
+                        .add(clientInfoPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -333,30 +351,37 @@ public final class CustomizerRun extends JPanel implements HelpCtx.Provider {
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(jLabelVersion)
                     .add(jTextFieldVersion, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .add(32, 32, 32)
+                .add(7, 7, 7)
+                .add(jCheckBoxDeployOnSave)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(dosDescription)
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                 .add(webInfoPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(clientInfoPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(184, Short.MAX_VALUE))
+                .addContainerGap(126, Short.MAX_VALUE))
         );
 
         jComboBoxServer.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(CustomizerRun.class, "ACS_CustomizeRun_Server_A11YDesc")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
 
 private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jCheckBoxDisplayBrowserActionPerformed
-    handleWebModuleRelated();
-}//GEN-LAST:event_jCheckBoxDisplayBrowserActionPerformed
+    handleWebModuleRelated();//GEN-LAST:event_jCheckBoxDisplayBrowserActionPerformed
+}                                                       
     
     private void jComboBoxServerActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jComboBoxServerActionPerformed
-//        if (jComboBoxServer.getSelectedIndex() == -1 || !initialized)
+//        if (jComboBoxServer.getSelectedIndex() == -1 || !initialized)//GEN-LAST:event_jComboBoxServerActionPerformed
 //            return;
 //        String newCtxPath = null ; // wm.getContextPath(serverInstanceIDs [jComboBoxServer.getSelectedIndex ()]);
-    }//GEN-LAST:event_jComboBoxServerActionPerformed
+        setDeployOnSaveState();
+    }                                               
         
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JPanel clientInfoPanel;
     private javax.swing.JComboBox clientModuleUriCombo;
+    private javax.swing.JLabel dosDescription;
     private javax.swing.JLabel filler;
+    private javax.swing.JCheckBox jCheckBoxDeployOnSave;
     private javax.swing.JCheckBox jCheckBoxDisplayBrowser;
     private javax.swing.JComboBox jComboBoxServer;
     private javax.swing.JLabel jLabelArgs;
@@ -382,44 +407,61 @@ private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent e
     public HelpCtx getHelpCtx() {
         return new HelpCtx(CustomizerRun.class);
     }
-    
-    public static ApplicationUrisComboBoxModel createApplicationUrisComboBoxModel(EarProject project, EarProjectProperties uiProperties) {
-        return new ApplicationUrisComboBoxModel(project, uiProperties);
+
+    private void setDeployOnSaveState() {
+        if (uiProperties.J2EE_SERVER_INSTANCE_MODEL.getSelectedItem() != null) {
+            String serverInstanceID = J2eePlatformUiSupport.getServerInstanceID(
+                    uiProperties.J2EE_SERVER_INSTANCE_MODEL.getSelectedItem());
+
+            J2eeModule module = uiProperties.getProject().getAppModule().getJ2eeModule();
+            ServerInstance instance = Deployment.getDefault().getServerInstance(serverInstanceID);
+
+            try {
+                jCheckBoxDeployOnSave.setEnabled(instance.isDeployOnSaveSupported(module));
+            } catch (InstanceRemovedException ex) {
+                jCheckBoxDeployOnSave.setEnabled(false);
+            }
+        } else {
+            jCheckBoxDeployOnSave.setEnabled(false);
+        }
+    }
+
+    public static ApplicationUrisComboBoxModel createApplicationUrisComboBoxModel(EarProject project) {
+        return new ApplicationUrisComboBoxModel(project);
     }
     
     public static final class ApplicationUrisComboBoxModel extends AbstractListModel implements ComboBoxModel {
         
         private List<ClientModuleItem> values;
         private EarProject project;
-        private EarProjectProperties uiProperties;
         private ClientModuleItem selected;
         
-        public ApplicationUrisComboBoxModel(EarProject project, EarProjectProperties uiProperties) {
+        public ApplicationUrisComboBoxModel(EarProject project) {
             this.project = project;
-            this.uiProperties = uiProperties;
-            initValues();
+            initValues(EarProjectProperties.getJarContentAdditional(project));
         }
         
         public Object getElementAt(int index) {
             return values.get(index);
         }
 
-        private void setSelectedItem(String clientModuleURI, String appClient) {
-            if (values.contains(new ClientModuleItem(clientModuleURI, false))) {
+        private boolean setSelectedItem(String clientModuleURI, String appClient) {
+            if (clientModuleURI != null && values.contains(new ClientModuleItem(clientModuleURI, false))) {
                 setSelectedItem(new ClientModuleItem(clientModuleURI, false));
+                return true;
             } else if (appClient != null && values.contains(new ClientModuleItem(appClient, true))) {
                 setSelectedItem(new ClientModuleItem(appClient, true));
+                return true;
             }
+            return false;
         }
         
         public void storeSelectedItem(EditableProperties ep) {
             ClientModuleItem sel = (ClientModuleItem)getSelectedItem();
-            // #128854
-            initValues();
-            if (!values.contains(sel)) {
-                return;
-            }
-            if (sel.isAppClient()) {
+            if (sel == null) {
+                ep.remove(EarProjectProperties.APPLICATION_CLIENT);
+                ep.remove(EarProjectProperties.CLIENT_MODULE_URI);
+            } else if (sel.isAppClient()) {
                 ep.setProperty(EarProjectProperties.APPLICATION_CLIENT, sel.getUri());
                 ep.setProperty(EarProjectProperties.CLIENT_MODULE_URI, getClientModuleUriForAppClient(project));
             } else {
@@ -440,12 +482,17 @@ private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent e
             selected = (ClientModuleItem)obj;
         }
         
-        private void initValues() {
+        void refresh(List<ClassPathSupport.Item> list) {
+            initValues(list);
+            fireContentsChanged(this, 0, values.size());
+        }
+        
+        private void initValues(List<ClassPathSupport.Item> list) {
             Set<ClientModuleItem> items = new TreeSet<ClientModuleItem>();
-            for (Project p : EarProjectProperties.getApplicationSubprojects(project, J2eeModule.WAR)) {
+            for (Project p : EarProjectProperties.getApplicationSubprojects(list, J2eeModule.Type.WAR)) {
                 items.add(new ClientModuleItem(ProjectUtils.getInformation(p).getName(), false));
             }
-            for (Project p : EarProjectProperties.getApplicationSubprojects(project, J2eeModule.CLIENT)) {
+            for (Project p : EarProjectProperties.getApplicationSubprojects(list, J2eeModule.Type.CAR)) {
                 items.add(new ClientModuleItem(ProjectUtils.getInformation(p).getName(), true));
             }
             values = new ArrayList<ClientModuleItem>(items);
@@ -453,7 +500,9 @@ private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent e
                     AntProjectHelper.PROJECT_PROPERTIES_PATH);
             String clientModuleURI = ep.getProperty(EarProjectProperties.CLIENT_MODULE_URI);
             String appClient = ep.getProperty(EarProjectProperties.APPLICATION_CLIENT);
-            setSelectedItem(clientModuleURI, appClient);
+            if (!setSelectedItem(clientModuleURI, appClient)) {
+                setSelectedItem(values.size() > 0 ? values.get(0) : null);
+            }
         }
 
         private static String getClientModuleUriForAppClient(EarProject project) {
@@ -503,6 +552,7 @@ private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent e
         private boolean appClient;
 
         public ClientModuleItem(String uri, boolean appClient) {
+            assert uri != null;
             this.uri = uri;
             this.appClient = appClient;
         }
@@ -522,7 +572,7 @@ private void jCheckBoxDisplayBrowserActionPerformed(java.awt.event.ActionEvent e
 
         @Override
         public boolean equals(Object obj) {
-            if (obj == null || uri == null) {
+            if (obj == null) {
                 return false;
             }
             return uri.equals(((ClientModuleItem)obj).uri);

@@ -200,6 +200,17 @@ public class ClientBuilder {
         }
     }
 
+    private String uniqueClientName(final FileObject wsdlFolder, String origName) {
+        FileObject[] webServices = wsdlFolder.getChildren();
+        Set<String> serviceNames = new HashSet<String>(webServices.length);
+        for(FileObject service: webServices){
+            if(service.hasExt("wsdl") || service.hasExt("xml") && service.getName().
+                    endsWith(WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX))
+            serviceNames.add(service.getName());
+        }
+        return uniqueServiceName(origName, serviceNames);
+    }
+
     public Set/*FileObject*/ generate(final ProgressHandle handle) {
         Set result = Collections.EMPTY_SET;
 
@@ -247,18 +258,18 @@ public class ClientBuilder {
             // 1. Copy wsdl file to wsdl folder -- DONE
             final FileObject wsdlFolder = projectSupport.getWsdlFolder(true);
 
-            // First ensure neither the target wsdl or -config.xml files exist.
-            FileObject target = wsdlFolder.getFileObject(wsdlSource.getName(), "wsdl"); //NOI18N
-            if (target != null) {
-                target.delete();
-            }
-            target = wsdlFolder.getFileObject(wsdlSource.getName() + WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX, "xml"); // NOI18N
-            if (target != null) {
-                target.delete();
-            }
+//            // First ensure neither the target wsdl or -config.xml files exist.
+//            FileObject target = wsdlFolder.getFileObject(wsdlSource.getName(), "wsdl"); //NOI18N
+//            if (target != null) {
+//                target.delete();
+//            }
+//            target = wsdlFolder.getFileObject(wsdlSource.getName() + WsCompileConfigDataObject.WSCOMPILE_CONFIG_FILENAME_SUFFIX, "xml"); // NOI18N
+//            if (target != null) {
+//                target.delete();
+//            }
 
             // Now copy the wsdl file.
-            wsdlTarget = wsdlSource.copy(wsdlFolder, wsdlSource.getName(), "wsdl"); //NOI18N
+            wsdlTarget = wsdlSource.copy(wsdlFolder, uniqueClientName(wsdlFolder,wsdlSource.getName()), "wsdl"); //NOI18N
             if (handler.isServiceNameConflict()) {
                 handleServiceConflicts(wsdlTarget);
             }
@@ -385,7 +396,7 @@ public class ClientBuilder {
 
                 //get correct top folder where wsdl and mapping file are stored
                 // WEB-INF for webapp, META-INF otherwise (ejb, appclient, connector(?))
-                String prefix = J2eeModule.WAR.equals(j2eeMP.getJ2eeModule().getModuleType())
+                String prefix = J2eeModule.Type.WAR.equals(j2eeMP.getJ2eeModule().getType())
                         ? "WEB-INF/" //NOI18N
                         : "META-INF/";  //NOI18N
 
@@ -487,7 +498,7 @@ public class ClientBuilder {
             // 6. Add properties to drive new entry in build script -- DONE
             // 7. Add WS libraries to project build path -- DONE
             // 8. Force build script regeneration -- DONE
-
+            
             handle.progress(NbBundle.getMessage(ClientBuilder.class, "MSG_WizUpdatingBuildScript"), 65);
             Set features = handler.getWscompileFeatures();
             String[] wscompileFeatures = new String[features.size()];

@@ -40,9 +40,9 @@
  */
 package org.netbeans.modules.websvc.jaxrpc.nodes;
 
+import java.awt.Cursor;
 import org.netbeans.modules.j2ee.dd.api.web.ServletMapping;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
-import org.netbeans.modules.websvc.jaxrpc.actions.JaxRpcWsdlCookie;
 import org.netbeans.modules.websvc.core.webservices.ui.DeleteWsDialog;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
 import org.openide.ErrorManager;
@@ -54,11 +54,11 @@ import org.openide.nodes.AbstractNode;
 import org.netbeans.modules.j2ee.dd.api.webservices.Webservices;
 import org.netbeans.modules.j2ee.dd.api.webservices.WebserviceDescription;
 import org.netbeans.modules.j2ee.dd.api.webservices.ServiceImplBean;
+import org.openide.util.ImageUtilities;
 import org.openide.util.actions.SystemAction;
 import org.openide.actions.*;
 import org.openide.util.HelpCtx;
 import javax.swing.Action;
-import org.openide.util.Utilities;
 import java.awt.Image;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.websvc.jaxrpc.actions.AddOperationAction;
@@ -89,15 +89,16 @@ import org.openide.util.lookup.InstanceContent;
 import org.openide.windows.TopComponent;
 import org.openide.util.RequestProcessor;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
-import org.netbeans.modules.websvc.core.ConfigureHandlerAction;
-import org.netbeans.modules.websvc.core.ConfigureHandlerCookie;
-import org.netbeans.modules.websvc.core.webservices.ui.panels.MessageHandlerPanel;
+import org.netbeans.modules.websvc.spi.support.ConfigureHandlerAction;
+import org.netbeans.modules.websvc.api.support.ConfigureHandlerCookie;
+import org.netbeans.modules.websvc.spi.support.MessageHandlerPanel;
 import org.netbeans.modules.j2ee.dd.api.webservices.PortComponent;
 import org.netbeans.modules.j2ee.dd.api.webservices.PortComponentHandler;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.Arrays;
 import javax.swing.ListModel;
 import javax.swing.table.TableModel;
 import org.apache.tools.ant.module.api.support.ActionUtils;
@@ -113,6 +114,7 @@ import org.openide.execution.ExecutorTask;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.nodes.Node;
+import org.openide.util.lookup.Lookups;
 
 public class WebServiceNode extends AbstractNode implements WSRegisterCookie, WsWsdlCookie,
         ConfigureHandlerCookie, OpenCookie, RegenerateFromWsdlCookie{
@@ -141,10 +143,11 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
         setName(wsName);
         content.add(this);
         content.add(implClass);
+        setValue("wsdl-url",getWsdlURL());
     }
     
     public Image getIcon(int type){
-        return Utilities.loadImage("org/netbeans/modules/websvc/core/webservices/ui/resources/XMLServiceDataIcon.gif");
+        return ImageUtilities.loadImage("org/netbeans/modules/websvc/core/webservices/ui/resources/webservice.png");
     }
     
     public Image getOpenedIcon(int type){
@@ -188,7 +191,7 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
     
     // Create the popup menu:
     public Action[] getActions(boolean context) {
-        return new SystemAction[] {
+        ArrayList<Action> actions = new ArrayList<Action>(Arrays.asList(
             SystemAction.get(OpenAction.class),
             null,
             SystemAction.get(AddOperationAction.class),
@@ -201,10 +204,22 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
             null,
             SystemAction.get(DeleteAction.class),
             null,
-            SystemAction.get(PropertiesAction.class),
-        };
+            SystemAction.get(PropertiesAction.class)));
+        addFromLayers(actions, "WebServices/Services/Actions");
+        return actions.toArray(new Action[actions.size()]);
     }
     
+    private void addFromLayers(ArrayList<Action> actions, String path) {
+        Lookup look = Lookups.forPath(path);
+        for (Object next : look.lookupAll(Object.class)) {
+            if (next instanceof Action) {
+                actions.add((Action) next);
+            } else if (next instanceof javax.swing.JSeparator) {
+                actions.add(null);
+            }
+        }
+    }
+
     public HelpCtx getHelpCtx() {
         return HelpCtx.DEFAULT_HELP;
     }
@@ -348,9 +363,9 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
         }
         
         String contextRoot = "webservice";//NO18N
-        Object moduleType = provider.getJ2eeModule().getModuleType();
+        J2eeModule.Type moduleType = provider.getJ2eeModule().getType();
         String wsURI = wsName;
-        if(J2eeModule.WAR.equals(moduleType)) {
+        if(J2eeModule.Type.WAR.equals(moduleType)) {
             J2eeModuleProvider.ConfigSupport configSupport = provider.getConfigSupport();
             WebServicesSupport wsSupport = WebServicesSupport.getWebServicesSupport(srcRoot);
             FileObject ddFolder = wsSupport.getWsDDFolder();
@@ -371,8 +386,8 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
             if(contextRoot != null && contextRoot.startsWith("/")){
                 contextRoot = contextRoot.substring(1);
             }
-        } else if(J2eeModule.EJB.equals(moduleType)) {
-            contextRoot = "webservice";//NO18N for now, we need to find the real value (see bug...57034 and 52265)
+        } else if(J2eeModule.Type.EJB.equals(moduleType)) {
+            contextRoot = "";//NO18N for now, we need to find the real value (see bug...57034 and 52265)
         }
         
         return "http://"+hostName+":" + portNumber +"/" + (contextRoot != null && !contextRoot.equals("") ? contextRoot + "/" : "") + wsURI + "?WSDL";
@@ -451,7 +466,7 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
                             WebServicesRegistryView registryView = (WebServicesRegistryView)Lookup.getDefault().
                                     lookup(WebServicesRegistryView.class);
                             TopComponent currentComponent = TopComponent.getRegistry().getActivated();
-                            currentComponent.setCursor(org.openide.util.Utilities.createProgressCursor(currentComponent));
+                            currentComponent.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
                             try{
                                 boolean success = registryView.registerService(url, true);
                                 if(!success) {
@@ -613,7 +628,7 @@ public class WebServiceNode extends AbstractNode implements WSRegisterCookie, Ws
     }
     
     private void runWscompileTarget(){
-        FileObject buildImplFo = project.getProjectDirectory().getFileObject(GeneratedFilesHelper.BUILD_IMPL_XML_PATH);
+        FileObject buildImplFo = project.getProjectDirectory().getFileObject(GeneratedFilesHelper.BUILD_XML_PATH);
         try {
             ExecutorTask wscompileTask =
                     ActionUtils.runTarget(buildImplFo,new String[]{wsName + "_wscompile"},null); //NOI18N

@@ -47,6 +47,7 @@ import java.util.LinkedList;
 import java.util.List;
 import javax.lang.model.element.Element;
 import javax.swing.Action;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.ui.ElementOpen;
 import org.netbeans.api.project.FileOwnerQuery;
@@ -54,12 +55,14 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.j2ee.api.ejbjar.EjbReference;
 import org.openide.DialogDescriptor;
+import org.openide.NotificationLineSupport;
 import org.openide.nodes.Children;
 import org.openide.nodes.Node;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.j2ee.ejbcore.Utils;
 import org.netbeans.modules.j2ee.api.ejbjar.EnterpriseReferenceContainer;
+import org.netbeans.modules.j2ee.common.Util;
 import org.netbeans.modules.j2ee.ejbcore._RetoucheUtil;
 import org.netbeans.modules.j2ee.ejbcore.action.CallEjbGenerator;
 import org.openide.DialogDisplayer;
@@ -67,6 +70,8 @@ import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.nodes.AbstractNode;
 import org.openide.nodes.FilterNode;
+import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 
 /**
  * Handling of Call EJB dialog; used from CallEjbAction
@@ -75,7 +80,7 @@ import org.openide.nodes.FilterNode;
  */
 public class CallEjbDialog {
     
-    public boolean open(FileObject referencingFO, String referencingClassName, String title) throws IOException {
+    public boolean open(final FileObject referencingFO, final String referencingClassName, String title) throws IOException {
         Project enterpriseProject = FileOwnerQuery.getOwner(referencingFO);
         
         Project[] allProjects = Utils.getCallableEjbProjects(enterpriseProject);
@@ -84,6 +89,7 @@ public class CallEjbDialog {
         for (int i = 0; i < allProjects.length; i++) {
             Node projectView = new EjbsNode(allProjects[i]);
             ejbProjectNodes.add(new FilterNode(projectView, new EjbChildren(projectView)) {
+                @Override
                 public Action[] getActions(boolean context) {
                     return new Action[0];
                 }
@@ -95,8 +101,8 @@ public class CallEjbDialog {
         Node root = new AbstractNode(children);
         root.setDisplayName(NbBundle.getMessage(CallEjbDialog.class, "LBL_EJBModules"));
         EnterpriseReferenceContainer erc = enterpriseProject.getLookup().lookup(EnterpriseReferenceContainer.class);
-        boolean isJavaEE5orHigher = Utils.isJavaEE5orHigher(enterpriseProject);
-        CallEjbPanel panel = new CallEjbPanel(referencingFO, root, isJavaEE5orHigher ? null : erc.getServiceLocatorName(), referencingClassName);
+        boolean isJavaEE5orHigher = Util.isJavaEE5orHigher(enterpriseProject);
+        final CallEjbPanel panel = new CallEjbPanel(referencingFO, root, isJavaEE5orHigher ? null : erc.getServiceLocatorName(), referencingClassName);
         if (isJavaEE5orHigher) {
             panel.disableServiceLocator();
         }
@@ -111,6 +117,8 @@ public class CallEjbDialog {
                 new HelpCtx(CallEjbPanel.class),
                 null
                 );
+        NotificationLineSupport statusLine = dialogDescriptor.createNotificationLineSupport();
+        panel.setNotificationLine(statusLine);
         
         panel.addPropertyChangeListener(new PropertyChangeListener() {
             public void propertyChange(PropertyChangeEvent evt) {
@@ -130,32 +138,44 @@ public class CallEjbDialog {
             return false;
         }
         Node ejbNode = panel.getEjb();
-        boolean throwExceptions = !panel.convertToRuntime();
+        final boolean throwExceptions = !panel.convertToRuntime();
         EjbReference ref = ejbNode.getLookup().lookup(EjbReference.class);
         String referenceNameFromPanel = panel.getReferenceName();
         if (referenceNameFromPanel != null && referenceNameFromPanel.trim().equals("")) {
             referenceNameFromPanel = null;
         }
-        FileObject fileObject = ejbNode.getLookup().lookup(FileObject.class);
-        Project nodeProject = FileOwnerQuery.getOwner(fileObject);
+        final FileObject fileObject = ejbNode.getLookup().lookup(FileObject.class);
+        final Project nodeProject = FileOwnerQuery.getOwner(fileObject);
         
-        boolean remoteInterfaceSelected = panel.isRemoteInterfaceSelected();
+        final boolean remoteInterfaceSelected = panel.isRemoteInterfaceSelected();
         boolean isDefaultRefName = panel.isDefaultRefName();
-        String referencedClassName = _RetoucheUtil.getJavaClassFromNode(ejbNode).getQualifiedName();
+        final String referencedClassName = _RetoucheUtil.getJavaClassFromNode(ejbNode).getQualifiedName();
 
-        CallEjbGenerator generator = CallEjbGenerator.create(ref, referenceNameFromPanel, isDefaultRefName);
-        ElementHandle<? extends Element> elementHandle = generator.addReference(
-                referencingFO, 
-                referencingClassName, 
-                fileObject, 
-                referencedClassName, 
-                panel.getServiceLocator(), 
-                remoteInterfaceSelected, 
-                throwExceptions, 
-                nodeProject
-                );
-        
-        ElementOpen.open(referencingFO, elementHandle);
+        final CallEjbGenerator generator = CallEjbGenerator.create(ref, referenceNameFromPanel, isDefaultRefName);
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                try {
+                    final ElementHandle<? extends Element> elementHandle = generator.addReference(
+                            referencingFO,
+                            referencingClassName,
+                            fileObject,
+                            referencedClassName,
+                            panel.getServiceLocator(),
+                            remoteInterfaceSelected,
+                            throwExceptions,
+                            nodeProject
+                            );
+                    SwingUtilities.invokeLater(new Runnable() {
+                        public void run() {
+                            ElementOpen.open(referencingFO, elementHandle);
+                        }
+                    });
+                } catch (IOException ioe) {
+                    Exceptions.printStackTrace(ioe);
+                }
+            }
+        });
+
         
         return true;
     }

@@ -78,7 +78,6 @@ import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
 import org.netbeans.modules.identity.profile.api.bridgeapi.RuntimeBridge;
-import org.netbeans.modules.identity.profile.api.configurator.ConfiguratorException;
 import org.netbeans.modules.identity.profile.api.configurator.ServerProperties;
 import org.netbeans.modules.j2ee.api.ejbjar.Car;
 import org.netbeans.modules.j2ee.dd.api.client.AppClient;
@@ -98,8 +97,6 @@ import org.netbeans.modules.j2ee.metadata.model.api.MetadataModelAction;
 import org.netbeans.modules.websvc.wsitconf.api.WSITConfigProvider;
 import org.netbeans.modules.websvc.wsitconf.spi.SecurityCheckerRegistry;
 import org.openide.filesystems.FileLock;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 
 /**
@@ -180,7 +177,7 @@ public class J2eeProjectHelper {
     
     
     private Node node;
-    private JaxWsModel model;
+    private JaxWsModel jaxWsModel;
     private ProjectType projectType;
     private Version version;
     private File sunDD;
@@ -192,8 +189,8 @@ public class J2eeProjectHelper {
     private List<WsdlData> wsdlData;
     private List<String> serviceNames;
     
-    public static J2eeProjectHelper newInstance(Node node, JaxWsModel model) {
-        J2eeProjectHelper helper = new J2eeProjectHelper(node, model);
+    public static J2eeProjectHelper newInstance(Node node, JaxWsModel jaxWsModel) {
+        J2eeProjectHelper helper = new J2eeProjectHelper(node, jaxWsModel);
         
         //if (helper.getVersion() == Version.VERSION_1_5) {
         //    return new J2ee15ProjectHelper(node, model);
@@ -203,9 +200,9 @@ public class J2eeProjectHelper {
     }
     
     /** Creates a new instance of J2eeProjectHelper */
-    protected J2eeProjectHelper(Node node, JaxWsModel model) {
+    protected J2eeProjectHelper(Node node, JaxWsModel jaxWsModel) {
         this.node = node;
-        this.model = model;
+        this.jaxWsModel = jaxWsModel;
     }
     
     public boolean isSecurable() {
@@ -355,13 +352,13 @@ public class J2eeProjectHelper {
     
     public ProjectType getProjectType() {
         if (projectType == null) {
-            Object moduleType = getProvider().getJ2eeModule().getModuleType();
+            Object moduleType = getProvider().getJ2eeModule().getType();
             
-            if(J2eeModule.WAR.equals(moduleType)) {
+            if(J2eeModule.Type.WAR.equals(moduleType)) {
                 projectType = ProjectType.WEB;
-            } else if (J2eeModule.EJB.equals(moduleType)) {
+            } else if (J2eeModule.Type.EJB.equals(moduleType)) {
                 projectType = ProjectType.EJB;
-            } else if (J2eeModule.CLIENT.equals(moduleType)) {
+            } else if (J2eeModule.Type.CAR.equals(moduleType)) {
                 projectType = ProjectType.CLIENT;
             } else {
                 projectType = ProjectType.UNKNOWN;
@@ -977,8 +974,7 @@ public class J2eeProjectHelper {
         assert template != null;
         assert folder != null;
         
-        FileSystem defaultFS = Repository.getDefault().getDefaultFileSystem();
-        FileObject templateFO = defaultFS.findResource(template);
+        FileObject templateFO = FileUtil.getConfigFile(template);
         DataObject templateDO = DataObject.find(templateFO);
         DataFolder dataFolder = DataFolder.findFolder(folder);
         DataObject dataObj = templateDO.createFromTemplate(dataFolder, sunDDName);
@@ -1040,7 +1036,7 @@ public class J2eeProjectHelper {
     //    }
     
     public boolean isWsitSecurityEnabled() {
-        return WSITConfigProvider.getDefault().isWsitSecurityEnabled(node, model);
+        return WSITConfigProvider.getDefault().isWsitSecurityEnabled(node, jaxWsModel);
     }
     
     public void setTransientState(boolean isEnabled) {
@@ -1341,17 +1337,17 @@ public class J2eeProjectHelper {
         
         if (source != null) return source;
         
-        FileObject fo = (FileObject)node.getLookup().lookup(FileObject.class);
+        FileObject fo = node.getLookup().lookup(FileObject.class);
         
         if (fo != null) return fo;
         
-        DataObject dobj = (DataObject)node.getLookup().lookup(DataObject.class);
+        DataObject dobj = node.getLookup().lookup(DataObject.class);
         
         return dobj.getPrimaryFile();
     }
     
     protected FileObject getJavaSource() {
-        return (FileObject)node.getLookup().lookup(FileObject.class);
+        return node.getLookup().lookup(FileObject.class);
     }
     
     protected String getJavaSourceName() {
@@ -1359,11 +1355,11 @@ public class J2eeProjectHelper {
     }
     
     protected Client getClient() {
-        return (Client) node.getLookup().lookup(Client.class);
+        return node.getLookup().lookup(Client.class);
     }
     
     protected Service getService() {
-        return (Service) node.getLookup().lookup(Service.class);
+        return node.getLookup().lookup(Service.class);
     }
     
     protected WebModule getWebModule() {
