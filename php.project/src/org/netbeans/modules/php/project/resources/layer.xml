@@ -51,7 +51,11 @@ made subject to such option by the copyright holder.
                 <attr name="instanceCreate" methodvalue="org.netbeans.modules.php.project.ui.logicalview.SrcNode.createUploadAction"/>
             </file>
         </folder>
+        <folder name="Tools">
+            <file name="org-netbeans-modules-php-project-ui-actions-tests-CreateTestsAction.instance"/>
+        </folder>
     </folder>
+
     <!-- uncomment/change default values for actions Download, Upload
     <folder name="Shortcuts">
         <file name="CSA-D.shadow">
@@ -84,6 +88,14 @@ made subject to such option by the copyright holder.
                     <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.php.project.ui.wizards.Bundle"/>
                     <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/php/project/ui/resources/phpProject.png"/>
                     <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/php/project/ui/resources/existingPhpProject.html"/>
+                </file>
+                <file name="remotePHPProject.php">
+                    <attr name="position" intvalue="300"/>
+                    <attr name="template" boolvalue="true"/>
+                    <attr name="templateWizardIterator" methodvalue="org.netbeans.modules.php.project.ui.wizards.NewPhpProjectWizardIterator.remote"/>
+                    <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.php.project.ui.wizards.Bundle"/>
+                    <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/php/project/ui/resources/phpProject.png"/>
+                    <attr name="templateWizardURL" urlvalue="nbresloc:/org/netbeans/modules/php/project/ui/resources/remotePhpProject.html"/>
                 </file>
             </folder>
         </folder>
@@ -156,19 +168,13 @@ made subject to such option by the copyright holder.
                     <attr name="position" intvalue="1000"/>
                 </file>
             </folder>
-            <folder name="Nodes">
-                <file name="org-netbeans-modules-php-project-ui-logicalview-SourcesNodeFactory.instance">
-                    <attr name="position" intvalue="100"/>
-                </file>
-                <file name="org-netbeans-modules-php-project-ui-logicalview-IncludePathNodeFactory.instance">
-                    <attr name="position" intvalue="200"/>
-                </file>
-            </folder>
         </folder>
     </folder>
     <folder name="PHP">
         <folder name="RuntimeLibraries">
             <file name="pdo_mysql.php" url="nbres:/org/netbeans/modules/php/project/resources/phpruntime/pdo_mysql.php"/>
+        </folder>
+        <folder name="Options">
         </folder>
     </folder>
     <folder name="Loaders">
@@ -251,7 +257,20 @@ made subject to such option by the copyright holder.
                         <attr name="originalFile" stringvalue="Actions/Project/org-netbeans-modules-project-ui-RunSingle.instance"/>
                         <attr name="position" intvalue="840"/>
                     </file>
+                    <folder name="goto">
+                        <file name="org-netbeans-modules-gototest-GotoOppositeAction.shadow">
+                            <attr name="originalFile" stringvalue="Actions/UnitTests/org-netbeans-modules-gototest-GotoOppositeAction.instance"/>
+                            <attr name="position" intvalue="200"/>
+                        </file>
+                    </folder>
                 </folder>
+            </folder>
+        </folder>
+    </folder>
+    <folder name="GsfPlugins">
+        <folder name="text">
+            <folder name="x-php5">
+                <file name="codecoverage"/>
             </folder>
         </folder>
     </folder>
@@ -260,6 +279,21 @@ made subject to such option by the copyright holder.
             <file name="php-project-mime-resolver.xml" url="php-project-mime-resolver.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.php.project.resources.Bundle"/>
                 <attr name="position" intvalue="99000"/>
+            </file>
+        </folder>
+    </folder>
+    <folder name="OptionsExport">
+        <folder name="PHP">
+            <attr name="displayName" bundlevalue="org.netbeans.modules.php.project.resources.Bundle#Php.Options.Export.Category.displayName"/>
+            <attr name="position" intvalue="700"/>
+            <file name="General">
+                <attr name="include" stringvalue="config/Preferences/org/netbeans/modules/php/project/general/.*|config/Preferences/org/netbeans/modules/php/project/general.properties|config/Editors/text/x-php5/.*"/>
+                <attr name="exclude" stringvalue="config/Preferences/org/netbeans/modules/php/project/private/.*|config/Preferences/org/netbeans/modules/php/project/private.properties"/>
+                <attr name="displayName" bundlevalue="org.netbeans.modules.php.project.resources.Bundle#Php.Options.Export.General.displayName"/>
+            </file>
+            <file name="Remote">
+                <attr name="include" stringvalue="config/Preferences/org/netbeans/modules/php/project/RemoteConnections/.*|config/Preferences/org/netbeans/modules/php/project/RemoteConnections.properties"/>
+                <attr name="displayName" bundlevalue="org.netbeans.modules.php.project.resources.Bundle#Php.Options.Export.Remote.displayName"/>
             </file>
         </folder>
     </folder>
