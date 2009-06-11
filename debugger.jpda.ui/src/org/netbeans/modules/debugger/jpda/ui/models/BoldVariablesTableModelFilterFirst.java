@@ -144,6 +144,9 @@ Constants {
         Color color
     ) {
         if (text == null) return null;
+        if (text.length() > 6 && text.substring(0, 6).equalsIgnoreCase("<html>")) {
+            return text; // Already HTML
+        }
         StringBuffer sb = new StringBuffer ();
         sb.append ("<html>");
         if (bold) sb.append ("<b>");
@@ -152,12 +155,14 @@ Constants {
             sb.append ("<font color=");
             sb.append (Integer.toHexString ((color.getRGB () & 0xffffff)));
             sb.append (">");
+        } else {
+            sb.append ("<font color=000000>");
         }
         text = text.replaceAll ("&", "&amp;");
         text = text.replaceAll ("<", "&lt;");
         text = text.replaceAll (">", "&gt;");
         sb.append (text);
-        if (color != null) sb.append ("</font>");
+        /*if (color != null)*/ sb.append ("</font>");
         if (italics) sb.append ("</i>");
         if (bold) sb.append ("</b>");
         sb.append ("</html>");
