@@ -58,8 +58,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.Stack;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openide.filesystems.FileSystem;
-import org.openide.util.NotImplementedException;
+import org.openide.util.Exceptions;
 import org.openide.xml.XMLUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
@@ -80,6 +81,7 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
     
     private final static String[] ATTR_TYPES = {
         "boolvalue",
+        "bundlevalue",
         "bytevalue",
         "charvalue",
         "doublevalue",
@@ -91,11 +93,12 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
         "serialvalue",
         "shortvalue",
         "stringvalue",
-        "urlvalue"
+        "urlvalue",
     };
     
     private final static String DTD_1_0 = "-//NetBeans//DTD Filesystem 1.0//EN";
     private final static String DTD_1_1 = "-//NetBeans//DTD Filesystem 1.1//EN";
+    private final static String DTD_1_2 = "-//NetBeans//DTD Filesystem 1.2//EN";
     
     private Locator locator;
     private MemFolder root;
@@ -132,14 +135,18 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
         curr = new Stack<Object>();
         curr.push(root);
         try {
-            // XMLReader r = SAXParserFactory.newInstance().newSAXParser().getXMLReader();
             XMLReader r = XMLUtil.createXMLReader();
             // Speed enhancements.
             // XXX these are not really necessary; OK to run validation here!
             r.setFeature("http://xml.org/sax/features/validation", false);
             r.setFeature("http://xml.org/sax/features/namespaces", false);
-            // XXX this is not standard, should not rely on it:
-            r.setFeature("http://xml.org/sax/features/string-interning", true);
+            try {
+                r.setFeature("http://xml.org/sax/features/string-interning", true);
+            } catch (SAXException x) {
+                Logger.getLogger(ParsingLayerCacheManager.class.getName()).log(Level.INFO,
+                        "#127537: could not set string-interning feature on parser; are you using a nonstandard XML parser?",
+                        x);
+            }
             r.setContentHandler(this);
             r.setErrorHandler(this);
             r.setEntityResolver(this);
@@ -165,7 +172,7 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
                 } catch (Exception e) {
                     curr.clear();
                     curr.push(root);
-                    LayerCacheManager.err.fine("Caught " + e + " while parsing: " + base);
+                    Exceptions.attachMessage(e, "While parsing " + base);
                     if (carrier == null) {
                         carrier = e;
                     } else {
@@ -183,7 +190,7 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
         } catch (IOException ioe) {
             throw ioe;
         } catch (Exception e) {
-            throw (IOException) new IOException("While parsing " + base + ": " + e).initCause(e);
+            throw (IOException) new IOException(e.toString()).initCause(e);
         } finally {
             fileCount = folderCount = attrCount = 0;
             base = null;
@@ -292,6 +299,7 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
                 MemFileOrFolder f2 = (MemFileOrFolder)it.next();
                 if (f2.name.equals(name)) {
                     f = f2;
+                    f.registerURL(base);
                     break;
                 }
             }
@@ -399,7 +407,7 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
     }
     
     public InputSource resolveEntity(String pubid, String sysid) throws SAXException, IOException {
-        if (pubid != null && (pubid.equals(DTD_1_0) || pubid.equals(DTD_1_1))) {
+        if (pubid != null && (pubid.equals(DTD_1_0) || pubid.equals(DTD_1_1) || pubid.equals(DTD_1_2))) {
             return new InputSource(new ByteArrayInputStream(new byte[0]));
         } else {
             return null;
@@ -431,11 +439,45 @@ abstract class ParsingLayerCacheManager extends LayerCacheManager implements Con
     protected static abstract class MemFileOrFolder {
         public String name;
         public List<MemAttr> attrs = null; // {null | List<MemAttr>}
-        public final URL base;
+        private Object base;
         
         public MemFileOrFolder (URL base) {
             this.base = base;
         }
+
+        @SuppressWarnings("unchecked")
+        final URL getBase() {
+            Object o = base;
+            if (o instanceof URL) {
+                return (URL)o;
+            } else {
+                return (URL)((Iterable)o).iterator().next();
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        final List<URL> getURLs() {
+            Object o = base;
+            if (o instanceof URL) {
+                return Collections.singletonList((URL)o);
+            } else {
+                return o != null ? (List<URL>)o : Collections.<URL>emptyList();
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        final void registerURL(URL url) {
+            List<URL> urls;
+            if (base instanceof URL) {
+                URL u = (URL)base;
+                base = urls = new ArrayList<URL>();
+                urls.add(u);
+            } else {
+                urls = (List<URL>)base;
+            }
+            urls.add(url);
+        }
+
     }
     
     /** Struct for <folder>.
