@@ -41,30 +41,62 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import java.util.Map.Entry;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+import org.netbeans.modules.cnd.utils.cache.TinyCharSequence;
 
 /**
  *
  * @author gorrus
  */
 public final class APTMacroMapSnapshot {
-    protected final Map<String/*getTokenTextKey(token)*/, APTMacro> macros = new HashMap<String, APTMacro>();
-    protected final APTMacroMapSnapshot parent;
+    private static final boolean USE_SIMPLIFIED_MAP = true;
+    private final Map<CharSequence, APTMacro> macros;
 
+    /*package*/ final APTMacroMapSnapshot parent;
+    
     public APTMacroMapSnapshot(APTMacroMapSnapshot parent) {
+        macros = createMacroMap(1);
+        assert (parent == null || parent.parent == null || !parent.parent.isEmtpy()) : "how grand father could be empty " + parent;
+        // optimization to prevent chaining of empty snapshots
+        while (parent != null && parent.isEmtpy()) {
+            parent = parent.parent;
+        }
         this.parent = parent;
     }
+
+    private Map<CharSequence, APTMacro> createMacroMap(int prefferedSize) {
+        if (USE_SIMPLIFIED_MAP && prefferedSize < 2) {
+            return new SimplifiedMap();
+        } else {
+            if (prefferedSize < 2) {
+                return new HashMap<CharSequence, APTMacro>(2);
+            } else {
+                return new HashMap<CharSequence, APTMacro>(prefferedSize);
+            }
+        }
+    }
+
+    /*package*/ final void putMacro(CharSequence name, APTMacro macro) {
+        macros.put(name, macro);
+    }
+
+    public final APTMacro getMacro(APTToken token) {
+        return getMacro(token.getTextID());
+    }
     
-    public final APTMacro getMacro(Token token) {
-        Object key = APTUtils.getTokenTextKey(token);
+    /*package*/ final APTMacro getMacro(CharSequence key) {
+        assert key instanceof TinyCharSequence : "string can't be here " + key;
         APTMacroMapSnapshot currentSnap = this;
         while (currentSnap != null) {
             APTMacro macro = currentSnap.macros.get(key);
@@ -76,25 +108,37 @@ public final class APTMacroMapSnapshot {
         return null;
     }
     
+    @Override
     public String toString() {
-        Map<String, APTMacro> tmpMap = new HashMap<String, APTMacro>();
+        Map<CharSequence, APTMacro> tmpMap = new HashMap<CharSequence, APTMacro>();
         addAllMacros(this, tmpMap);
         return APTUtils.macros2String(tmpMap);
     }
     
-    public static void addAllMacros(APTMacroMapSnapshot snap, Map<String, APTMacro> out) {
-        if (snap.parent != null) {
-            addAllMacros(snap.parent, out);
-        }
-        for (Map.Entry<String, APTMacro> cur : snap.macros.entrySet()) {
-            if (cur.getValue() != UNDEFINED_MACRO) {
-                out.put(cur.getKey(), cur.getValue());
-            } else {
-                out.remove(cur.getKey());
+    public static void addAllMacros(APTMacroMapSnapshot snap, Map<CharSequence, APTMacro> out) {
+        if (snap != null) {
+            if (snap.parent != null) {
+                addAllMacros(snap.parent, out);
+            }
+            for (Map.Entry<CharSequence, APTMacro> cur : snap.macros.entrySet()) {
+                if (cur.getValue() != UNDEFINED_MACRO) {
+                    out.put(cur.getKey(), cur.getValue());
+                } else {
+                    out.remove(cur.getKey());
+                }
             }
         }
     }    
-    
+
+    public static int getMacroSize(APTMacroMapSnapshot snap) {
+        int size = 0;
+        while (snap != null) {
+            size += snap.macros.size();
+            snap = snap.parent;
+        }
+        return size;
+    }
+
     public boolean isEmtpy() {
         return macros.isEmpty();
     }
@@ -109,35 +153,240 @@ public final class APTMacroMapSnapshot {
     
     public APTMacroMapSnapshot(DataInput input) throws IOException {
         this.parent = APTSerializeUtils.readSnapshot(input);
-        APTSerializeUtils.readStringToMacroMap(this.macros, input);
+        int collSize = input.readInt();
+        macros = createMacroMap(collSize);
+        APTSerializeUtils.readStringToMacroMap(collSize, this.macros, input);
     }  
         
     //This is a single instance of a class to indicate that macro is undefined,
     //not a child of APTMacro to track errors more easily
-    public static final UndefinedMacro UNDEFINED_MACRO = new UndefinedMacro();
-    private static class UndefinedMacro implements APTMacro {
+    public static final APTMacro UNDEFINED_MACRO = new UndefinedMacro();
+    private static final class UndefinedMacro implements APTMacro {
+        @Override
         public String toString() {
             return "Macro undefined"; // NOI18N
         }
 
-        public boolean isSystem() {
-            throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
+        public CharSequence getFile() {
+            return CharSequenceKey.empty();
+        }
+        
+        public Kind getKind() {
+            return Kind.USER_SPECIFIED;
         }
 
         public boolean isFunctionLike() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Token getName() {
+        public APTToken getName() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Collection<Token> getParams() {
+        public Collection<APTToken> getParams() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
         public TokenStream getBody() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
+        }
+
+        public APTDefine getDefineNode() {
+            throw new UnsupportedOperationException("Not supported in fake impl."); // NOI18N
+        }
+
+    }
+
+    private final static class SimplifiedMap implements Map<CharSequence, APTMacro>{
+        private Map<CharSequence, APTMacro> proxyMap;
+        private CharSequence key;
+        private APTMacro macro;
+        private SimplifiedMap(){
+        }
+
+        public int size() {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return 0;
+                }
+                return 1;
+            }
+            return proxyMap.size();
+        }
+
+        public boolean isEmpty() {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return true;
+                }
+                return false;
+            }
+            return proxyMap.isEmpty();
+        }
+
+        public boolean containsKey(Object aKey) {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return false;
+                }
+                return key.equals(aKey);
+            }
+            return proxyMap.isEmpty();
+        }
+
+        public boolean containsValue(Object value) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        public APTMacro get(Object aKey) {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return null;
+                }
+                if (key.equals(aKey)){
+                    return macro;
+                }
+            }
+            return proxyMap.get(aKey);
+        }
+
+        public APTMacro put(CharSequence aKey, APTMacro aMacro) {
+            if (proxyMap == null) {
+                if (key == null) {
+                    key = aKey;
+                    macro = aMacro;
+                    return null;
+                }
+                if (key.equals(aKey)){
+                    APTMacro res = macro;
+                    macro = aMacro;
+                    return res;
+                }
+                proxyMap = new HashMap<CharSequence, APTMacro>();
+                proxyMap.put(key, macro);
+                proxyMap.put(aKey, aMacro);
+                key = null;
+                macro = null;
+                return null;
+            }
+            return proxyMap.put(aKey, aMacro);
+        }
+
+        public APTMacro remove(Object aKey) {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return null;
+                }
+                if (key.equals(aKey)){
+                    APTMacro res = macro;
+                    key = null;
+                    macro = null;
+                    return res;
+                }
+                return null;
+            }
+            return proxyMap.remove(aKey);
+        }
+
+        public void putAll(Map<? extends CharSequence, ? extends APTMacro> t) {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        public void clear() {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return;
+                }
+                key = null;
+                macro = null;
+                return;
+            }
+            proxyMap.clear();
+        }
+
+        public Set<CharSequence> keySet() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        public Collection<APTMacro> values() {
+            throw new UnsupportedOperationException("Not supported yet.");
+        }
+
+        public Set<Entry<CharSequence, APTMacro>> entrySet() {
+            if (proxyMap == null) {
+                if (key == null) {
+                    return Collections.<Entry<CharSequence, APTMacro>>emptySet();
+                }
+                return new Set<Entry<CharSequence, APTMacro>>(){
+                    public int size() {
+                        return 1;
+                    }
+                    public boolean isEmpty() {
+                        return false;
+                    }
+                    public boolean contains(Object o) {
+                        return key.equals(o);
+                    }
+                    public Iterator<Entry<CharSequence, APTMacro>> iterator() {
+                        return new Iterator<Entry<CharSequence, APTMacro>>(){
+                            private boolean last = false;
+                            public boolean hasNext() {
+                                return !last;
+                            }
+                            public Entry<CharSequence, APTMacro> next() {
+                                if (!last) {
+                                    last = true;
+                                    return new Entry<CharSequence, APTMacro>(){
+                                        public CharSequence getKey() {
+                                            return key;
+                                        }
+                                        public APTMacro getValue() {
+                                            return macro;
+                                        }
+                                        public APTMacro setValue(APTMacro value) {
+                                            APTMacro res = macro;
+                                            macro = value;
+                                            return res;
+                                        }
+                                    };
+                                }
+                                return null;
+                            }
+                            public void remove() {
+                                throw new UnsupportedOperationException("Not supported yet.");
+                            }
+                        };
+                    }
+                    public Object[] toArray() {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public <T> T[] toArray(T[] a) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean add(Entry<CharSequence, APTMacro> o) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean remove(Object o) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean containsAll(Collection<?> c) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean addAll(Collection<? extends Entry<CharSequence, APTMacro>> c) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean retainAll(Collection<?> c) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public boolean removeAll(Collection<?> c) {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                    public void clear() {
+                        throw new UnsupportedOperationException("Not supported yet.");
+                    }
+                };
+            }
+            return proxyMap.entrySet();
         }
     }
 }
