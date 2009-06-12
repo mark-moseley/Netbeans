@@ -43,8 +43,10 @@ package org.netbeans.modules.web.debug.actions;
 
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 import java.util.Set;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.debugger.ActionsManager;
 import org.netbeans.api.debugger.Breakpoint;
 import org.netbeans.api.debugger.DebuggerEngine;
@@ -54,12 +56,14 @@ import org.netbeans.api.debugger.Session;
 import org.netbeans.api.debugger.Watch;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.project.Project;
-import org.netbeans.spi.debugger.jpda.EditorContext;
+import org.netbeans.modules.web.debug.Context;
 import org.netbeans.spi.project.ActionProvider;
-import org.openide.windows.TopComponent;
 import org.netbeans.modules.web.debug.breakpoints.JspLineBreakpoint;
 import org.netbeans.modules.web.debug.util.Utils;
 import org.netbeans.spi.debugger.ActionsProviderSupport;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
+import org.openide.util.Exceptions;
+import org.openide.util.Lookup;
 
 /**
 *
@@ -67,16 +71,13 @@ import org.netbeans.spi.debugger.ActionsProviderSupport;
 */
 public class JspRunToCursorActionProvider extends ActionsProviderSupport {
     
-    private EditorContext editorContext;
     private JspLineBreakpoint breakpoint;
         
     {
-        editorContext = (EditorContext) DebuggerManager.
-            getDebuggerManager().lookupFirst(null, EditorContext.class);
-        
         Listener listener = new Listener ();
         MainProjectManager.getDefault ().addPropertyChangeListener (listener);
-        TopComponent.getRegistry ().addPropertyChangeListener (listener);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener("text/x-jsp", listener);
+        EditorContextDispatcher.getDefault().addPropertyChangeListener("text/x-tag", listener);
         DebuggerManager.getDebuggerManager ().addDebuggerListener (listener);
 
         setEnabled(ActionsManager.ACTION_RUN_TO_CURSOR, shouldBeEnabled());
@@ -91,20 +92,24 @@ public class JspRunToCursorActionProvider extends ActionsProviderSupport {
         // 1) set breakpoint
         removeBreakpoint();
         createBreakpoint();
-        
         // 2) start debugging of project
-        ((ActionProvider) MainProjectManager.getDefault().
-            getMainProject().getLookup().lookup(
-                ActionProvider.class
-            )).invokeAction (
-                ActionProvider.COMMAND_DEBUG, 
-                MainProjectManager.getDefault ().getMainProject ().getLookup ()
-            );
+        final Lookup lkp = MainProjectManager.getDefault().getMainProject().getLookup();
+        final ActionProvider ap = lkp.lookup(ActionProvider.class);
+        try { // Do that in AWT because of issue #121374.
+            SwingUtilities.invokeAndWait(new Runnable() {
+                public void run() {
+                    ap.invokeAction(ActionProvider.COMMAND_DEBUG, lkp);
+                }
+            });
+        } catch (InterruptedException ex) {
+        } catch (InvocationTargetException ex) {
+            Exceptions.printStackTrace(ex);
+        }
     }
     
     private boolean shouldBeEnabled () {
 
-        if (/* some module disabled? */ editorContext == null || !Utils.isJsp(editorContext.getCurrentURL())) {
+        if (!Utils.isJsp(Context.getCurrentFile())) {
             return false;
         }
         
@@ -136,8 +141,8 @@ public class JspRunToCursorActionProvider extends ActionsProviderSupport {
 
     private void createBreakpoint() {
         breakpoint = JspLineBreakpoint.create (
-            editorContext.getCurrentURL (),
-            editorContext.getCurrentLineNumber ()
+            Context.getCurrentURL (),
+            Context.getCurrentLineNumber ()
         );
         breakpoint.setHidden (true);
         DebuggerManager.getDebuggerManager ().addBreakpoint (breakpoint);
@@ -152,7 +157,7 @@ public class JspRunToCursorActionProvider extends ActionsProviderSupport {
     
     private class Listener implements PropertyChangeListener, DebuggerManagerListener {
         public void propertyChange (PropertyChangeEvent e) {
-            if ((e == null) || (TopComponent.Registry.PROP_OPENED.equals(e.getPropertyName())))
+            if (e == null)
                 return;
             if (e.getPropertyName () == JPDADebugger.PROP_STATE) {
                 int state = ((Integer) e.getNewValue ()).intValue ();
