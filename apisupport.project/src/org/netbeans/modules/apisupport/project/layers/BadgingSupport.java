@@ -48,6 +48,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -187,7 +188,7 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
                         orig = null;
                     }
                     if (orig != null && orig.hasExt("instance")) { // NOI18N
-                        return getInstanceLabel(orig);
+                        return annotateNameGeneral((String) originalFile, Collections.singleton(orig), suffix, fileChangeListener, cp);
                     }
                 }
             }
@@ -202,12 +203,16 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
             if (ic != null) {
                 Object o;
                 Logger fslogger = Logger.getLogger("org.openide.filesystems"); // NOI18N
-                Level oldLevel = fslogger.getLevel();
+                Logger cachelogger = Logger.getLogger("org.netbeans.core.startup.layers.BinaryFS"); // NOI18N
+                Level fsLevel = fslogger.getLevel();
+                Level cacheLevel = cachelogger.getLevel();
                 fslogger.setLevel(Level.OFF); // #99744
+                cachelogger.setLevel(Level.OFF); // #166199
                 try {
                     o = ic.instanceCreate();
                 } finally {
-                    fslogger.setLevel(oldLevel);
+                    fslogger.setLevel(fsLevel);
+                    cachelogger.setLevel(cacheLevel);
                 }
                 if (o instanceof Action) {
                     String name = (String) ((Action) o).getValue(Action.NAME);
@@ -224,10 +229,9 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
                     return toStringOf(o);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             // ignore, OK
-        } catch (ClassNotFoundException e) {
-            // ignore, OK
+            Logger.getLogger(BadgingSupport.class.getName()).log(Level.FINE, "Ignored exception: (" + e.getClass().getSimpleName() + ") " + e.getMessage());
         }
         // OK, probably a developed module, so take a guess.
         String clazz = (String) fo.getAttribute("instanceClass"); // NOI18N
