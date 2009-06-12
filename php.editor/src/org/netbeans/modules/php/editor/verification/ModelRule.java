@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- * 
+ *
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- * 
+ *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- * 
+ *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,52 +31,44 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- * 
+ *
  * Contributor(s):
- * 
+ *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.parser.astnodes;
+
+package org.netbeans.modules.php.editor.verification;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import org.netbeans.modules.csl.api.Hint;
+import org.netbeans.modules.csl.api.HintSeverity;
+import org.netbeans.modules.csl.api.Rule.AstRule;
+import org.netbeans.modules.csl.api.RuleContext;
+import org.netbeans.modules.php.editor.model.FileScope;
 
 /**
  *
- * @author petr
+ * @author Radek Matous
  */
-public abstract class ASTNode {
+abstract class ModelRule implements AstRule {
+    abstract void check (FileScope modelScope, RuleContext context, List<Hint> hints);
 
-    private int startOffset;
-    private int endOffset;
-    //private ASTNode parent = null;
-    
-    public ASTNode(int start, int end) {
-        assert start >= 0;
-        assert end >= start;
-
-        this.startOffset = start;
-        this.endOffset = end;
+    @Override
+    public Set<? extends Object> getKinds() {
+        return Collections.singleton(PHPHintsProvider.MODEL_HINTS);
     }
 
-    public final int getStartOffset() {
-        return startOffset;
+    public boolean getDefaultEnabled() {
+        return true;
     }
 
-    public final int getEndOffset() {
-        return endOffset;
+    public boolean appliesTo(RuleContext context) {
+        return true;
     }
 
-    public final void setSourceRange(int startOffset, int endOffset) {
-        if (startOffset >= 0 && endOffset < 0) {
-            throw new IllegalArgumentException();
-        }
-        if (startOffset < 0 && endOffset != 0) {
-            throw new IllegalArgumentException();
-        }
-        assert startOffset >= 0;
-        assert endOffset >= startOffset;
-
-        this.startOffset = startOffset;
-        this.endOffset = endOffset;
+    public HintSeverity getDefaultSeverity() {
+        return HintSeverity.WARNING;
     }
-
-    public abstract void accept(Visitor visitor);
 }
