@@ -36,14 +36,14 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.mobility.project.ui.security;
+package org.netbeans.modules.project.ant;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
-public final class SecurityManagerAction implements ActionListener {
+public final class VariablesCustomizerAction implements ActionListener {
 
     public void actionPerformed(ActionEvent e) {
-        SecurityManagerPanel.showSecurityManager(null, null);
+        VariablesPanel.showVariablesCustomizer();
     }
 }
