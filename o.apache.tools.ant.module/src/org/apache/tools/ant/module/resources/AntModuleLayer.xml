@@ -43,30 +43,16 @@ made subject to such option by the copyright holder.
 <!DOCTYPE filesystem PUBLIC "-//NetBeans//DTD Filesystem 1.1//EN" "http://www.netbeans.org/dtds/filesystem-1_1.dtd">
 <filesystem>
 
+
     <folder name="Actions">
         <folder name="Build">
-            <file name="org-apache-tools-ant-module-run-RunLastTargetAction.instance"/>
-            <file name="org-apache-tools-ant-module-run-StopBuildingAction.instance"/>
-        </folder>
-    </folder>
-
-    <folder name="Menu">
-        <folder name="BuildProject">
-            <file name="org-apache-tools-ant-module-run-RunLastTargetAction.shadow">
-                <attr name="originalFile" stringvalue="Actions/Build/org-apache-tools-ant-module-run-RunLastTargetAction.instance"/>
-                <attr name="position" intvalue="1000"/>
-            </file>
-            <file name="org-apache-tools-ant-module-run-StopBuildingAction.instance">
-                <attr name="position" intvalue="1100"/>
-            </file>
+            <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.instance"/>
         </folder>
     </folder>
 
     <folder name="Templates">
  
         <folder name="Other">
-            <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
-            <attr name="templateWizardURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/AntDescription.html"/>
             <file name="Project.xml" url="Project.xml_">
                 <attr name="position" intvalue="800"/>
                 <attr name="template" boolvalue="true"/>
@@ -80,7 +66,7 @@ made subject to such option by the copyright holder.
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <!-- XXX #44054: implies a runtime dep on java/project module: -->
                 <attr name="instantiatingIterator" methodvalue="org.netbeans.spi.java.project.support.ui.templates.JavaTemplates.createJavaTemplateIterator"/>
-                <attr name="instantiatingIteratorURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/CustomTaskDescription.html"/>
+                <attr name="instantiatingWizardURL" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/CustomTaskDescription.html"/>
                 <attr name="templateCategory" stringvalue="ant-task"/>
                 <attr name="javax.script.ScriptEngine" stringvalue="freemarker"/>
             </file>
@@ -91,7 +77,7 @@ made subject to such option by the copyright holder.
 
         <!-- Recognize text/x-ant+xml: -->
         <folder name="MIMEResolver">
-            <file name="org-apache-tools-ant-module-mime-resolver.xml" url="mime-resolver.xml">
+            <file name="org-apache-tools-ant-module-mime-resolver.xml" url="ant-mime-resolver.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/apache/tools/ant/module/resources/AntIcon.gif"/>
                 <attr name="position" intvalue="310"/>
@@ -104,10 +90,17 @@ made subject to such option by the copyright holder.
     <folder name="Editors">
         <folder name="text">
             <folder name="x-ant+xml">
+                <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.resources.Bundle"/>
                 <folder name="Popup"> <!-- #20203 -->
-                    <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.instance">
+                    <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Build/org-apache-tools-ant-module-nodes-RunTargetsAction.instance"/>
                         <attr name="position" intvalue="900"/>
                     </file>
+                </folder>
+                <folder name="CodeTemplates">
+                    <folder name="Defaults">
+                        <file name="org-apache-tools-ant-module-CodeTemplates.xml" url="codetemplates.xml"/>
+                    </folder>
                 </folder>
             </folder>
         </folder>
@@ -116,54 +109,70 @@ made subject to such option by the copyright holder.
     <folder name="Loaders">
         <folder name="text">
             <folder name="x-ant+xml">
-                <folder name="Actions">
-                    <file name="org-openide-actions-OpenAction.instance">
-                        <attr name="position" intvalue="100"/>
+                <folder name="Factories">
+                    <file name="org-apache-tools-ant-module-loader-AntProjectDataLoader.instance">
+                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.apache.tools.ant.module.Bundle"/>
                     </file>
-                    <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.instance">
+                </folder>
+                
+                <folder name="Actions">
+                    <file name="org-apache-tools-ant-module-nodes-RunTargetsAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Build/org-apache-tools-ant-module-nodes-RunTargetsAction.instance"/>
                         <attr name="position" intvalue="200"/>
                     </file>
-                    <file name="org-openide-actions-FileSystemAction.instance">
+                    <file name="org-openide-actions-CopyAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CopyAction.instance"/>
+                        <attr name="position" intvalue="700"/>
+                    </file>
+                    <file name="org-openide-actions-CutAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CutAction.instance"/>
+                        <attr name="position" intvalue="600"/>
+                    </file>
+                    <file name="org-openide-actions-DeleteAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-DeleteAction.instance"/>
+                        <attr name="position" intvalue="900"/>
+                    </file>
+                    <file name="org-openide-actions-FileSystemAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-FileSystemAction.instance"/>
                         <attr name="position" intvalue="400"/>
+                    </file>
+                    <file name="org-openide-actions-OpenAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-OpenAction.instance"/>
+                        <attr name="position" intvalue="100"/>
+                    </file>
+                    <file name="org-openide-actions-PropertiesAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-PropertiesAction.instance"/>
+                        <attr name="position" intvalue="1500"/>
+                    </file>
+                    <file name="org-openide-actions-RenameAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-RenameAction.instance"/>
+                        <attr name="position" intvalue="1000"/>
+                    </file>
+                    <file name="org-openide-actions-SaveAsTemplateAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-SaveAsTemplateAction.instance"/>
+                        <attr name="position" intvalue="1200"/>
+                    </file>
+                    <file name="org-openide-actions-ToolsAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-ToolsAction.instance"/>
+                        <attr name="position" intvalue="1400"/>
                     </file>
                     <file name="sep-1.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="500"/>
                     </file>
-                    <file name="org-openide-actions-CutAction.instance">
-                        <attr name="position" intvalue="600"/>
-                    </file>
-                    <file name="org-openide-actions-CopyAction.instance">
-                        <attr name="position" intvalue="700"/>
-                    </file>
                     <file name="sep-2.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="800"/>
-                    </file>
-                    <file name="org-openide-actions-DeleteAction.instance">
-                        <attr name="position" intvalue="900"/>
-                    </file>
-                    <file name="org-openide-actions-RenameAction.instance">
-                        <attr name="position" intvalue="1000"/>
                     </file>
                     <file name="sep-3.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1100"/>
                     </file>
-                    <file name="org-openide-actions-SaveAsTemplateAction.instance">
-                        <attr name="position" intvalue="1200"/>
-                    </file>
                     <file name="sep-4.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1300"/>
                     </file>
-                    <file name="org-openide-actions-ToolsAction.instance">
-                        <attr name="position" intvalue="1400"/>
-                    </file>
-                    <file name="org-openide-actions-PropertiesAction.instance">
-                        <attr name="position" intvalue="1500"/>
-                    </file>
-                </folder>
+                    </folder>
             </folder>
         </folder>
     </folder>
@@ -183,13 +192,6 @@ made subject to such option by the copyright holder.
             <file name="Ant.instance">
                 <attr name="instanceClass" stringvalue="org.apache.tools.ant.module.AntOption"/>
             </file>
-        </folder>
-        <folder name="Actions"> <!-- XXX #71280: should not be necessary but currently is -->
-            <folder name="Build">
-                <file name="org-apache-tools-ant-module-run-RunLastTargetAction.shadow">
-                    <attr name="originalFile" stringvalue="Actions/Build/org-apache-tools-ant-module-run-RunLastTargetAction.instance"/>
-                </file>
-            </folder>
         </folder>
    </folder>
 

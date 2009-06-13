@@ -79,132 +79,142 @@ made subject to such option by the copyright holder.
     <folder name="Loaders">
         <folder name="text">
             <folder name="url">
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-url-URLDataLoader.instance">
+                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.utilities.Bundle"/>
+                    </file>
+                </folder>
                 <folder name="Actions">
-                    <file name="OpenAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.OpenAction"/>
+                    <file name="CopyAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CopyAction.instance"/>
+                        <attr name="position" intvalue="700"/>
+                    </file>
+                    <file name="CutAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CutAction.instance"/>
+                        <attr name="position" intvalue="600"/>
+                    </file>
+                    <file name="DeleteAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-DeleteAction.instance"/>
+                        <attr name="position" intvalue="1000"/>
+                    </file>
+                    <file name="EditAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-EditAction.instance"/>
+                        <attr name="position" intvalue="400"/>
+                    </file>
+                    <file name="FileSystemAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-FileSystemAction.instance"/>
+                        <attr name="position" intvalue="200"/>
+                    </file>
+                    <file name="OpenAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-OpenAction.instance"/>
                         <attr name="position" intvalue="100"/>
                     </file>
-                    <file name="FileSystemAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.FileSystemAction"/>
-                        <attr name="position" intvalue="200"/>
+                    <file name="PasteAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-PasteAction.instance"/>
+                        <attr name="position" intvalue="800"/>
+                    </file>
+                    <file name="PropertiesAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-PropertiesAction.instance"/>
+                        <attr name="position" intvalue="1600"/>
+                    </file>
+                    <file name="RenameAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-RenameAction.instance"/>
+                        <attr name="position" intvalue="1100"/>
+                    </file>
+                    <file name="SaveAsTemplateAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-SaveAsTemplateAction.instance"/>
+                        <attr name="position" intvalue="1300"/>
                     </file>
                     <file name="Separator0.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="300"/>
                     </file>
-                    <file name="EditAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.EditAction"/>
-                        <attr name="position" intvalue="400"/>
-                    </file>
                     <file name="Separator1.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="500"/>
-                    </file>
-                    <file name="CutAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.CutAction"/>
-                        <attr name="position" intvalue="600"/>
-                    </file>
-                    <file name="CopyAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.CopyAction"/>
-                        <attr name="position" intvalue="700"/>
-                    </file>
-                    <file name="PasteAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.PasteAction"/>
-                        <attr name="position" intvalue="800"/>
                     </file>
                     <file name="Separator2.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="900"/>
                     </file>
-                    <file name="DeleteAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.DeleteAction"/>
-                        <attr name="position" intvalue="1000"/>
-                    </file>
-                    <file name="RenameAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.RenameAction"/>
-                        <attr name="position" intvalue="1100"/>
-                    </file>
                     <file name="Separator3.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1200"/>
-                    </file>
-                    <file name="SaveAsTemplateAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.SaveAsTemplateAction"/>
-                        <attr name="position" intvalue="1300"/>
                     </file>
                     <file name="Separator4.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1400"/>
                     </file>
-                    <file name="ToolsAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.ToolsAction"/>
+                    <file name="ToolsAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-ToolsAction.instance"/>
                         <attr name="position" intvalue="1500"/>
-                    </file>
-                    <file name="PropertiesAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.PropertiesAction"/>
-                        <attr name="position" intvalue="1600"/>
                     </file>
                 </folder> <!-- Actions -->
             </folder> <!-- url -->
         </folder> <!-- text -->
         <folder name="application">
             <folder name="pdf">
+                <folder name="Factories">
+                    <file name="org-netbeans-modules-pdf-PDFDataLoader.instance">
+                        <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.utilities.Bundle"/>
+                    </file>
+                </folder>
                 <folder name="Actions">
-                    <file name="OpenAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.OpenAction"/>
+                    <file name="CopyAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CopyAction.instance"/>
+                        <attr name="position" intvalue="500"/>
+                    </file>
+                    <file name="CutAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-CutAction.instance"/>
+                        <attr name="position" intvalue="400"/>
+                    </file>
+                    <file name="DeleteAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-DeleteAction.instance"/>
+                        <attr name="position" intvalue="800"/>
+                    </file>
+                    <file name="FileSystemAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-FileSystemAction.instance"/>
+                        <attr name="position" intvalue="200"/>
+                    </file>
+                    <file name="OpenAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-OpenAction.instance"/>
                         <attr name="position" intvalue="100"/>
                     </file>
-                    <file name="FileSystemAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.FileSystemAction"/>
-                        <attr name="position" intvalue="200"/>
+                    <file name="PasteAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/Edit/org-openide-actions-PasteAction.instance"/>
+                        <attr name="position" intvalue="600"/>
+                    </file>
+                    <file name="PropertiesAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-PropertiesAction.instance"/>
+                        <attr name="position" intvalue="1400"/>
+                    </file>
+                    <file name="RenameAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-RenameAction.instance"/>
+                        <attr name="position" intvalue="900"/>
+                    </file>
+                    <file name="SaveAsTemplateAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-SaveAsTemplateAction.instance"/>
+                        <attr name="position" intvalue="1100"/>
                     </file>
                     <file name="Separator0.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="300"/>
                     </file>
-                    <file name="CutAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.CutAction"/>
-                        <attr name="position" intvalue="400"/>
-                    </file>
-                    <file name="CopyAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.CopyAction"/>
-                        <attr name="position" intvalue="500"/>
-                    </file>
-                    <file name="PasteAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.PasteAction"/>
-                        <attr name="position" intvalue="600"/>
-                    </file>
                     <file name="Separator1.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="700"/>
-                    </file>
-                    <file name="DeleteAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.DeleteAction"/>
-                        <attr name="position" intvalue="800"/>
-                    </file>
-                    <file name="RenameAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.RenameAction"/>
-                        <attr name="position" intvalue="900"/>
                     </file>
                     <file name="Separator2.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1000"/>
                     </file>
-                    <file name="SaveAsTemplateAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.SaveAsTemplateAction"/>
-                        <attr name="position" intvalue="1100"/>
-                    </file>
                     <file name="Separator3.instance">
                         <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                         <attr name="position" intvalue="1200"/>
                     </file>
-                    <file name="ToolsAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.ToolsAction"/>
+                    <file name="ToolsAction.shadow">
+                        <attr name="originalFile" stringvalue="Actions/System/org-openide-actions-ToolsAction.instance"/>
                         <attr name="position" intvalue="1300"/>
-                    </file>
-                    <file name="PropertiesAction.instance">
-                        <attr name="instanceClass" stringvalue="org.openide.actions.PropertiesAction"/>
-                        <attr name="position" intvalue="1400"/>
                     </file>
                 </folder> <!-- Actions -->
             </folder> <!-- pdf -->
@@ -224,7 +234,13 @@ made subject to such option by the copyright holder.
         </folder> <!-- Edit -->
 
         <folder name="System">
-            <file name="org-netbeans-modules-openfile-OpenFileAction.instance"/>
+            <file name="org-netbeans-modules-openfile-OpenFileAction.instance">
+               <attr name="instanceCreate" methodvalue="org.openide.awt.Actions.alwaysEnabled"/>
+               <attr name="delegate" newvalue="org.netbeans.modules.openfile.OpenFileAction"/>
+               <attr name="displayName" bundlevalue="org.netbeans.modules.openfile.Bundle#LBL_openFile"/>
+               <attr name="iconBase" stringvalue="org/netbeans/modules/openfile/openFile.png"/>
+               <attr name="noIconInMenu" boolvalue="true"/>
+            </file>
             <file name="org-netbeans-modules-openfile-RecentFileAction.instance"/>
         </folder> <!-- System -->
 
@@ -237,27 +253,31 @@ made subject to such option by the copyright holder.
 
     <folder name="Menu">
         <folder name="Edit">
+            <file name="org-netbeans-modules-search-FindInFilesAction.shadow">
+                <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-search-FindInFilesAction.instance"/>
+                <attr name="position" intvalue="2400"/>
+            </file>
+            <file name="org-netbeans-modules-search-ReplaceInFilesAction.shadow">
+                <attr name="originalFile" stringvalue="Actions/Edit/org-netbeans-modules-search-ReplaceInFilesAction.instance"/>
+                <attr name="position" intvalue="2500"/>
+            </file>
             <file name="sep-before-reposearch.instance">
                 <attr name="instanceClass" stringvalue="javax.swing.JSeparator"/>
                 <attr name="position" intvalue="2300"/>
             </file>
-            <file name="org-netbeans-modules-search-FindInFilesAction.instance">
-                <attr name="position" intvalue="2400"/>
-            </file>
-            <file name="org-netbeans-modules-search-ReplaceInFilesAction.instance">
-                <attr name="position" intvalue="2500"/>
-            </file>
-        </folder>
+            </folder>
         
         <folder name="File">
             <!-- position of OpenFileAction defined in projects/ui module -->
-            <file name="org-netbeans-modules-openfile-OpenFileAction.instance">
+            <file name="org-netbeans-modules-openfile-OpenFileAction.shadow">
                 <attr name="position" intvalue="800"/>
+                <attr name="originalFile" stringvalue="Actions/System/org-netbeans-modules-openfile-OpenFileAction.instance"/>
             </file>
-            <file name="org-netbeans-modules-openfile-RecentFileAction.instance">
+            <file name="org-netbeans-modules-openfile-RecentFileAction.shadow">
+                <attr name="originalFile" stringvalue="Actions/System/org-netbeans-modules-openfile-RecentFileAction.instance"/>
                 <attr name="position" intvalue="900"/>
             </file>
-            </folder> <!-- File -->
+        </folder> <!-- File -->
 
         <folder name="Window">
             <folder name="Output">
@@ -318,12 +338,12 @@ made subject to such option by the copyright holder.
     <folder name="Services">
 
         <folder name="MIMEResolver">
-            <file name="org-netbeans-modules-url-mime-resolver.xml" url="../url/mime-resolver.xml">
+            <file name="org-netbeans-modules-url-mime-resolver.xml" url="../url/url-mime-resolver.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.url.Bundle"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/url/urlObject.png"/>
                 <attr name="position" intvalue="360"/>
             </file>
-            <file name="org-netbeans-modules-pdf-mime-resolver.xml" url="../pdf/mime-resolver.xml">
+            <file name="org-netbeans-modules-pdf-mime-resolver.xml" url="../pdf/uu-mime-resolver.xml">
                 <attr name="SystemFileSystem.localizingBundle" stringvalue="org.netbeans.modules.pdf.Bundle"/>
                 <attr name="SystemFileSystem.icon" urlvalue="nbresloc:/org/netbeans/modules/pdf/PDFDataIcon.png"/>
                 <attr name="position" intvalue="370"/>
@@ -345,7 +365,7 @@ made subject to such option by the copyright holder.
         <folder name="Modes">
             <folder name="output">       <!-- "output" is defined in core/ui -->
                 <file name="search-results.wstcref" url="../search/res/search-results.wstcref">
-                    <attr name="position" intvalue="1000"/>
+                    <attr name="position" intvalue="1900"/>
                 </file>
             </folder>
         </folder>
