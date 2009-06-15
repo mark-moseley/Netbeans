@@ -41,30 +41,75 @@
 
 package org.netbeans.modules.cnd.apt.impl.support;
 
-import antlr.Token;
 import antlr.TokenStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.*;
+import org.netbeans.modules.cnd.apt.structure.APTDefine;
 import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.apt.support.APTToken;
 import org.netbeans.modules.cnd.apt.utils.APTSerializeUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
+import org.netbeans.modules.cnd.utils.cache.CharSequenceKey;
+import org.netbeans.modules.cnd.utils.cache.TinyCharSequence;
+import org.netbeans.modules.cnd.utils.cache.TinySingletonMap;
 
 /**
  *
  * @author gorrus
  */
 public final class APTMacroMapSnapshot {
-    protected final Map<String/*getTokenTextKey(token)*/, APTMacro> macros = new HashMap<String, APTMacro>();
-    protected final APTMacroMapSnapshot parent;
+    private static final Map<CharSequence, APTMacro> NO_MACROS = Collections.unmodifiableMap(new HashMap<CharSequence, APTMacro>(0));
+    private volatile Map<CharSequence, APTMacro> macros;
 
+    /*package*/ final APTMacroMapSnapshot parent;
+    
     public APTMacroMapSnapshot(APTMacroMapSnapshot parent) {
+        macros = createMacroMap(0);
+        assert (parent == null || parent.parent == null || !parent.parent.isEmtpy()) : "how grand father could be empty " + parent;
+        // optimization to prevent chaining of empty snapshots
+        while (parent != null && parent.isEmtpy()) {
+            parent = parent.parent;
+        }
         this.parent = parent;
     }
+
+    private Map<CharSequence, APTMacro> createMacroMap(int prefferedSize) {
+        if (prefferedSize == 0) {
+            return NO_MACROS;
+        }
+        if (prefferedSize == 1) {
+            return new TinySingletonMap<CharSequence, APTMacro>();
+        } else {
+            return new HashMap<CharSequence, APTMacro>(prefferedSize);
+        }
+    }
+
+    private void prepareMacroMapToAddMacro() {
+        if (macros == NO_MACROS) {
+            // create LW map
+            macros = createMacroMap(1);
+        } else if (macros instanceof TinySingletonMap<?, ?>) {
+            // copy into new map
+            TinySingletonMap<CharSequence, APTMacro> lwMap = (TinySingletonMap<CharSequence, APTMacro>)macros;
+            Map<CharSequence, APTMacro> map = createMacroMap(2);
+            map.put(lwMap.getKey(), lwMap.getValue());
+            macros = map;
+        }
+    }
+
+    /*package*/ final void putMacro(CharSequence name, APTMacro macro) {
+        prepareMacroMapToAddMacro();
+        macros.put(name, macro);
+    }
+
+    public final APTMacro getMacro(APTToken token) {
+        return getMacro(token.getTextID());
+    }
     
-    public final APTMacro getMacro(Token token) {
-        Object key = APTUtils.getTokenTextKey(token);
+    /*package*/ final APTMacro getMacro(CharSequence key) {
+        assert key instanceof TinyCharSequence : "string can't be here " + key;
         APTMacroMapSnapshot currentSnap = this;
         while (currentSnap != null) {
             APTMacro macro = currentSnap.macros.get(key);
@@ -76,25 +121,37 @@ public final class APTMacroMapSnapshot {
         return null;
     }
     
+    @Override
     public String toString() {
-        Map<String, APTMacro> tmpMap = new HashMap<String, APTMacro>();
+        Map<CharSequence, APTMacro> tmpMap = new HashMap<CharSequence, APTMacro>();
         addAllMacros(this, tmpMap);
         return APTUtils.macros2String(tmpMap);
     }
     
-    public static void addAllMacros(APTMacroMapSnapshot snap, Map<String, APTMacro> out) {
-        if (snap.parent != null) {
-            addAllMacros(snap.parent, out);
-        }
-        for (Map.Entry<String, APTMacro> cur : snap.macros.entrySet()) {
-            if (cur.getValue() != UNDEFINED_MACRO) {
-                out.put(cur.getKey(), cur.getValue());
-            } else {
-                out.remove(cur.getKey());
+    public static void addAllMacros(APTMacroMapSnapshot snap, Map<CharSequence, APTMacro> out) {
+        if (snap != null) {
+            if (snap.parent != null) {
+                addAllMacros(snap.parent, out);
+            }
+            for (Map.Entry<CharSequence, APTMacro> cur : snap.macros.entrySet()) {
+                if (cur.getValue() != UNDEFINED_MACRO) {
+                    out.put(cur.getKey(), cur.getValue());
+                } else {
+                    out.remove(cur.getKey());
+                }
             }
         }
     }    
-    
+
+    public static int getMacroSize(APTMacroMapSnapshot snap) {
+        int size = 0;
+        while (snap != null) {
+            size += snap.macros.size();
+            snap = snap.parent;
+        }
+        return size;
+    }
+
     public boolean isEmtpy() {
         return macros.isEmpty();
     }
@@ -109,35 +166,48 @@ public final class APTMacroMapSnapshot {
     
     public APTMacroMapSnapshot(DataInput input) throws IOException {
         this.parent = APTSerializeUtils.readSnapshot(input);
-        APTSerializeUtils.readStringToMacroMap(this.macros, input);
+        int collSize = input.readInt();
+        macros = createMacroMap(collSize);
+        APTSerializeUtils.readStringToMacroMap(collSize, this.macros, input);
     }  
         
     //This is a single instance of a class to indicate that macro is undefined,
     //not a child of APTMacro to track errors more easily
-    public static final UndefinedMacro UNDEFINED_MACRO = new UndefinedMacro();
-    private static class UndefinedMacro implements APTMacro {
+    public static final APTMacro UNDEFINED_MACRO = new UndefinedMacro();
+
+    private static final class UndefinedMacro implements APTMacro {
+        @Override
         public String toString() {
             return "Macro undefined"; // NOI18N
         }
 
-        public boolean isSystem() {
-            throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
+        public CharSequence getFile() {
+            return CharSequenceKey.empty();
+        }
+        
+        public Kind getKind() {
+            return Kind.USER_SPECIFIED;
         }
 
         public boolean isFunctionLike() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Token getName() {
+        public APTToken getName() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
-        public Collection<Token> getParams() {
+        public Collection<APTToken> getParams() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
 
         public TokenStream getBody() {
             throw new UnsupportedOperationException("Not supported in fake impl"); // NOI18N
         }
+
+        public APTDefine getDefineNode() {
+            throw new UnsupportedOperationException("Not supported in fake impl."); // NOI18N
+        }
+
     }
 }
