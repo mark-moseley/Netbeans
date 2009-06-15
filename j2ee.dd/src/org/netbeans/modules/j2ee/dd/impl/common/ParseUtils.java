@@ -42,6 +42,8 @@
 package org.netbeans.modules.j2ee.dd.impl.common;
 
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openide.util.NbBundle;
 import org.openide.xml.XMLUtil;
 import org.xml.sax.*;
@@ -57,6 +59,8 @@ import org.xml.sax.*;
 public class ParseUtils {
   
     public static final String EXCEPTION_PREFIX="version:"; //NOI18N
+    
+    private static final Logger LOGGER = Logger.getLogger(ParseUtils.class.getName());
     
     /** Parsing just for detecting the version  SAX parser used
      */
@@ -106,6 +110,7 @@ public class ParseUtils {
         SAXParseException error;
         
         public void warning(org.xml.sax.SAXParseException sAXParseException) throws org.xml.sax.SAXException {
+            printMsg("warning", sAXParseException);
             if (errorType<0) {
                 errorType=0;
                 error=sAXParseException;
@@ -113,6 +118,7 @@ public class ParseUtils {
             //throw sAXParseException;
         }
         public void error(org.xml.sax.SAXParseException sAXParseException) throws org.xml.sax.SAXException {
+            printMsg("error", sAXParseException);
             if (errorType<1) {
                 errorType=1;
                 error=sAXParseException;
@@ -120,10 +126,15 @@ public class ParseUtils {
             //throw sAXParseException;
         }
         public void fatalError(org.xml.sax.SAXParseException sAXParseException) throws org.xml.sax.SAXException {
+            printMsg("fatal error", sAXParseException);
             errorType=2;
             throw sAXParseException;
         }
-        
+
+        private void printMsg(String type, org.xml.sax.SAXParseException e) {
+            System.out.println("&&& SAX "+type+": ["+e.getLineNumber()+":"+e.getColumnNumber()+"] "+e.getPublicId()+" / "+e.getSystemId()+" / "+e);
+        }
+
         public int getErrorType() {
             return errorType;
         }
@@ -134,6 +145,10 @@ public class ParseUtils {
     
     public static SAXParseException parseDD(InputSource is, EntityResolver ddResolver) 
             throws org.xml.sax.SAXException, java.io.IOException {
+        // additional logging for #127276
+        if (LOGGER.isLoggable(Level.FINE)) {
+            LOGGER.log(Level.FINE, "Parsing with ddResolver: " + ddResolver);
+        }
         ErrorHandler errorHandler = new ErrorHandler();
         try {
             XMLReader reader = XMLUtil.createXMLReader();
