@@ -64,7 +64,6 @@ import org.openide.filesystems.LocalFileSystem;
 import org.openide.filesystems.Repository;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.Lookups;
 import org.openide.util.lookup.ProxyLookup;
 
 /**
@@ -72,40 +71,9 @@ import org.openide.util.lookup.ProxyLookup;
  * @author Jesse Glick
  */
 public final class TestUtil extends ProxyLookup {
-    
-    static {
-        TestUtil.class.getClassLoader().setDefaultAssertionStatus(true);
-        System.setProperty("org.openide.util.Lookup", TestUtil.class.getName());
-        Assert.assertEquals(TestUtil.class, Lookup.getDefault().getClass());
-    }
-    
-    private static TestUtil DEFAULT;
     /** Do not call directly */
-    public TestUtil() {
-        Assert.assertNull(DEFAULT);
-        DEFAULT = this;
-        setLookup(new Object[0]);
-    }
-    
-    /**
-     * Set the global default lookup.
-     * Caution: if you don't include Lookups.metaInfServices, you may have trouble,
-     * e.g. {@link #makeScratchDir} will not work.
-     */
-    public static void setLookup(Lookup l) {
-        DEFAULT.setLookups(new Lookup[] {l});
-    }
-    
-    /**
-     * Set the global default lookup with some fixed instances including META-INF/services/*.
-     */
-    public static void setLookup(Object[] instances) {
-        ClassLoader l = TestUtil.class.getClassLoader();
-        DEFAULT.setLookups(new Lookup[] {
-            Lookups.fixed(instances),
-            Lookups.metaInfServices(l),
-            Lookups.singleton(l),
-        });
+    private TestUtil() {
+        super();
     }
     
     private static boolean warned = false;
@@ -237,7 +205,7 @@ public final class TestUtil extends ProxyLookup {
     public static void copyDir(File src,File tgt) throws IOException {
         if (src.isDirectory()) {
             if (!tgt.exists()) {
-                tgt.mkdir();
+                FileUtil.createFolder(tgt);
             }
             
             String[] dirList = src.list();
