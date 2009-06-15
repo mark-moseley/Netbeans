@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,13 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,43 +31,41 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ * 
+ * Contributor(s):
+ * 
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.db.explorer;
+package org.netbeans.modules.db.explorer.action;
 
-import java.beans.*;
-import java.awt.*;
-import java.util.ResourceBundle;
-import org.openide.util.Exceptions;
+import org.netbeans.modules.db.explorer.node.RootNode;
+import org.openide.nodes.Node;
+import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 
-/** A BeanInfo for DatabaseOption
-*/
-public class DatabaseOptionBeanInfo extends SimpleBeanInfo {
-
-    public PropertyDescriptor[] getPropertyDescriptors ()
-    {
-        PropertyDescriptor[] desc = new PropertyDescriptor[1];
-        try {
-            desc[0] = new PropertyDescriptor("debugMode", DatabaseOption.class); //NOI18N
-            ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); //NOI18N
-            desc[0].setDisplayName(bundle.getString("PROP_DEBUG_MODE")); //NOI18N
-            desc[0].setShortDescription(bundle.getString ("HINT_DEBUG_MODE")); //NOI18N
-        } catch (Exception e) {
-            Exceptions.printStackTrace(e);
-        }
-        return desc;
+/**
+ *
+ * @author Rob Englander
+ */
+public class DisableDebugAction extends BaseAction {
+    @Override
+    public String getName() {
+        return NbBundle.getMessage (DisableDebugAction.class, "DisableDebug"); // NOI18N
     }
 
-    public Image getIcon(int type)
-    {
-        if (type == BeanInfo.ICON_COLOR_16x16) {
-            return Utilities.loadImage("/org/netbeans/modules/db/resources/optionIcon.gif"); //NOI18N
-        } else if (type == BeanInfo.ICON_COLOR_32x32) {
-            return Utilities.loadImage("/org/netbeans/modules/db/resources/optionIcon32.gif"); //NOI18N
-        }
-
-        return super.getIcon(type);
+    @Override
+    public HelpCtx getHelpCtx() {
+        return new HelpCtx(DisableDebugAction.class);
     }
+
+    protected boolean enable(Node[] activatedNodes) {
+        return RootNode.instance().getSpecificationFactory().isDebugMode();
+    }
+
+    @Override
+    protected void performAction(Node[] activatedNodes) {
+        RootNode.instance().getSpecificationFactory().setDebugMode(false);
+    }
+
 }
