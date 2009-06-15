@@ -37,44 +37,21 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model.nodes;
-
-import org.netbeans.api.annotations.common.NonNull;
-import org.netbeans.modules.php.editor.model.Parameter;
-import org.netbeans.modules.php.editor.model.TypeScope;
+package org.netbeans.modules.php.editor.model;
 
 /**
- *
  * @author Radek Matous
  */
-class ParameterImpl implements Parameter {
-    private String name;
-    private String defaultValue;
-    ParameterImpl(String name) {
-        this(name, null);
-    }
-
-    ParameterImpl(String name, String defaultValue) {
-        this.name = name;
-        this.defaultValue = defaultValue;
-    }
-
-    @NonNull
-    public String getName() {
-        return name;
-    }
-
-    @NonNull
-    public String getDefaultValue() {
-        return defaultValue;//NOI18N
-    }
-
-    public boolean isMandatory() {
-        return defaultValue == null;
-    }
-
-    //TODO: not implemented yet
-    public TypeScope getType() {
-        return null;
-    }
+public interface MethodScope extends FunctionScope, VariableScope, ClassMemberElement {
+    PhpModifiers getPhpModifiers();
+    boolean isMagic();
+    boolean isConstructor();
+    TypeScope getTypeScope();
+    String getClassSkeleton();
+    String getInterfaceSkeleton();
+    public String getConstructorIndexSignature();
+    //TODO:
+    //boolean implementedMethod();
+    //boolean overridenMethod();
+    //List<? extends MethodScope> getMethodChain();
 }
