@@ -47,8 +47,6 @@ import java.util.Map;
 import java.util.Iterator;
 import java.util.HashMap;
 import java.net.MalformedURLException;
-import org.netbeans.editor.Settings;
-import org.netbeans.editor.WeakPropertyChangeSupport;
 import javax.swing.SwingUtilities;
 import java.util.Set;
 import java.util.HashSet;
@@ -91,7 +89,7 @@ public class AnnotationTypes {
     private WeakPropertyChangeSupport support;
     
     /** Static map containing all annotation types: annotation_name <-> annotation_type */
-    private Map allTypes = null;
+    private Map<String, AnnotationType> allTypes = null;
     
     /** Flag whether the annotation types were loaded or not */
     private boolean loadedTypes = false;
@@ -156,8 +154,11 @@ public class AnnotationTypes {
         if (!isBackgroundDrawing().equals(drawing)) {
             putProp(PROP_BACKGROUND_DRAWING, drawing);
             firePropertyChange(PROP_BACKGROUND_DRAWING, null, null);
-            // force repaint of all documents
-            Settings.touchValue(null, null);
+            
+// XXX: has this ever worked??
+//            // force repaint of all documents
+//            Settings.touchValue(null, null);
+            
             saveSetting(PROP_BACKGROUND_DRAWING, drawing);
         }
     }
@@ -179,8 +180,11 @@ public class AnnotationTypes {
         if (!isCombineGlyphs().equals(combine)) {
             putProp(PROP_COMBINE_GLYPHS, combine);
             firePropertyChange(PROP_COMBINE_GLYPHS, null, null);
-            // force repaint of all documents
-            Settings.touchValue(null, null);
+
+// XXX: has this ever worked??
+//            // force repaint of all documents
+//            Settings.touchValue(null, null);
+
             saveSetting(PROP_COMBINE_GLYPHS, combine);
         }
     }
@@ -204,8 +208,11 @@ public class AnnotationTypes {
         Integer i = new Integer(alpha);
         putProp(PROP_BACKGROUND_GLYPH_ALPHA, i);
         firePropertyChange(PROP_BACKGROUND_GLYPH_ALPHA, null, null);
-        // force repaint of all documents
-        Settings.touchValue(null, null);
+        
+// XXX: has this ever worked??
+//        // force repaint of all documents
+//        Settings.touchValue(null, null);
+
         saveSetting(PROP_BACKGROUND_GLYPH_ALPHA, i);
     }
 
@@ -321,9 +328,9 @@ public class AnnotationTypes {
     }
 
     /** Iterator of all annotation type names in the system */
-    public Iterator getAnnotationTypeNames() {
+    public Iterator<String> getAnnotationTypeNames() {
         loadTypes();
-        Set temp = new HashSet();
+        Set<String> temp = new HashSet<String>();
         if (allTypes != null)
             temp.addAll(allTypes.keySet());
         return temp.iterator();

@@ -52,18 +52,27 @@ import javax.swing.event.EventListenerList;
 import java.util.EventListener;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 import javax.swing.JPopupMenu;
 import javax.swing.Action;
 import java.util.Map;
 import java.util.TreeSet;
+import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.SwingUtilities;
 import org.netbeans.editor.ext.ExtKit;
+import org.openide.awt.Actions;
+import org.openide.awt.DynamicMenuContent;
+import org.openide.util.ContextAwareAction;
+import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.actions.Presenter;
+import org.openide.util.lookup.Lookups;
+import org.openide.util.lookup.ProxyLookup;
 
 /** Annotations class act as data model containing all annotations attached
  * to one document. Class uses instances of private class LineAnnotations for 
@@ -85,10 +94,10 @@ import org.openide.util.actions.Presenter;
 public class Annotations implements DocumentListener {
     
     /** Map of [Mark, LineAnnotations] */
-    private HashMap lineAnnotationsByMark;
+    private HashMap<Mark, LineAnnotations> lineAnnotationsByMark;
     
     /** List of [LineAnnotations] which is ordered by line number */
-    private ArrayList lineAnnotationsArray;
+    private ArrayList<LineAnnotations> lineAnnotationsArray;
 
     /** Drawing layer for drawing of annotations */
     private DrawLayerFactory.AnnotationLayer drawLayer;
@@ -102,9 +111,6 @@ public class Annotations implements DocumentListener {
     /** Property change listener on annotation type changes */
     private PropertyChangeListener l;
     
-    /** Property change listener on AnnotationTypes changes */
-    private PropertyChangeListener annoTypesListener;
-
     /** Whether the column with glyph icons is visible */
     private boolean glyphColumn = false;
     
@@ -115,11 +121,11 @@ public class Annotations implements DocumentListener {
     private boolean menuInitialized = false;
 
     /** Sorts the subMenu items */
-    public static final Comparator MENU_COMPARATOR = new MenuComparator();    
+    public static final Comparator<JMenu> MENU_COMPARATOR = new MenuComparator();
 
     public Annotations(BaseDocument doc) {
-        lineAnnotationsByMark = new HashMap(30);
-        lineAnnotationsArray = new ArrayList(20);
+        lineAnnotationsByMark = new HashMap<Mark, LineAnnotations>(30);
+        lineAnnotationsArray = new ArrayList<LineAnnotations>(20);
         listenerList =  new EventListenerList();
         
         drawLayer = null;
@@ -147,19 +153,19 @@ public class Annotations implements DocumentListener {
             }
         };
 
-        AnnotationTypes.getTypes().addPropertyChangeListener( annoTypesListener = new PropertyChangeListener() {
+        AnnotationTypes.getTypes().addPropertyChangeListener( new PropertyChangeListener() {
             public void propertyChange (PropertyChangeEvent evt) {
                 if (evt.getPropertyName() == null || AnnotationTypes.PROP_COMBINE_GLYPHS.equals(evt.getPropertyName())) {
                     LineAnnotations lineAnnos;
-                    for( Iterator it = lineAnnotationsArray.iterator(); it.hasNext(); ) {
-                        lineAnnos = (LineAnnotations)it.next();
+                    for( Iterator<LineAnnotations> it = lineAnnotationsArray.iterator(); it.hasNext(); ) {
+                        lineAnnos = it.next();
                         lineAnnos.refreshAnnotations();
                     }
                 }
                 if (evt.getPropertyName() == null || AnnotationTypes.PROP_ANNOTATION_TYPES.equals(evt.getPropertyName())) {
                     LineAnnotations lineAnnos;
-                    for( Iterator it = lineAnnotationsArray.iterator(); it.hasNext(); ) {
-                        lineAnnos = (LineAnnotations)it.next();
+                    for( Iterator<LineAnnotations> it = lineAnnotationsArray.iterator(); it.hasNext(); ) {
+                        lineAnnos = it.next();
                         for( Iterator it2 = lineAnnos.getAnnotations(); it2.hasNext(); ) {
                             AnnotationDesc anno = (AnnotationDesc)it2.next();
                             anno.updateAnnotationType();
@@ -642,6 +648,14 @@ public class Annotations implements DocumentListener {
         }
     }
     
+    private Action getAction(AnnotationDesc anno, Action action) {
+        if (action instanceof ContextAwareAction && anno instanceof Lookup.Provider) {
+            Lookup lookup = ((Lookup.Provider) anno).getLookup();
+            action = ((ContextAwareAction) action).createContextAwareInstance(lookup);
+        }
+        return action;
+    }
+    
     /** Creates menu item for the given action. It must handle the BaseActions, which
      * have localized name stored not in Action.NAME property. */
     private JMenuItem createMenuItem(Action action, BaseKit kit) {
@@ -654,7 +668,7 @@ public class Annotations implements DocumentListener {
             item = ((Presenter.Popup) action).getPopupPresenter();        
         } else {
             item = new JMenuItem( (String)action.getValue(Action.NAME) );
-            item.addActionListener(action);
+            Actions.connect(item, action, true);
             addAcceleretors(action, item, kit);
         }
         return item;
@@ -664,104 +678,106 @@ public class Annotations implements DocumentListener {
     public JPopupMenu createPopupMenu(BaseKit kit, int line) {
         return createMenu(kit, line, false).getPopupMenu();
     }
+
+    private JMenu createSubMenu(AnnotationDesc anno, BaseKit kit) {
+        JMenu subMenu = null;
+        Action[] actions = anno.getActions();
+        if (actions != null) {
+            subMenu = new JMenu(anno.getAnnotationTypeInstance().getDescription());
+            for (int j=0; j<actions.length; j++) {
+                JMenuItem item = createMenuItem(getAction(anno, actions[j]), kit);
+                if (item instanceof DynamicMenuContent) {
+                    JComponent[] cs = ((DynamicMenuContent) item).getMenuPresenters();
+                    for (JComponent c : cs) {
+                        subMenu.add(c);
+                    }
+                } else {
+                    subMenu.add(item);
+                }
+            }
+
+            if (subMenu.getItemCount() == 0) {
+                subMenu = null;
+            }
+        }
+        return subMenu;
+    }
     
+    private List<JMenu> createSubMenus(AnnotationDesc anno, BaseKit kit) {
+        JMenu subMenu = createSubMenu(anno, kit);
+        if (subMenu != null) {
+            return Collections.singletonList(subMenu);
+        } else if (anno instanceof AnnotationCombination) {
+            // if the annotation does not have defined actions,
+            // add actions of all sub-annotation
+            List<AnnotationDesc> subAnnotations = ((AnnotationCombination) anno).getCombinedAnnotations();
+            List<JMenu> subMenus = new ArrayList<JMenu>(subAnnotations.size());
+            for (AnnotationDesc ad : subAnnotations) {
+                subMenu = createSubMenu(ad, kit);
+                if (subMenu != null) {
+                    subMenus.add(subMenu);
+                }
+            }
+            return subMenus;
+        } else {
+            return Collections.emptyList();
+        }
+    }
+
     private void initMenu(JMenu pm, BaseKit kit, int line){
         LineAnnotations annos = getLineAnnotations(line);
-        Map types = new HashMap(AnnotationTypes.getTypes().getVisibleAnnotationTypeNamesCount() * 4/3);
+        Map<String, String> types = new HashMap<String, String>(AnnotationTypes.getTypes().getVisibleAnnotationTypeNamesCount() * 4/3);
 
-        Action[] actions;
-        boolean separator = false;
-        boolean added = false;
-        JMenu subMenu;
-        TreeSet orderedSubMenus = new TreeSet(MENU_COMPARATOR);
+        TreeSet<JMenu> orderedSubMenus = new TreeSet<JMenu>(MENU_COMPARATOR);
 
         if (annos != null) {
             
             // first, add actions for active annotation
             AnnotationDesc anno = annos.getActive();
             if (anno != null) {
-                actions = anno.getActions();
-                if (actions != null) {
-                    subMenu = new JMenu(anno.getAnnotationTypeInstance().getDescription());
-                    for (int j=0; j<actions.length; j++)
-                        subMenu.add(createMenuItem(actions[j], kit));
-                    
-                    if (subMenu.getItemCount() > 0) {
-                        orderedSubMenus.add(subMenu);
-                        separator = true;
-                    }
-                    types.put(anno.getAnnotationType(), anno.getAnnotationType());
-                }
+                List<JMenu> subMenus = createSubMenus(anno, kit);
+                orderedSubMenus.addAll(subMenus);
+                types.put(anno.getAnnotationType(), anno.getAnnotationType());
             }
 
             // second, add submenus for all pasive annotations
             AnnotationDesc[] pasiveAnnos = annos.getPasive();
-            added = false;
             if (pasiveAnnos != null) {
                 for (int i=0; i < pasiveAnnos.length; i++) {
-                    actions = pasiveAnnos[i].getActions();
-                    if (actions != null) {
-                        subMenu = new JMenu(pasiveAnnos[i].getAnnotationTypeInstance().getDescription());
-                        for (int j=0; j<actions.length; j++)
-                            subMenu.add(createMenuItem(actions[j], kit));
-                        if (separator) {
-                            separator = false;
-                            //pm.addSeparator();
-                        }
-                        if (subMenu.getItemCount() > 0){
-                            //pm.add(subMenu);
-                            orderedSubMenus.add(subMenu);
-                            added = true;
-                        }
-                        types.put(pasiveAnnos[i].getAnnotationType(), pasiveAnnos[i].getAnnotationType());
-                    }
+                    List<JMenu> subMenus = createSubMenus(pasiveAnnos[i], kit);
+                    orderedSubMenus.addAll(subMenus);
+                    types.put(pasiveAnnos[i].getAnnotationType(), pasiveAnnos[i].getAnnotationType());
                 }
-                if (added)
-                    separator = true;
             }
         }
 
         // third, add all remaining possible actions to the end of the list
-        added = false;
         AnnotationType type;
-        for (Iterator i = AnnotationTypes.getTypes().getAnnotationTypeNames(); i.hasNext(); ) {
-            type = AnnotationTypes.getTypes().getType((String)i.next());
+        for (Iterator<String> i = AnnotationTypes.getTypes().getAnnotationTypeNames(); i.hasNext(); ) {
+            type = AnnotationTypes.getTypes().getType(i.next());
             if (type == null || !type.isVisible())
                 continue;
             if (types.get(type.getName()) != null)
                 continue;
-            actions = type.getActions();
+            Action[] actions = type.getActions();
             if (actions != null) {
-                subMenu = new JMenu(type.getDescription());
+                JMenu subMenu = new JMenu(type.getDescription());
                 for (int j=0; j<actions.length; j++) {
                     if (actions[j].isEnabled()) {
                         subMenu.add(createMenuItem(actions[j], kit));
                     }
                 }
-                if (separator) {
-                    separator = false;
-                    //pm.addSeparator();
-                }
                 if (subMenu.getItemCount() > 0){
                     //pm.add(subMenu);
                     orderedSubMenus.add(subMenu);
-                    added = true;
                 }
             }
         }
         
-        if (added)
-            separator = true;
-
-        /*
-        if (separator)
-            pm.addSeparator();
-         */
-        
         if (!orderedSubMenus.isEmpty()){
-            Iterator iter = orderedSubMenus.iterator();
+            Iterator<JMenu> iter = orderedSubMenus.iterator();
             while(iter.hasNext()){
-                subMenu = (JMenu) iter.next();
+                JMenu subMenu = iter.next();
                 pm.add(subMenu);
             }
             pm.addSeparator();
@@ -769,14 +785,31 @@ public class Annotations implements DocumentListener {
         
         
         // add checkbox for enabling/disabling of line numbers
-        BaseAction action = (BaseAction)kit.getActionByName(BaseKit.toggleLineNumbersAction);
-        pm.add(action.getPopupMenuItem(null));
+        Action action = kit.getActionByName(BaseKit.toggleLineNumbersAction);
+        JMenuItem popupItem = getPopupMenuItem(action);
+        assert (popupItem != null);
+        pm.add(popupItem);
         
-        BaseAction action2 = (BaseAction)kit.getActionByName(ExtKit.toggleToolbarAction);
-        if (action2 != null){
-            pm.add(action2.getPopupMenuItem(null));
+        action = kit.getActionByName(ExtKit.toggleToolbarAction);
+        if (action != null){
+            popupItem = getPopupMenuItem(action);
+            assert (popupItem != null);
+            pm.add(popupItem);
         }
         menuInitialized = true;
+    }
+
+    private static JMenuItem getPopupMenuItem(Action action) {
+        JMenuItem popupItem = null;
+        if (action instanceof BaseAction) {
+            popupItem = ((BaseAction) action).getPopupMenuItem(null);
+        }
+        if (popupItem == null) {
+            if (action instanceof Presenter.Popup) {
+                popupItem = ((Presenter.Popup) action).getPopupPresenter();
+            }
+        }
+        return popupItem;
     }
 
     private static class DelayedMenu extends JMenu{
@@ -843,12 +876,12 @@ public class Annotations implements DocumentListener {
     private String dumpLineAnnotationsArray() {
         StringBuffer sb = new StringBuffer();
         for (int i = 0; i < lineAnnotationsArray.size(); i++) {
-            LineAnnotations la = (LineAnnotations)lineAnnotationsArray.get(i);
-            LinkedList annos = la.annos;
+            LineAnnotations la = lineAnnotationsArray.get(i);
+            LinkedList<AnnotationDesc> annos = la.annos;
             sb.append("[" + i + "]: line=" + la.getLine() // NOI18N
                 + ", anos:"); // NOI18N
-            for (int j = 0; j < annos.size(); j++) {
-                sb.append("\n    [" + j + "]: " + dumpAnnotaionDesc((AnnotationDesc)annos.get(j))); // NOI18N
+            for (AnnotationDesc ad : annos) {
+                sb.append("\n    " + dumpAnnotaionDesc(ad)); // NOI18N
             }
             sb.append('\n');
         }
@@ -863,10 +896,10 @@ public class Annotations implements DocumentListener {
     static public class LineAnnotations extends Object {
 
         /** List with all annotations in this LineAnnotations */
-        private LinkedList annos;
+        private LinkedList<AnnotationDesc> annos;
 
         /** List with all visible annotations in this LineAnnotations */
-        private LinkedList annosVisible;
+        private LinkedList<AnnotationDesc> annosVisible;
         
         /** Active annotation. Used only in case there is more than one
          * annotation on the line */
@@ -876,8 +909,8 @@ public class Annotations implements DocumentListener {
 //        private int lineNumber;
         
         protected LineAnnotations() {
-            annos = new LinkedList();
-            annosVisible = new LinkedList();
+            annos = new LinkedList<AnnotationDesc>();
+            annosVisible = new LinkedList<AnnotationDesc>();
 //            lineNumber = -1;
         }
 
@@ -886,20 +919,14 @@ public class Annotations implements DocumentListener {
 //            if (lineNumber == -1)
 //                lineNumber = anno.getLine();
             annos.add(anno);
-            if (anno.isVisible()) {
-                active = anno;
-            }
+//            Collections.sort(annos);
             refreshAnnotations();
         }
         
         /** Remove annotation from this line. Refresh the active one
          * and count of visible. */
         public void removeAnnotation(AnnotationDesc anno) {
-            if (anno == active)
-                activateNext();
             annos.remove(anno);
-            if (active == anno)
-                active = null;
             refreshAnnotations();
         }
 
@@ -912,7 +939,7 @@ public class Annotations implements DocumentListener {
         public int getLine() {
             // #33165 - delegating of getting of the line number to first anno
             return (annos.size() > 0)
-                ? ((AnnotationDesc)annos.get(0)).getLine()
+                ? annos.peek().getLine()
                 : 0;
 //            return lineNumber;
         }
@@ -936,7 +963,7 @@ public class Annotations implements DocumentListener {
                 if (index == startIndex)
                     break;
 
-                pasives[i] = (AnnotationDesc)annosVisible.get(index);
+                pasives[i] = annosVisible.get(index);
                 i++;
             }
             return pasives;
@@ -989,19 +1016,19 @@ public class Annotations implements DocumentListener {
             current++;
             if (current >= getCount())
                 current = 0;
-            active = (AnnotationDesc)annosVisible.get(current);
+            active = annosVisible.get(current);
             return active;
         }
         
         /** Searches all combination annotation type and sort them
          * by getCombinationOrder into combTypes array
          * which is passed as paramter. */
-        private void fillInCombinationsAndOrderThem(LinkedList combTypes) {
+        private void fillInCombinationsAndOrderThem(LinkedList<AnnotationType> combTypes) {
             AnnotationType type;
             AnnotationType.CombinationMember[] combs;
             
-            for (Iterator it = AnnotationTypes.getTypes().getAnnotationTypeNames(); it.hasNext(); ) {
-                type = AnnotationTypes.getTypes().getType((String)it.next());
+            for (Iterator<String> it = AnnotationTypes.getTypes().getAnnotationTypeNames(); it.hasNext(); ) {
+                type = AnnotationTypes.getTypes().getType(it.next());
                 if (type == null)
                     continue;
                 combs = type.getCombinations();
@@ -1012,7 +1039,7 @@ public class Annotations implements DocumentListener {
                     } else {
                         boolean inserted = false;
                         for (int i=0; i < combTypes.size(); i++) {
-                            if ( ((AnnotationType)combTypes.get(i)).getCombinationOrder() > type.getCombinationOrder()) {
+                            if ( (combTypes.get(i)).getCombinationOrder() > type.getCombinationOrder()) {
                                 combTypes.add(i, type);
                                 inserted = true;
                                 break;
@@ -1030,14 +1057,14 @@ public class Annotations implements DocumentListener {
          * and inserts into list of annotations new combined annotation which
          * wraps combined annotations. The result list of annotations can
          * contain null values for annotations which were combined. */
-        private boolean combineType(AnnotationType combType, LinkedList annosDupl) {
+        private boolean combineType(AnnotationType combType, LinkedList<AnnotationDesc> annosDupl) {
 
             int i, j, k;
             boolean matchedType;
             int countOfAnnos = 0;
             int valid_optional_count = 0;
             
-            LinkedList combinedAnnos = new LinkedList();
+            LinkedList<AnnotationDesc> combinedAnnos = new LinkedList<AnnotationDesc>();
 
             AnnotationType.CombinationMember[] combs = combType.getCombinations();
             
@@ -1053,7 +1080,7 @@ public class Annotations implements DocumentListener {
                 // check that for one specified combination type there exist some annotation
                 for (j=0; j < annosDupl.size(); j++) {
                     
-                    anno = (AnnotationDesc)annosDupl.get(j);
+                    anno = annosDupl.get(j);
                     
                     if (anno == null)
                         continue;
@@ -1074,7 +1101,7 @@ public class Annotations implements DocumentListener {
                             for (k=j+1; (k < annosDupl.size()) && (requiredCount > 0); k++) {
                                 if (annosDupl.get(k) == null)
                                     continue;
-                                if (comb.getName().equals( ((AnnotationDesc)annosDupl.get(k)).getAnnotationType() )) {
+                                if (comb.getName().equals( (annosDupl.get(k)).getAnnotationType() )) {
                                     requiredCount--;
                                 }
                             }
@@ -1122,11 +1149,12 @@ public class Annotations implements DocumentListener {
                         activateComb = true;
                     
                     if (annoComb == null) {
-                        annoComb = new AnnotationCombination(combType.getName(), (AnnotationDesc)combinedAnnos.get(i));
-                        annosDupl.set(annosDupl.indexOf(combinedAnnos.get(i)),annoComb);  // replace the original annotation by the new Combined one
+                        annoComb = new AnnotationCombination(combType.getName(), combinedAnnos.get(i));
+                        annosDupl.remove(combinedAnnos.get(i));
+                        annosDupl.add(annoComb);// replace the original annotation by the new Combined one
                     } else {
-                        annoComb.addCombinedAnnotation((AnnotationDesc)combinedAnnos.get(i));
-                        annosDupl.set(annosDupl.indexOf(combinedAnnos.get(i)),null);  // remove annotations which were combined form the array
+                        annoComb.addCombinedAnnotation(combinedAnnos.get(i));
+                        annosDupl.remove(combinedAnnos.get(i)); // remove annotations which were combined form the array
                     }
                 }
                 if (activateComb)
@@ -1145,46 +1173,47 @@ public class Annotations implements DocumentListener {
          * This method is used after change of annotation type of some annotation
          * on this line */
         public void refreshAnnotations() {
-            int i;
-            
             if (!AnnotationTypes.getTypes().isCombineGlyphs().booleanValue()) {
                 
                 // combinations are disabled
-                annosVisible = new LinkedList();
-                for (i=0; i < annos.size(); i++) {
-                    if ( ! ((AnnotationDesc)annos.get(i)).isVisible() )
-                        continue;
-                    annosVisible.add(annos.get(i));
+                annosVisible = new LinkedList<AnnotationDesc>();
+                for (AnnotationDesc ad : annos) {
+                    if (ad.isVisible()) {
+                        annosVisible.add(ad);
+                    }
                 }
-                
             } else {
                 
                 // combination are enabled
-                LinkedList annosDupl = (LinkedList)annos.clone();
+                LinkedList<AnnotationDesc> annosDupl = new LinkedList<AnnotationDesc>(annos);
     
                 // List of all annotation types
-                LinkedList combTypes = new LinkedList();
+                LinkedList<AnnotationType> combTypes = new LinkedList<AnnotationType>();
                 
                 // first, fill in the array with combination types sorted by the order
                 fillInCombinationsAndOrderThem(combTypes);
                 
                 for (int ct=0; ct < combTypes.size(); ct++) {
-                    combineType((AnnotationType)combTypes.get(ct), annosDupl);
+                    combineType(combTypes.get(ct), annosDupl);
                 }
 
-                annosVisible = new LinkedList();
+                annosVisible = new LinkedList<AnnotationDesc>();
 
                 // add remaining not combined annotations into the line annotations array
-                for (i=0; i < annosDupl.size(); i++) {
-                    if (annosDupl.get(i) != null && ((AnnotationDesc)annosDupl.get(i)).isVisible() )
-                        annosVisible.add(annosDupl.get(i));
+                for (AnnotationDesc ad : annosDupl) {
+                    if (ad.isVisible()) {
+                        annosVisible.add(ad);
+                    }
                 }
             }
+
+            //Order by priority
+            Collections.sort(annosVisible);
 
             // update the active annotation
             if (annosVisible.indexOf(active) == -1) {
                 if (annosVisible.size() > 0)
-                    active = (AnnotationDesc)annosVisible.get(0);
+                    active = annosVisible.get(0);
                 else
                     active = null;
             }
@@ -1193,16 +1222,14 @@ public class Annotations implements DocumentListener {
         /** Is this given mark still referenced by some annotation or it
          * can be removed from the draw mark chain */
         public boolean isMarkStillReferenced(Mark mark) {
-            AnnotationDesc anno;
-            for( Iterator it = annos.listIterator(); it.hasNext(); ) {
-                anno = (AnnotationDesc)it.next();
-                if (anno.getMark() == mark)
+            for(AnnotationDesc ad : annos) {
+                if (ad.getMark() == mark)
                    return true;
             }
             return false;
         }
         
-        public Iterator getAnnotations() {
+        public Iterator<AnnotationDesc> getAnnotations() {
             return annos.iterator();
         }
         
@@ -1228,7 +1255,7 @@ public class Annotations implements DocumentListener {
      * annotations which are representd by this combined annotation. The only
      * added functionality is for tooltip text and annotation type.
      */
-    private static class AnnotationCombination extends AnnotationDesc {
+    private static class AnnotationCombination extends AnnotationDesc implements Lookup.Provider {
         
         /** Delegate annotaiton */
         private AnnotationDesc delegate;
@@ -1237,14 +1264,14 @@ public class Annotations implements DocumentListener {
         private String type;
         
         /** List of annotations which are combined */
-        private LinkedList list;
+        private LinkedList<AnnotationDesc> list;
         
         public AnnotationCombination(String type, AnnotationDesc delegate) {
             super(delegate.getOffset(), delegate.getLength());
             this.delegate = delegate;
             this.type = type;
             updateAnnotationType();
-            list = new LinkedList();
+            list = new LinkedList<AnnotationDesc>();
             list.add(delegate);
         }
         
@@ -1281,22 +1308,42 @@ public class Annotations implements DocumentListener {
                 return true;
         }
 
+        List<AnnotationDesc> getCombinedAnnotations() {
+            return list;
+        }
+
         /** Get Mark which represent this annotation in document */
         /* package */ @Override Mark getMark() {
             return delegate.getMark();
         }
+
+        public Lookup getLookup() {
+            Lookup l = null;
+            for (AnnotationDesc ad : list) {
+                if (ad instanceof Lookup.Provider) {
+                    Lookup adl = ((Lookup.Provider) ad).getLookup();
+                    if (l == null) {
+                        l = adl;
+                    } else {
+                        l = new ProxyLookup(l, adl);
+                    }
+                }
+            }
+            if (l == null) {
+                l = Lookups.fixed(new Object[0]);
+            }
+            return l;
+        }
         
     }
 
-    public static final class MenuComparator implements Comparator {
+    public static final class MenuComparator implements Comparator<JMenu> {
 
        
         public MenuComparator() {
         }
         
-        public int compare(Object o1, Object o2) {
-            JMenu menuOne = (JMenu)o1;
-            JMenu menuTwo = (JMenu)o2;
+        public int compare(JMenu menuOne, JMenu menuTwo) {
             if (menuTwo == null || menuOne == null) return 0;
             String menuOneText = menuOne.getText();
             String menuTwoText = menuTwo.getText();
