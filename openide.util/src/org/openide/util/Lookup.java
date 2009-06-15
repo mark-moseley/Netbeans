@@ -47,6 +47,7 @@ import java.util.Iterator;
 import java.util.Set;
 import org.openide.util.lookup.Lookups;
 import org.openide.util.lookup.ProxyLookup;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
  * A general registry permitting clients to find instances of services
@@ -97,6 +98,7 @@ public abstract class Lookup {
      * is a JDK standard.
      *
      * @return the global lookup in the system
+     * @see ServiceProvider
      */
     public static synchronized Lookup getDefault() {
         if (defaultLookup != null) {
@@ -229,6 +231,14 @@ public abstract class Lookup {
      * Find all instances corresponding to a given class.
      * Equivalent to calling {@link #lookupResult} and asking for {@link Lookup.Result#allInstances} but slightly more convenient.
      * Subclasses may override this method to produce the same semantics more efficiently.
+     * <div class="nonnormative">
+     * <p>Example usage:</p>
+     * <pre>
+     * for (MyService svc : Lookup.getDefault().lookupAll(MyService.class)) {
+     *     svc.useMe();
+     * }
+     * </pre>
+     * </div>
      * @param clazz the supertype of the result
      * @return all currently available instances of that type
      * @since org.openide.util 6.10
@@ -337,6 +347,7 @@ public abstract class Lookup {
         /* Computes hashcode for this template. The hashcode is cached.
          * @return hashcode
          */
+        @Override
         public int hashCode() {
             if (hashCode != 0) {
                 return hashCode;
@@ -352,6 +363,7 @@ public abstract class Lookup {
          * @param obj another template to check
          * @return true if so, false otherwise
          */
+        @Override
         public boolean equals(Object obj) {
             if (!(obj instanceof Template)) {
                 return false;
@@ -387,6 +399,7 @@ public abstract class Lookup {
         }
 
         /* for debugging */
+        @Override
         public String toString() {
             return "Lookup.Template[type=" + type + ",id=" + id + ",instance=" + instance + "]"; // NOI18N
         }
@@ -481,6 +494,7 @@ public abstract class Lookup {
         public abstract String getDisplayName();
 
         /* show ID for debugging */
+        @Override
         public String toString() {
             return getId();
         }
