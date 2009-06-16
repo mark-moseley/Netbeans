@@ -48,12 +48,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
+import org.netbeans.api.project.libraries.Library;
+import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.modules.j2ee.core.api.support.wizard.Wizards;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.PersistenceUtils;
+import org.netbeans.modules.j2ee.persistence.dd.common.Persistence;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.unit.PUDataObject;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.modules.j2ee.persistence.wizard.Util;
+import org.netbeans.modules.j2ee.persistence.wizard.library.PersistenceLibrarySupport;
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.openide.WizardDescriptor;
 import org.openide.util.NbBundle;
@@ -125,9 +130,17 @@ public class PersistenceUnitWizard implements WizardDescriptor.InstantiatingIter
     public Set instantiate() throws java.io.IOException {
         PersistenceUnit punit = null;
         LOG.fine("Instantiating...");
-            if (descriptor.isContainerManaged()) {
+        String version=PersistenceUtils.getJPAVersion(project);
+        if (descriptor.isContainerManaged()) {
             LOG.fine("Creating a container managed PU");
-            punit = new PersistenceUnit();
+            if(Persistence.VERSION_2_0.equals(version))
+            {
+                punit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_2_0.PersistenceUnit();
+            }
+            else//currently default 1.0
+            {
+                punit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
+            }
             if (descriptor.getDatasource() != null && !"".equals(descriptor.getDatasource())){
                 if (descriptor.isJTA()) {
                     punit.setJtaDataSource(descriptor.getDatasource());
@@ -136,18 +149,36 @@ public class PersistenceUnitWizard implements WizardDescriptor.InstantiatingIter
                     punit.setTransactionType("RESOURCE_LOCAL");
                 }
             }
+            
             if (descriptor.isNonDefaultProviderEnabled()) {
-                punit.setProvider(descriptor.getNonDefaultProvider());
+                String providerClass = descriptor.getNonDefaultProvider();
+                punit.setProvider(providerClass);
+                
+                //Only add library for Hibernate in NB 6.5
+                if(providerClass.equals("org.hibernate.ejb.HibernatePersistence")){
+                    Library lib =  LibraryManager.getDefault().getLibrary("hibernate-support"); //NOI18N 
+                    if (lib != null) {
+                        Util.addLibraryToProject(project, lib);
+                    }
+                }
             }
         } else {
             LOG.fine("Creating an application managed PU");
             punit = ProviderUtil.buildPersistenceUnit(descriptor.getPersistenceUnitName(),
-                    descriptor.getSelectedProvider(), descriptor.getPersistenceConnection());
+                    descriptor.getSelectedProvider(), descriptor.getPersistenceConnection(), version);
             punit.setTransactionType("RESOURCE_LOCAL");
-            if (descriptor.getPersistenceLibrary() != null){
-                Util.addLibraryToProject(project, descriptor.getPersistenceLibrary());
+            Library lib = PersistenceLibrarySupport.getLibrary(descriptor.getSelectedProvider());
+            if (lib != null){
+                Util.addLibraryToProject(project, lib);
             }
         }
+        
+        // Explicitly add <exclude-unlisted-classes>false</exclude-unlisted-classes>
+        // See issue 142575 - desc 10
+        if (!Util.isJavaSE(project)) {
+            punit.setExcludeUnlistedClasses(false);
+        }
+        
         punit.setName(descriptor.getPersistenceUnitName());
         ProviderUtil.setTableGeneration(punit, descriptor.getTableGeneration(), project);
         try{

@@ -63,12 +63,16 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.libraries.Library;
-import org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit;
+import org.netbeans.modules.j2ee.persistence.dd.PersistenceUtils;
+import org.netbeans.modules.j2ee.persistence.dd.common.Persistence;
+import org.netbeans.modules.j2ee.persistence.dd.common.PersistenceUnit;
 import org.netbeans.modules.j2ee.persistence.provider.InvalidPersistenceXmlException;
 import org.netbeans.modules.j2ee.persistence.provider.ProviderUtil;
 import org.netbeans.modules.j2ee.persistence.spi.moduleinfo.JPAModuleInfo;
+import org.netbeans.modules.j2ee.persistence.spi.provider.PersistenceProviderSupplier;
 import org.netbeans.modules.j2ee.persistence.unit.PUDataObject;
 import org.netbeans.modules.j2ee.persistence.wizard.entity.WrapperPanel;
+import org.netbeans.modules.j2ee.persistence.wizard.library.PersistenceLibrarySupport;
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanel.TableGeneration;
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanel;
 import org.netbeans.modules.j2ee.persistence.wizard.unit.PersistenceUnitWizardPanelDS;
@@ -209,6 +213,11 @@ public class Util {
         return false;
     }
     
+    public static boolean isContainerManaged(Project project) {
+        PersistenceProviderSupplier providerSupplier = project.getLookup().lookup(PersistenceProviderSupplier.class);
+        return Util.isSupportedJavaEEVersion(project) && providerSupplier != null && providerSupplier.supportsDefaultProvider();
+    }
+    
     public static boolean isEjbModule(Project project) {
         JPAModuleInfo moduleInfo = project.getLookup().lookup(JPAModuleInfo.class);
         if (moduleInfo == null){
@@ -247,9 +256,9 @@ public class Util {
     public static PersistenceUnit buildPersistenceUnitUsingWizard(Project project,
             String preselectedDB, TableGeneration tableGeneration){
         
-        boolean isContainer = Util.isSupportedJavaEEVersion(project);
+        boolean isContainerManaged = Util.isContainerManaged(project);
         PersistenceUnitWizardPanel panel;
-        if (isContainer) {
+        if (isContainerManaged) {
             panel = new PersistenceUnitWizardPanelDS(project, null, true, tableGeneration);
         } else {
             panel = new PersistenceUnitWizardPanelJdbc(project, null, true, tableGeneration);
@@ -288,9 +297,18 @@ public class Util {
             createPUButton.setEnabled(false);
         }
         Object result = DialogDisplayer.getDefault().notify(nd);
+        String version=PersistenceUtils.getJPAVersion(project);
         if (result == createPUButton) {
-            PersistenceUnit punit = new PersistenceUnit();
-            if (isContainer) {
+            PersistenceUnit punit = null;
+            if(Persistence.VERSION_2_0.equals(version))
+            {
+                punit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_2_0.PersistenceUnit();
+            }
+            else//currently default 1.0
+            {
+                punit = new org.netbeans.modules.j2ee.persistence.dd.persistence.model_1_0.PersistenceUnit();
+            }
+            if (isContainerManaged) {
                 PersistenceUnitWizardPanelDS puPanel = (PersistenceUnitWizardPanelDS) panel;
                 if (puPanel.getDatasource() != null && !"".equals(puPanel.getDatasource().trim())){
                     if (puPanel.isJTA()) {
@@ -307,10 +325,11 @@ public class Util {
                 }
             } else {
                 PersistenceUnitWizardPanelJdbc puJdbc = (PersistenceUnitWizardPanelJdbc) panel;
-                punit = ProviderUtil.buildPersistenceUnit(puJdbc.getPersistenceUnitName(), puJdbc.getSelectedProvider(), puJdbc.getPersistenceConnection());
+                punit = ProviderUtil.buildPersistenceUnit(puJdbc.getPersistenceUnitName(), puJdbc.getSelectedProvider(), puJdbc.getPersistenceConnection(),version);
                 punit.setTransactionType("RESOURCE_LOCAL"); //NOI18N
-                if (puJdbc.getPersistenceLibrary() != null){
-                    addLibraryToProject(project, puJdbc.getPersistenceLibrary());
+                Library lib = PersistenceLibrarySupport.getLibrary(puJdbc.getSelectedProvider());
+                if (lib != null){
+                    addLibraryToProject(project, lib);
                 }
             }
             punit.setName(panel.getPersistenceUnitName());
@@ -344,6 +363,9 @@ public class Util {
             return false;
         }
         PUDataObject pud = ProviderUtil.getPUDataObject(project);
+        if (pud == null) {
+            return false;
+        }
         pud.addPersistenceUnit(punit);
         pud.save();
         return true;
