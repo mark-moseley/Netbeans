@@ -46,7 +46,7 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.CharacterCodingException;
 import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
-import org.netbeans.modules.db.explorer.nodes.RootNode;
+import org.netbeans.modules.db.explorer.node.RootNode;
 import org.netbeans.modules.db.test.DOMCompare;
 import org.netbeans.modules.db.test.TestBase;
 import org.netbeans.modules.db.test.Util;
@@ -80,7 +80,7 @@ public class DatabaseConnectionConvertorTest extends TestBase {
     
     protected void setUp() throws Exception {
         super.setUp();
-        Util.deleteConnectionFiles();
+        Util.clearConnections();
     }
     
     public void testReadXml() throws Exception {
@@ -140,17 +140,6 @@ public class DatabaseConnectionConvertorTest extends TestBase {
         assertTrue(DOMCompare.compareDocuments(doc, goldenDoc));
     }
     
-    /**
-     * Tests that the instance retrieved from the DO created by DCC.create(DCI dbconn) is the same object as dbconn.
-     */
-    public void testSameInstanceAfterCreate() throws Exception {
-        DatabaseConnection dbconn = new DatabaseConnection("org.bar.BarDriver", 
-                "bar_driver", "jdbc:bar:localhost", "schema", "user", "password");
-        dbconn.setRememberPassword(true);
-        DataObject dobj = DatabaseConnectionConvertor.create(dbconn);
-        assertSame(dbconn, ((InstanceCookie)dobj.getCookie(InstanceCookie.class)).instanceCreate());
-    }
-    
     public void testSaveOnPropertyChange() throws Exception {
         DatabaseConnection dbconn = new DatabaseConnection("a", "b", "c", "d", "e", null);
         FileObject fo = DatabaseConnectionConvertor.create(dbconn).getPrimaryFile();
@@ -208,25 +197,6 @@ public class DatabaseConnectionConvertorTest extends TestBase {
         Lookup.Result result = lookup.getLookup().lookup(new Lookup.Template(DatabaseConnection.class));
         Collection instances = result.allInstances();
         assertEquals(1, instances.size()); 
-    }
-    
-    public void testImportOldConnections() throws Exception {
-        DatabaseConnection conn = new DatabaseConnection("org.foo.FooDriver", 
-                "foo_driver", "jdbc:foo:localhost", "schema", "user", null);
-        RootNode.getOption().getConnections().add(conn);
-        
-        DatabaseConnectionConvertor.importOldConnections();
-        
-        FileObject root = Util.getConnectionsFolder();
-        Collection instances = new FolderLookup(DataFolder.findFolder(root)).getLookup().lookup(new Lookup.Template(DatabaseConnection.class)).allInstances();
-        assertEquals(1, instances.size());
-        
-        DatabaseConnection importedConn = (DatabaseConnection)instances.iterator().next();
-        assertEquals(conn.getDriver(), importedConn.getDriver());
-        assertEquals(conn.getDriverName(), importedConn.getDriverName());
-        assertEquals(conn.getDatabase(), importedConn.getDatabase());
-        assertEquals(conn.getSchema(), importedConn.getSchema());
-        assertEquals(conn.getUser(), importedConn.getUser());
     }
     
     public void testDecodePassword() throws Exception {
