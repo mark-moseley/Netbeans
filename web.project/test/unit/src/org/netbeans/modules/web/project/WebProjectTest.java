@@ -48,6 +48,7 @@ import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.project.uiapi.ProjectOpenedTrampoline;
 import org.netbeans.modules.web.project.api.WebPropertyEvaluator;
 import org.netbeans.modules.web.project.test.TestUtil;
@@ -68,29 +69,25 @@ public class WebProjectTest extends NbTestCase {
         super(testName);
     }
     
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
         TestUtil.makeScratchDir(this);
         serverID = TestUtil.registerSunAppServer(this);
     }
     
+    // see #99077, #70052
+    // TODO investigate more
+    @RandomlyFails
     public void testWebProjectIsGCed() throws Exception { // #83128
-        
-        
-        // #99077 - see umbrella issue #70052 for web project memory leaks
-        // for now commenting out this test:
-        if (true) return;
-        
         File f = new File(getDataDir().getAbsolutePath(), "projects/WebApplication1");
         FileObject projdir = FileUtil.toFileObject(f);
         Project webProject = ProjectManager.getDefault().findProject(projdir);
         WebProjectTest.openProject((WebProject) webProject);
-        Node rootNode = ((WebLogicalViewProvider) webProject.getLookup().lookup(WebLogicalViewProvider.class)).createLogicalView();
-//.getNodes(true) causes IllegalArgumentException: Called DataObject.find on null
-//commenting out till it is fixed
-//        rootNode.getChildren().getNodes(true); // ping
+        Node rootNode = webProject.getLookup().lookup(WebLogicalViewProvider.class).createLogicalView();
+        rootNode.getChildren().getNodes(true); // ping
         Reference<Project> wr = new WeakReference<Project>(webProject);
-        OpenProjects.getDefault().close(new Project[] { webProject });
+        OpenProjects.getDefault().close(new Project[] {webProject});
         WebProjectTest.closeProject((WebProject) webProject);
         rootNode = null;
         webProject = null;
@@ -106,6 +103,7 @@ public class WebProjectTest extends NbTestCase {
         String property = evaluator.evaluator().getProperty("war.ear.name");
         assertEquals("war.ear.name property ", "WebApplication1.war", property);
     }
+
     /**
      * Accessor method for those who wish to simulate open of a project and in
      * case of suite for example generate the build.xml.
