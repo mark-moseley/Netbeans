@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2ee.samples;
+package org.netbeans.modules.maven.samples;
 
 import java.io.File;
 import javax.swing.JFileChooser;
@@ -47,41 +47,34 @@ import javax.swing.JPanel;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.Document;
-import org.netbeans.modules.derby.api.DerbyDatabases;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.netbeans.spi.project.ui.support.ProjectChooser;
 import org.openide.WizardDescriptor;
 import org.openide.WizardValidationException;
 import org.openide.filesystems.FileUtil;
 import org.openide.util.NbBundle;
 
-public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener {
+public class MavenSamplesPanelVisual extends JPanel implements DocumentListener {
     private boolean withDB = false;
     
-    private JavaEESamplesWizardPanel panel;
+    private MavenSamplesWizardPanel panel;
     
     /** Creates new form PanelProjectLocationVisual */
-    public JavaEESamplesPanelVisual(JavaEESamplesWizardPanel panel, boolean withDB, boolean specifyPrjName) {
+    public MavenSamplesPanelVisual(MavenSamplesWizardPanel panel, boolean withDB) {
         initComponents();
         this.panel = panel;
         this.withDB = withDB;
         // Register listener on the textFields to make the automatic updates
         projectNameTextField.getDocument().addDocumentListener(this);
         projectLocationTextField.getDocument().addDocumentListener(this);
-        txtDBName.getDocument().addDocumentListener(this);
-
-        projectNameTextField.setEditable(specifyPrjName);
-        projectNameTextField.setEnabled(specifyPrjName);
-
-        if (!withDB){
-            txtDBName.setVisible(false);
-            lblDBName.setVisible(false);
-            txtDBLocation.setVisible(false);
-            lblDBLocation.setVisible(false);
-            infoDBLocation.setVisible(false);
-        }
+//        txtDBName.getDocument().addDocumentListener(this);
+        
+//        if (!withDB){
+//            txtDBName.setVisible(false);
+//            lblDBName.setVisible(false);
+//            txtDBLocation.setVisible(false);
+//            lblDBLocation.setVisible(false);
+//            infoDBLocation.setVisible(false);
+//        }
     }
     
     
@@ -104,20 +97,17 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         browseButton = new javax.swing.JButton();
         createdFolderLabel = new javax.swing.JLabel();
         createdFolderTextField = new javax.swing.JTextField();
-        lblDBName = new javax.swing.JLabel();
-        txtDBName = new javax.swing.JTextField();
-        lblDBLocation = new javax.swing.JLabel();
-        txtDBLocation = new javax.swing.JTextField();
-        infoDBLocation = new javax.swing.JTextArea();
 
         projectNameLabel.setLabelFor(projectNameTextField);
-        java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/j2ee/samples/Bundle"); // NOI18N
-        org.openide.awt.Mnemonics.setLocalizedText(projectNameLabel, bundle.getString("LBL_ProjectName")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(projectNameLabel, org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_ProjectName")); // NOI18N
+
+        projectNameTextField.setEditable(false);
+        projectNameTextField.setEnabled(false);
 
         projectLocationLabel.setLabelFor(projectLocationTextField);
-        org.openide.awt.Mnemonics.setLocalizedText(projectLocationLabel, bundle.getString("LBL_ProjectLocation")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(projectLocationLabel, org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_ProjectLocation")); // NOI18N
 
-        org.openide.awt.Mnemonics.setLocalizedText(browseButton, bundle.getString("LBL_Browse")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(browseButton, org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_Browse")); // NOI18N
         browseButton.setActionCommand("BROWSE");
         browseButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -126,49 +116,25 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         });
 
         createdFolderLabel.setLabelFor(createdFolderTextField);
-        org.openide.awt.Mnemonics.setLocalizedText(createdFolderLabel, bundle.getString("LBL_ProjectFolder")); // NOI18N
+        org.openide.awt.Mnemonics.setLocalizedText(createdFolderLabel, org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_ProjectFolder")); // NOI18N
 
         createdFolderTextField.setEditable(false);
         createdFolderTextField.setEnabled(false);
-
-        lblDBName.setLabelFor(txtDBName);
-        org.openide.awt.Mnemonics.setLocalizedText(lblDBName, org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_DBName")); // NOI18N
-
-        lblDBLocation.setLabelFor(txtDBLocation);
-        org.openide.awt.Mnemonics.setLocalizedText(lblDBLocation, org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_DBLocation")); // NOI18N
-
-        txtDBLocation.setEditable(false);
-        txtDBLocation.setEnabled(false);
-
-        infoDBLocation.setColumns(20);
-        infoDBLocation.setEditable(false);
-        infoDBLocation.setLineWrap(true);
-        infoDBLocation.setRows(5);
-        infoDBLocation.setText(org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "CreateDatabasePanelVisual.infoTextArea.text")); // NOI18N
-        infoDBLocation.setWrapStyleWord(true);
-        infoDBLocation.setFocusable(false);
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
             .add(layout.createSequentialGroup()
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, infoDBLocation)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(projectNameLabel)
-                            .add(projectLocationLabel)
-                            .add(createdFolderLabel)
-                            .add(lblDBName)
-                            .add(lblDBLocation))
-                        .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                            .add(txtDBName, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
-                            .add(createdFolderTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
-                            .add(txtDBLocation, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
-                            .add(projectLocationTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE)
-                            .add(projectNameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE))))
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(projectNameLabel)
+                    .add(projectLocationLabel)
+                    .add(createdFolderLabel))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(createdFolderTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE)
+                    .add(projectLocationTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE)
+                    .add(projectNameTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 297, Short.MAX_VALUE))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(browseButton))
         );
@@ -188,23 +154,11 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(createdFolderLabel)
                     .add(createdFolderTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(lblDBName)
-                    .add(txtDBName, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                    .add(lblDBLocation)
-                    .add(txtDBLocation, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .add(24, 24, 24)
-                .add(infoDBLocation, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, 90, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap(176, Short.MAX_VALUE))
         );
 
-        projectLocationTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_ProjectLocation_A11YDesc")); // NOI18N
-        browseButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_Browse_A11YDesc")); // NOI18N
-        txtDBName.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_DBName_A11YDesc")); // NOI18N
-        txtDBLocation.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_DBLocation_A11YDesc")); // NOI18N
+        projectLocationTextField.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_ProjectLocation_A11YDesc")); // NOI18N
+        browseButton.getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_Browse_A11YDesc")); // NOI18N
     }// </editor-fold>//GEN-END:initComponents
     
     private void browseButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_browseButtonActionPerformed
@@ -212,7 +166,7 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         if ("BROWSE".equals(command)) { //NOI18N
             JFileChooser chooser = new JFileChooser();
             FileUtil.preventFileChooserSymlinkTraversal(chooser, null);
-            chooser.setDialogTitle(NbBundle.getMessage(JavaEESamplesPanelVisual.class, "LBL_TITLE"));
+            chooser.setDialogTitle(NbBundle.getMessage(MavenSamplesPanelVisual.class, "LBL_TITLE"));
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             String path = this.projectLocationTextField.getText();
             if (path.length() > 0) {
@@ -235,15 +189,10 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
     private javax.swing.JButton browseButton;
     private javax.swing.JLabel createdFolderLabel;
     private javax.swing.JTextField createdFolderTextField;
-    private javax.swing.JTextArea infoDBLocation;
-    private javax.swing.JLabel lblDBLocation;
-    private javax.swing.JLabel lblDBName;
     private javax.swing.JLabel projectLocationLabel;
     private javax.swing.JTextField projectLocationTextField;
     private javax.swing.JLabel projectNameLabel;
     private javax.swing.JTextField projectNameTextField;
-    private javax.swing.JTextField txtDBLocation;
-    private javax.swing.JTextField txtDBName;
     // End of variables declaration//GEN-END:variables
     
     @Override
@@ -255,24 +204,24 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
     
     boolean valid(WizardDescriptor wizardDescriptor) {
         
-        if (!isJavaEECapableServerRegistered()){
-            wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG,
-                    NbBundle.getMessage(JavaEESamplesPanelVisual.class, "ERR_MissingJavaEE5AppServer"));
-            
-            return false;
-        }
+//        if (!isJavaEECapableServerRegistered()){
+//            wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG,
+//                    NbBundle.getMessage(MavenSamplesPanelVisual.class, "ERR_MissingJavaEE5AppServer"));
+//            
+//            return false;
+//        }
         
         if (projectNameTextField.getText().length() == 0) {
             
             wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG,
-                    NbBundle.getMessage(JavaEESamplesPanelVisual.class, "MSG_InvalidProjectName"));
+                    NbBundle.getMessage(MavenSamplesPanelVisual.class, "MSG_InvalidProjectName"));
             
             return false; // Display name not specified
         }
         String projectLocation = projectLocationTextField.getText();
         File f = FileUtil.normalizeFile(new File(projectLocation).getAbsoluteFile());
         if (!f.isDirectory() || projectLocation.length() == 0) {
-            String message = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "MSG_InvalidPath");
+            String message = NbBundle.getMessage(MavenSamplesPanelVisual.class, "MSG_InvalidPath");
             wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG, message);
             return false;
         }
@@ -284,13 +233,13 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         }
         if (projLoc == null || !projLoc.canWrite()) {
             wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG,
-                    NbBundle.getMessage(JavaEESamplesPanelVisual.class, "MSG_FolderCannotBeCreated"));
+                    NbBundle.getMessage(MavenSamplesPanelVisual.class, "MSG_FolderCannotBeCreated"));
             
             return false;
         }
         
         if (FileUtil.toFileObject(projLoc) == null) {
-            String message = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "MSG_InvalidPath");
+            String message = NbBundle.getMessage(MavenSamplesPanelVisual.class, "MSG_InvalidPath");
             wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG, message);
             return false;
         }
@@ -299,36 +248,37 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         if (destFolder.exists() && kids != null && kids.length > 0) {
             // Folder exists and is not empty
             wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG,
-                    NbBundle.getMessage(JavaEESamplesPanelVisual.class, "MSG_FolderAlreadyExists"));
+                    NbBundle.getMessage(MavenSamplesPanelVisual.class, "MSG_FolderAlreadyExists"));
             
             return false;
         }
         
         wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG, null);
-        
-        return withDB ? validDBData(wizardDescriptor) : true;
+
+        return true;
+//        return withDB ? validDBData(wizardDescriptor) : true;
     }
     
-    boolean validDBData(WizardDescriptor wizardDescriptor){
-        String dbName = txtDBName.getText();
-        String errorMsg = null;
+//    boolean validDBData(WizardDescriptor wizardDescriptor){
+//        String dbName = txtDBName.getText();
+//        String errorMsg = null;
         
-        if (DerbyDatabases.isDerbyRegistered()){
-            int illegalChar = DerbyDatabases.getFirstIllegalCharacter(dbName);
-            
-            if (illegalChar > -1){
-                errorMsg = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "ERR_DatabaseNameIllegalChar", (char)illegalChar);
-            } else if (DerbyDatabases.databaseExists(dbName)){
-                errorMsg = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "ERR_DatabaseDirectoryExists", dbName);
-            } else if (dbName.length() == 0){
-                errorMsg = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "ERR_DatabaseNameEmpty");
-            }
-        } else{
-            errorMsg = NbBundle.getMessage(JavaEESamplesPanelVisual.class, "ERR_JavaDBNotRegistered");
-        }
-        wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG, errorMsg);
-        return errorMsg == null;
-    }
+//        if (DerbyDatabases.isDerbyRegistered()){
+//            int illegalChar = DerbyDatabases.getFirstIllegalCharacter(dbName);
+//
+//            if (illegalChar > -1){
+//                errorMsg = NbBundle.getMessage(MavenSamplesPanelVisual.class, "ERR_DatabaseNameIllegalChar", (char)illegalChar);
+//            } else if (DerbyDatabases.databaseExists(dbName)){
+//                errorMsg = NbBundle.getMessage(MavenSamplesPanelVisual.class, "ERR_DatabaseDirectoryExists", dbName);
+//            } else if (dbName.length() == 0){
+//                errorMsg = NbBundle.getMessage(MavenSamplesPanelVisual.class, "ERR_DatabaseNameEmpty");
+//            }
+//        } else{
+//            errorMsg = NbBundle.getMessage(MavenSamplesPanelVisual.class, "ERR_JavaDBNotRegistered");
+//        }
+//        wizardDescriptor.putProperty(WizardProperties.WIZARD_ERROR_MSG, errorMsg);
+//        return errorMsg == null;
+//    }
     
     void store(WizardDescriptor d) {
         String name = projectNameTextField.getText().trim();
@@ -337,10 +287,10 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         d.putProperty(WizardProperties.PROJ_DIR, new File(folder));
         d.putProperty(WizardProperties.NAME, name);
         
-        if (withDB){
-            String dbName = txtDBName.getText().trim();
-            d.putProperty(WizardProperties.DB_NAME, dbName);
-        }
+//        if (withDB){
+//            String dbName = txtDBName.getText().trim();
+//            d.putProperty(WizardProperties.DB_NAME, dbName);
+//        }
     }
     
     void read(WizardDescriptor settings) {
@@ -359,12 +309,12 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
         this.projectNameTextField.setText(projectName);
         this.projectNameTextField.selectAll();
         
-        if (withDB){
-            String dbName = DerbyDatabases.getFirstFreeDatabaseName(projectName);
-            txtDBName.setText(dbName);
-            txtDBName.selectAll();
-            updateDBPath(dbName);
-        }
+//        if (withDB){
+//            String dbName = DerbyDatabases.getFirstFreeDatabaseName(projectName);
+//            txtDBName.setText(dbName);
+//            txtDBName.selectAll();
+//            updateDBPath(dbName);
+//        }
     }
     
     void validate(WizardDescriptor d) throws WizardValidationException {
@@ -409,29 +359,29 @@ public class JavaEESamplesPanelVisual extends JPanel implements DocumentListener
             //}
             
         }
-        else if (doc == txtDBName.getDocument()){
-            String dbName = txtDBName.getText();
-            firePropertyChange(WizardProperties.DB_NAME, null, dbName);
-            updateDBPath(dbName);
-        }
+//        else if (doc == txtDBName.getDocument()){
+//            String dbName = txtDBName.getText();
+//            firePropertyChange(WizardProperties.DB_NAME, null, dbName);
+//            updateDBPath(dbName);
+//        }
         
         panel.fireChangeEvent(); // Notify that the panel changed
     }
     
-    private void updateDBPath(String dbName){
-        String dbPath = new File(DerbyDatabases.getSystemHome(), dbName).getPath();
-        txtDBLocation.setText(dbPath);
-    }
+//    private void updateDBPath(String dbName){
+//        String dbPath = new File(DerbyDatabases.getSystemHome(), dbName).getPath();
+//        txtDBLocation.setText(dbPath);
+//    }
 
-    private boolean isJavaEECapableServerRegistered() {
-        for (String serverInstanceID : Deployment.getDefault().getServerInstanceIDs()){
-            J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstanceID);
-            
-            if (j2eePlatform.getSupportedProfiles().contains(Profile.JAVA_EE_5)){
-                return true;
-            }
-        }
-        
-        return false;
-    }
+//    private boolean isJavaEECapableServerRegistered() {
+//        for (String serverInstanceID : Deployment.getDefault().getServerInstanceIDs()){
+//            J2eePlatform j2eePlatform = Deployment.getDefault().getJ2eePlatform(serverInstanceID);
+//
+//            if (j2eePlatform.getSupportedProfiles().contains(Profile.JAVA_EE_5)){
+//                return true;
+//            }
+//        }
+//
+//        return false;
+//    }
 }
