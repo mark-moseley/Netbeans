@@ -30,21 +30,18 @@ package org.netbeans.modules.cnd.apt.impl.support;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import org.netbeans.modules.cnd.apt.support.IncludeDirEntry;
 
 /**
  * iterator which encapsulates two lists ans start index of combined collection
  * @author Vladimir Voskresensky
  */
-class PathsCollectionIterator implements Iterator<String> {
-    private final List<String> col1;
-    private final List<String> col2;
+class PathsCollectionIterator implements Iterator<IncludeDirEntry> {
+    private final List<IncludeDirEntry> col1;
+    private final List<IncludeDirEntry> col2;
     private int startIndex;
     
-    public PathsCollectionIterator(List<String> col1, List<String> col2) {
-        this(col1, col2, 0);
-    }
-    
-    public PathsCollectionIterator(List<String> col1, List<String> col2, int startIndex) {
+    public PathsCollectionIterator(List<IncludeDirEntry> col1, List<IncludeDirEntry> col2, int startIndex) {
         this.col1 = col1;
         this.col2 = col2;
         this.startIndex = startIndex;
@@ -54,7 +51,7 @@ class PathsCollectionIterator implements Iterator<String> {
         return startIndex < col1.size() + col2.size();
     }
 
-    public String next() {
+    public IncludeDirEntry next() {
         if (hasNext()) {
             int index = startIndex++;
             if (index < col1.size()) {
