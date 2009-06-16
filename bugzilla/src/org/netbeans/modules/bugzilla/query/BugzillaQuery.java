@@ -37,74 +37,75 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.jira.query;
+package org.netbeans.modules.bugzilla.query;
 
+import org.netbeans.modules.bugzilla.repository.BugzillaRepository;
 import java.io.IOException;
+import org.netbeans.modules.bugzilla.*;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import javax.swing.SwingUtilities;
-import org.eclipse.core.runtime.CoreException;
-import org.eclipse.mylyn.internal.jira.core.model.JiraFilter;
-import org.eclipse.mylyn.internal.jira.core.model.NamedFilter;
-import org.eclipse.mylyn.internal.jira.core.model.Project;
-import org.eclipse.mylyn.internal.jira.core.model.filter.FilterDefinition;
-import org.eclipse.mylyn.internal.jira.core.model.filter.ProjectFilter;
 import org.eclipse.mylyn.tasks.core.data.TaskData;
 import org.eclipse.mylyn.tasks.core.data.TaskDataCollector;
+import org.netbeans.modules.bugzilla.issue.BugzillaIssue;
 import org.netbeans.modules.bugtracking.spi.Issue;
 import org.netbeans.modules.bugtracking.spi.Query;
 import org.netbeans.modules.bugtracking.util.BugtrackingUtil;
 import org.netbeans.modules.bugtracking.spi.IssueCache;
 import org.netbeans.modules.bugtracking.ui.issuetable.ColumnDescriptor;
 import org.netbeans.modules.bugtracking.ui.issuetable.Filter;
-import org.netbeans.modules.jira.Jira;
-import org.netbeans.modules.jira.JiraConnector;
-import org.netbeans.modules.jira.commands.PerformQueryCommand;
-import org.netbeans.modules.jira.issue.NbJiraIssue;
-import org.netbeans.modules.jira.repository.JiraRepository;
+import org.netbeans.modules.bugzilla.commands.GetMultiTaskDataCommand;
+import org.netbeans.modules.bugzilla.commands.PerformQueryCommand;
+import org.netbeans.modules.bugzilla.util.BugzillaConstants;
 
 /**
  *
  * @author Tomas Stupka
  */
-public class JiraQuery extends Query {
+public class BugzillaQuery extends Query {
 
     private String name;
-    private final JiraRepository repository;
+    private final BugzillaRepository repository;
     protected QueryController controller;
     private final Set<String> issues = new HashSet<String>();
     private Set<String> archivedIssues = new HashSet<String>();
 
-    protected JiraFilter jiraFilter;
+    // XXX its not clear how the urlParam is used between query and controller
+    protected String urlParameters;
+    private boolean initialUrlDef;
+    
     private boolean firstRun = true;
+    private ColumnDescriptor[] columnDescriptors;
 
-    public JiraQuery(JiraRepository repository) {
-        this(null, repository, null, false, -1);
+    public BugzillaQuery(BugzillaRepository repository) {
+        this(null, repository, null, false, -1, false);
     }
 
-    protected JiraQuery(String name, JiraRepository repository, JiraFilter jiraFilter, boolean saved) {
+    protected BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, boolean saved) {
         super();
         this.name = name;
         this.repository = repository;
-        this.jiraFilter = jiraFilter;
+        this.urlParameters = urlParameters;
+        this.initialUrlDef = false;
         this.saved = saved;
         // let the subclass create the controller
     }
 
-    public JiraQuery(String name, JiraRepository repository, JiraFilter jiraFilter, long lastRefresh) {
-        this(name, repository, jiraFilter, true, lastRefresh);
+    public BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, long lastRefresh, boolean urlDef) {
+        this(name, repository, urlParameters, true, lastRefresh, urlDef);
     }
 
-    private JiraQuery(String name, JiraRepository repository, JiraFilter jiraFilter, boolean saved, long lastRefresh) {
+    private BugzillaQuery(String name, BugzillaRepository repository, String urlParameters, boolean saved, long lastRefresh, boolean urlDef) {
         this.repository = repository;
         this.saved = saved;
         this.name = name;
-        this.jiraFilter = jiraFilter;
+        this.urlParameters = urlParameters;
+        this.initialUrlDef = urlDef;
         this.setLastRefresh(lastRefresh);
-        controller = createControler(repository, this, jiraFilter);
+        controller = createControler(repository, this, urlParameters);
     }
 
     @Override
@@ -120,27 +121,25 @@ public class JiraQuery extends Query {
     @Override
     public synchronized QueryController getController() {
         if (controller == null) {
-            controller = createControler(repository, this, jiraFilter);
+            controller = createControler(repository, this, urlParameters);
         }
         return controller;
     }
 
     @Override
-    public JiraRepository getRepository() {
+    public BugzillaRepository getRepository() {
         return repository;
     }
 
-    protected QueryController createControler(JiraRepository r, JiraQuery q, JiraFilter jiraFilter) {
-        if(jiraFilter == null || jiraFilter instanceof FilterDefinition) {
-            return new QueryController(r, q, (FilterDefinition) jiraFilter);
-        } else if(jiraFilter instanceof NamedFilter) {
-            return new QueryController(r, q, jiraFilter, false);
-        }
-        throw new IllegalStateException("wrong fileter type : " + jiraFilter.getClass().getName());
+    protected QueryController createControler(BugzillaRepository r, BugzillaQuery q, String parameters) {
+        return new QueryController(r, q, parameters, initialUrlDef);
     }
 
     public ColumnDescriptor[] getColumnDescriptors() {
-        return NbJiraIssue.getColumnDescriptors(repository);
+        if(columnDescriptors == null) {
+            columnDescriptors = BugzillaIssue.getColumnDescriptors(repository);
+        }
+        return columnDescriptors;
     }
 
     @Override
@@ -150,70 +149,70 @@ public class JiraQuery extends Query {
 
     boolean refreshIntern(final boolean autoRefresh) { // XXX what if already running! - cancel task
 
-        assert jiraFilter != null;
+        assert urlParameters != null;
         assert !SwingUtilities.isEventDispatchThread() : "Accessing remote host. Do not call in awt"; // NOI18N
 
         final boolean ret[] = new boolean[1];
         executeQuery(new Runnable() {
             public void run() {
-                Jira.LOG.log(Level.FINE, "refresh start - {0} [{1}]", new String[] {name /* XXX , filterDefinition*/ }); // NOI18N
+                Bugzilla.LOG.log(Level.FINE, "refresh start - {0} [{1}]", new String[] {name, urlParameters}); // NOI18N
                 try {
-
+                    
                     // keeps all issues we will retrieve from the server
                     // - those matching the query criteria
-                    // - and the archived
+                    // - and the obsolete ones
+                    Set<String> queryIssues = new HashSet<String>();
+                    
                     issues.clear();
                     archivedIssues.clear();
                     if(isSaved()) {
                         if(!wasRun() && issues.size() != 0) {
-                                Jira.LOG.warning("query " + getDisplayName() + " supposed to be run for the first time yet already contains issues."); // NOI18N
+                                Bugzilla.LOG.warning("query " + getDisplayName() + " supposed to be run for the first time yet already contains issues."); // NOI18N
                                 assert false;
                         }
                         // read the stored state ...
-                        archivedIssues.addAll(repository.getIssueCache().readQueryIssues(getStoredQueryName()));
-                        archivedIssues.addAll(repository.getIssueCache().readArchivedQueryIssues(getStoredQueryName()));
+                        queryIssues.addAll(repository.getIssueCache().readQueryIssues(getStoredQueryName()));
+                        queryIssues.addAll(repository.getIssueCache().readArchivedQueryIssues(getStoredQueryName()));
+                        // ... and they might be rendered obsolete if not returned by the query
+                        archivedIssues.addAll(queryIssues);
                     }
                     firstRun = false;
 
                     // run query to know what matches the criteria
+                    StringBuffer url = new StringBuffer();
+                    url.append(BugzillaConstants.URL_ADVANCED_BUG_LIST);
+                    url.append(urlParameters); // XXX encode url?
                     // IssuesIdCollector will populate the issues set
-                    ensureProjects(jiraFilter);
-                    PerformQueryCommand queryCmd = new PerformQueryCommand(repository, jiraFilter, new IssuesCollector());
+                    PerformQueryCommand queryCmd = new PerformQueryCommand(repository, url.toString(), new IssuesIdCollector());
                     repository.getExecutor().execute(queryCmd, !autoRefresh);
-                    ret[0] = !queryCmd.hasFailed();
-                    if(!ret[0]) {
+                    ret[0] = queryCmd.hasFailed();
+                    if(ret[0]) {
                         return;
                     }
 
-                    // only issues not returned by the query are archived
+                    // only issues not returned by the query are obsolete
                     archivedIssues.removeAll(issues);
                     if(isSaved()) {
-                        // ... and store teh actuall state
+                        // ... and store all you got
                         repository.getIssueCache().storeQueryIssues(getStoredQueryName(), issues.toArray(new String[issues.size()]));
                         repository.getIssueCache().storeArchivedQueryIssues(getStoredQueryName(), archivedIssues.toArray(new String[archivedIssues.size()]));
                     }
+
+                    // now get the task data for
+                    // - all issue returned by the query
+                    // - and issues which were returned by some previous run and are archived now
+                    queryIssues.addAll(issues);
+
+                    GetMultiTaskDataCommand dataCmd = new GetMultiTaskDataCommand(repository, queryIssues, new IssuesCollector());
+                    repository.getExecutor().execute(dataCmd, !autoRefresh);
+                    ret[0] = dataCmd.hasFailed();
                 } finally {
                     logQueryEvent(issues.size(), autoRefresh);
-                    Jira.LOG.log(Level.FINE, "refresh finish - {0} [{1}]", new String[] {name /* XXX , filterDefinition*/}); // NOI18N
+                    Bugzilla.LOG.log(Level.FINE, "refresh finish - {0} [{1}]", new String[] {name, urlParameters}); // NOI18N
                 }
             }
         });
         return ret[0];
-    }
-
-    private void ensureProjects(JiraFilter jiraFilter) {
-        if(!(jiraFilter instanceof FilterDefinition)) {
-            return;
-        }
-        FilterDefinition fd = (FilterDefinition) jiraFilter;
-        ProjectFilter pf = fd.getProjectFilter();
-        if(pf == null) {
-            return;
-        }
-        Project[] projects = pf.getProjects();
-        for (Project project : projects) {
-            repository.getConfiguration().ensureProjectLoaded(project);
-        }
     }
 
     protected String getStoredQueryName() {
@@ -222,21 +221,21 @@ public class JiraQuery extends Query {
 
     protected void logQueryEvent(int count, boolean autoRefresh) {
         BugtrackingUtil.logQueryEvent(
-            JiraConnector.getConnectorName(),
+            BugzillaConnector.getConnectorName(),
             name,
             count,
             false,
             autoRefresh);
     }
 
-    void refresh(JiraFilter jiraFilter, boolean autoReresh) {
-        assert jiraFilter != null;
-        this.jiraFilter = jiraFilter;
+    void refresh(String urlParameters, boolean autoReresh) {
+        assert urlParameters != null;
+        this.urlParameters = urlParameters;
         refreshIntern(autoReresh);
     }
 
     void remove() {
-        repository.removeQuery(this);
+        repository.removeQuery(this);        
         fireQueryRemoved();
     }
 
@@ -258,7 +257,15 @@ public class JiraQuery extends Query {
     int getSize() {
         return issues.size();
     }
-    
+
+    public String getUrlParameters() {
+        return getController().getUrlParameters();
+    }
+
+    public boolean isUrlDefined() {
+        return getController().isUrlDefined();
+    }
+
     public void setName(String name) {
         this.name = name;
     }
@@ -305,37 +312,27 @@ public class JiraQuery extends Query {
         return ret.toArray(new Issue[ret.size()]);
     }
 
-    /**
-     * Returns the filter
-     * @return an instance of FilterDefinition set in UI
-     */
-    public FilterDefinition getFilterDefinition () {
-        return (FilterDefinition) getController().getJiraFilter();
-    }
-    
     boolean wasRun() {
         return !firstRun;
     }
 
+    private class IssuesIdCollector extends TaskDataCollector {
+        public IssuesIdCollector() {}
+        public void accept(TaskData taskData) {
+            String id = BugzillaIssue.getID(taskData);
+            issues.add(id);
+        }
+    };
     private class IssuesCollector extends TaskDataCollector {
         public IssuesCollector() {}
         public void accept(TaskData taskData) {
-            String id = NbJiraIssue.getID(taskData);
-            NbJiraIssue issue;
+            String id = BugzillaIssue.getID(taskData);
+            BugzillaIssue issue;
             try {
                 IssueCache cache = repository.getIssueCache();
-                issue = (NbJiraIssue) cache.setIssueData(id, taskData);
-                issues.add(issue.getID());
-                
-                try {
-                    // XXX hack to force mylyns clients side caching
-                    Jira.getInstance().storeTaskData(repository, taskData);
-                } catch (CoreException ex) {
-                    Jira.LOG.log(Level.SEVERE, null, ex); 
-                }
-
+                issue = (BugzillaIssue) cache.setIssueData(id, taskData);
             } catch (IOException ex) {
-                Jira.LOG.log(Level.SEVERE, null, ex);
+                Bugzilla.LOG.log(Level.SEVERE, null, ex);
                 return;
             }
             fireNotifyData(issue); // XXX - !!! triggers getIssues()
