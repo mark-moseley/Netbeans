@@ -41,27 +41,47 @@
 
 package org.netbeans.modules.web.jsf.impl.facesmodel;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.netbeans.modules.web.jsf.api.facesmodel.Converter;
+import org.netbeans.modules.web.jsf.api.facesmodel.ConverterExtension;
 import org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor;
 import org.w3c.dom.Element;
 
 /**
  *
- * @author Petr Pisl
+ * @author Petr Pisl, ads
  */
-public class ConverterImpl extends DescriptionGroupImpl implements Converter{
+class ConverterImpl extends IdentifiableDescriptionGroupImpl implements Converter{
+    
+    protected static final List<String> CONVERTER_SORTED_ELEMENTS = new ArrayList<String>(9);
+    static { 
+        CONVERTER_SORTED_ELEMENTS.addAll( DESCRIPTION_GROUP_SORTED_ELEMENTS );
+        CONVERTER_SORTED_ELEMENTS.add( CONVERTER_ID );
+        CONVERTER_SORTED_ELEMENTS.add( CONVERTER_FOR_CLASS );
+        CONVERTER_SORTED_ELEMENTS.add( CONVERTER_CLASS );
+        CONVERTER_SORTED_ELEMENTS.add( ATTRIBUTE );
+        CONVERTER_SORTED_ELEMENTS.add( PROPERTY );
+        CONVERTER_SORTED_ELEMENTS.add( CONVERTER_EXTENSION );
+    }
     
     /** Creates a new instance of CondverterImpl */
-    public ConverterImpl(JSFConfigModelImpl model, Element element) {
+    ConverterImpl(JSFConfigModelImpl model, Element element) {
         super(model, element);
     }
     
-    public ConverterImpl(JSFConfigModelImpl model) {
+    ConverterImpl(JSFConfigModelImpl model) {
         this(model, createElementNS(model, JSFConfigQNames.CONVERTER));
     }
     
     public String getConverterClass() {
-        return getChildElementText(JSFConfigQNames.CONVERTER_CLASS.getQName(getNamespaceURI())).trim();
+        String className = getChildElementText(JSFConfigQNames.CONVERTER_CLASS.getQName(getNamespaceURI()));
+        if (className != null) {
+            className = className.trim();
+        }
+
+        return className;
     }
     
     public void setConverterClass(String value) {
@@ -69,7 +89,12 @@ public class ConverterImpl extends DescriptionGroupImpl implements Converter{
     }
     
     public String getConverterForClass() {
-        return getChildElementText(JSFConfigQNames.CONVERTER_FOR_CLASS.getQName(getNamespaceURI())).trim();
+        String className = getChildElementText(JSFConfigQNames.CONVERTER_FOR_CLASS.getQName(getNamespaceURI()));
+        if (className != null) {
+            className = className.trim();
+        }
+
+        return className;
     }
     
     public void setConverterForClass(String value) {
@@ -87,4 +112,38 @@ public class ConverterImpl extends DescriptionGroupImpl implements Converter{
     public void accept(JSFConfigVisitor visitor) {
         visitor.visit(this);
     }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.Converter#addConverterExtension(org.netbeans.modules.web.jsf.api.facesmodel.ConverterExtension)
+     */
+    public void addConverterExtension( ConverterExtension extension ) {
+        appendChild( CONVERTER_EXTENSION, extension );
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.Converter#addConverterExtension(int, org.netbeans.modules.web.jsf.api.facesmodel.ConverterExtension)
+     */
+    public void addConverterExtension( int index, ConverterExtension extension )
+    {
+        insertAtIndex( CONVERTER_EXTENSION, extension, index, ConverterExtension.class);
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.Converter#getConverterExtensions()
+     */
+    public List<ConverterExtension> getConverterExtensions() {
+        return getChildren( ConverterExtension.class );
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.Converter#removeConverterExtension(org.netbeans.modules.web.jsf.api.facesmodel.ConverterExtension)
+     */
+    public void removeConverterExtension( ConverterExtension extension ) {
+        removeChild( CONVERTER_EXTENSION, extension);
+    }
+    
+    protected List<String> getSortedListOfLocalNames(){
+        return CONVERTER_SORTED_ELEMENTS;
+    }
+
 }

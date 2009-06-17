@@ -51,7 +51,7 @@ import org.w3c.dom.Element;
  * @author Petr Pisl
  */
 public class IconImpl extends JSFConfigComponentImpl implements Icon{
-    protected static final List<String> SORTED_ELEMENTS = new ArrayList();
+    protected static final List<String> SORTED_ELEMENTS = new ArrayList<String>(2);
     static {
         SORTED_ELEMENTS.add(JSFConfigQNames.SMALL_ICON.getLocalName());
         SORTED_ELEMENTS.add(JSFConfigQNames.LARGE_ICON.getLocalName());
@@ -74,19 +74,19 @@ public class IconImpl extends JSFConfigComponentImpl implements Icon{
     }
 
     public String getSmallIcon() {
-        return getChildElementText(JSFConfigQNames.SMALL_ICON.getQName(getModel().getVersion()));
+        return getChildElementText(JSFConfigQNames.SMALL_ICON.getQName(getNamespaceURI()));
     }
 
     public void setSmallIcon(String smallIcon) {
-        setChildElementText(SMALL_ICON, smallIcon, JSFConfigQNames.SMALL_ICON.getQName(getModel().getVersion()));
+        setChildElementText(SMALL_ICON, smallIcon, JSFConfigQNames.SMALL_ICON.getQName(getNamespaceURI()));
     }
 
     public String getLargeIcon() {
-        return getChildElementText(JSFConfigQNames.LARGE_ICON.getQName(getModel().getVersion()));
+        return getChildElementText(JSFConfigQNames.LARGE_ICON.getQName(getNamespaceURI()));
     }
 
     public void setLargeIcon(String largeIcon) {
-        setChildElementText(LARGE_ICON, largeIcon, JSFConfigQNames.LARGE_ICON.getQName(getModel().getVersion()));
+        setChildElementText(LARGE_ICON, largeIcon, JSFConfigQNames.LARGE_ICON.getQName(getNamespaceURI()));
     }
 
     public String getLang() {
