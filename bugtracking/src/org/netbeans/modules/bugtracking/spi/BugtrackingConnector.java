@@ -37,68 +37,53 @@
  * Portions Copyrighted 2008-2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.bugzilla;
+package org.netbeans.modules.bugtracking.spi;
 
-import org.netbeans.modules.bugtracking.spi.IssueFinder;
-import org.netbeans.modules.bugzilla.repository.BugzillaRepository;
-import org.netbeans.modules.bugtracking.kenai.spi.KenaiSupport;
-import org.netbeans.modules.bugtracking.spi.Repository;
-import org.netbeans.modules.bugtracking.spi.BugtrackingConnector;
-import org.netbeans.modules.bugzilla.issue.BugzillaIssueFinder;
-import org.netbeans.modules.bugzilla.kenai.KenaiSupportImpl;
 import org.openide.util.Lookup;
-import org.openide.util.NbBundle;
-import org.openide.util.lookup.Lookups;
 
 /**
- *
+ * Represents a bugtracking connector.
+ * 
  * @author Tomas Stupka
  */
-@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.bugtracking.spi.BugtrackingConnector.class)
-public class BugzillaConnector extends BugtrackingConnector {
-
-    private KenaiSupport kenaiSupport;
-    private BugzillaIssueFinder issueFinder;
-
-    public String getDisplayName() {
-        return getConnectorName();
-    }
-
-    public String getTooltip() {
-        return NbBundle.getMessage(BugzillaConnector.class, "LBL_ConnectorTooltip");        // NOI18N
-    }
+public abstract class BugtrackingConnector implements Lookup.Provider {
     
-    @Override
-    public Repository createRepository() {
-        return new BugzillaRepository();
-    }
+    /**
+     * Returns the display name for this connector
+     *
+     * @return the display name for this connector
+     */
+    public abstract String getDisplayName();
 
-    @Override
-    public Repository[] getRepositories() {
-        return Bugzilla.getInstance().getRepositories();
-    }
+    /**
+     * Returns tooltip for this connector
+     * 
+     * @return tooltip for this connector
+     */
+    public abstract String getTooltip();
 
-    public static String getConnectorName() {
-        return NbBundle.getMessage(BugzillaConnector.class, "LBL_ConnectorName");           // NOI18N
-}
+    /**
+     * Creates a repository
+     * @return the created repository
+     */
+    public abstract Repository createRepository();
 
-    @Override
+    /**
+     * Returns all known repositories for this connector
+     * @return known repositories
+     */
+    public abstract Repository[] getRepositories();
+
+    /**
+     * Returns an {@code IssueFinder} for the connector, or {@code null}
+     * if no {@code IssueFinder} is available.
+     * The default implementation returns {@code null}.
+     *
+     * @return  an instance of {@code IssueFinder} corresponding to this
+     *          type of bugtracker, or {@code null}
+     */
     public IssueFinder getIssueFinder() {
-        if (issueFinder == null) {
-            issueFinder = Lookup.getDefault().lookup(BugzillaIssueFinder.class);
-        }
-        return issueFinder;
-    }
-
-    public Lookup getLookup() {
-        return Lookups.singleton(getKenaiSupport());
-    }
-
-    private KenaiSupport getKenaiSupport() {
-        if(kenaiSupport == null) {
-            kenaiSupport = new KenaiSupportImpl();
-        }
-        return kenaiSupport;
+        return null;
     }
 
 }

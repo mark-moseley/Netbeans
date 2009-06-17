@@ -37,15 +37,15 @@
  * Portions Copyrighted 2008-2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.bugzilla;
+package org.netbeans.modules.jira;
 
 import org.netbeans.modules.bugtracking.spi.IssueFinder;
-import org.netbeans.modules.bugzilla.repository.BugzillaRepository;
 import org.netbeans.modules.bugtracking.kenai.spi.KenaiSupport;
+import org.netbeans.modules.jira.repository.JiraRepository;
 import org.netbeans.modules.bugtracking.spi.Repository;
 import org.netbeans.modules.bugtracking.spi.BugtrackingConnector;
-import org.netbeans.modules.bugzilla.issue.BugzillaIssueFinder;
-import org.netbeans.modules.bugzilla.kenai.KenaiSupportImpl;
+import org.netbeans.modules.jira.issue.JiraIssueFinder;
+import org.netbeans.modules.jira.kenai.KenaiSupportImpl;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.lookup.Lookups;
@@ -55,37 +55,38 @@ import org.openide.util.lookup.Lookups;
  * @author Tomas Stupka
  */
 @org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.bugtracking.spi.BugtrackingConnector.class)
-public class BugzillaConnector extends BugtrackingConnector {
+public class JiraConnector extends BugtrackingConnector {
 
     private KenaiSupport kenaiSupport;
-    private BugzillaIssueFinder issueFinder;
+    private JiraIssueFinder issueFinder;
 
     public String getDisplayName() {
         return getConnectorName();
     }
 
     public String getTooltip() {
-        return NbBundle.getMessage(BugzillaConnector.class, "LBL_ConnectorTooltip");        // NOI18N
+        return "Jira Issue Tracking System";
     }
-    
+
     @Override
     public Repository createRepository() {
-        return new BugzillaRepository();
+        return new JiraRepository();
     }
 
     @Override
     public Repository[] getRepositories() {
-        return Bugzilla.getInstance().getRepositories();
+        return Jira.getInstance().getRepositories();
     }
 
     public static String getConnectorName() {
-        return NbBundle.getMessage(BugzillaConnector.class, "LBL_ConnectorName");           // NOI18N
-}
+        return NbBundle.getMessage(JiraConnector.class, "LBL_ConnectorName");           // NOI18N
+    }
+
 
     @Override
     public IssueFinder getIssueFinder() {
         if (issueFinder == null) {
-            issueFinder = Lookup.getDefault().lookup(BugzillaIssueFinder.class);
+            issueFinder = Lookup.getDefault().lookup(JiraIssueFinder.class);
         }
         return issueFinder;
     }
@@ -100,5 +101,4 @@ public class BugzillaConnector extends BugtrackingConnector {
         }
         return kenaiSupport;
     }
-
 }
