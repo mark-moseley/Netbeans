@@ -110,7 +110,7 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
             prevValue = prefs.get(wizardIterator.getInstallRootKey(), null);
         }
         if (null == prevValue) {
-            String installDir = System.getProperty(wizardIterator.getInstallRootProperty()); // System.getProperty("org.glassfish.v3.installRoot");
+            String installDir = System.getProperty(wizardIterator.getInstallRootProperty());
             if (null != installDir && !(installDir.trim().length() == 0)) {
                  return installDir;
             } else {
@@ -219,7 +219,11 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
     public void updateMessageText(final String msg) {
         Mutex.EVENT.readAccess(new Runnable() {
             public void run() {
-                downloadStatusLabel.setText(msg);
+                if (msg.trim().startsWith("<html>")) {
+                    downloadStatusLabel.setText(msg);
+                } else {
+                    downloadStatusLabel.setText("<html>"+msg+"</html>");
+                }
                 fireChangeEvent();
             }
         });
@@ -242,12 +246,13 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
             public void run() {
                 DownloadState state = AddServerLocationVisualPanel.this.downloadState;
                 boolean licenseAccepted = agreeCheckBox.isSelected();
+                boolean writableLoc = AddServerLocationPanel.canCreate(new File(hk2HomeTextField.getText()));
                 String buttonTextKey = 
                         state == DownloadState.DOWNLOADING ? "LBL_CancelDownload" : 
                         state == DownloadState.COMPLETED ? "LBL_DownloadComplete" : "LBL_DownloadNow";
                 String buttonText = NbBundle.getMessage(AddServerLocationVisualPanel.class, buttonTextKey);
                 downloadButton.setText(buttonText);
-                downloadButton.setEnabled(state != DownloadState.COMPLETED && licenseAccepted);
+                downloadButton.setEnabled(state != DownloadState.COMPLETED && licenseAccepted && writableLoc);
             }
         });
     }
@@ -299,7 +304,6 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
         downloadButton = new javax.swing.JButton();
         agreeCheckBox = new javax.swing.JCheckBox();
         readlicenseButton = new javax.swing.JButton();
-        statusPanel = new javax.swing.JPanel();
         downloadStatusLabel = new javax.swing.JLabel();
 
         hk2HomeLabel.setLabelFor(hk2HomeTextField);
@@ -342,35 +346,24 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
         downloadStatusLabel.setVerticalAlignment(javax.swing.SwingConstants.TOP);
         downloadStatusLabel.setHorizontalTextPosition(javax.swing.SwingConstants.LEADING);
 
-        org.jdesktop.layout.GroupLayout statusPanelLayout = new org.jdesktop.layout.GroupLayout(statusPanel);
-        statusPanel.setLayout(statusPanelLayout);
-        statusPanelLayout.setHorizontalGroup(
-            statusPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(downloadStatusLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 498, Short.MAX_VALUE)
-        );
-        statusPanelLayout.setVerticalGroup(
-            statusPanelLayout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(downloadStatusLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-        );
-
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-            .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.TRAILING)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, statusPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, hk2HomeLabel)
-                    .add(org.jdesktop.layout.GroupLayout.LEADING, layout.createSequentialGroup()
+            .add(layout.createSequentialGroup()
+                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
+                    .add(hk2HomeLabel)
+                    .add(layout.createSequentialGroup()
                         .add(downloadButton)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.UNRELATED)
                         .add(agreeCheckBox)
                         .add(2, 2, 2)
-                        .add(readlicenseButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 327, Short.MAX_VALUE))
-                    .add(layout.createSequentialGroup()
-                        .add(hk2HomeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 405, Short.MAX_VALUE)
+                        .add(readlicenseButton, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
+                        .add(hk2HomeTextField, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 387, Short.MAX_VALUE)
                         .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                        .add(browseButton)))
+                        .add(browseButton))
+                    .add(downloadStatusLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, 480, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -379,15 +372,16 @@ public class AddServerLocationVisualPanel extends javax.swing.JPanel implements 
                 .add(hk2HomeLabel)
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
-                    .add(browseButton)
-                    .add(hk2HomeTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                    .add(hk2HomeTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE)
+                    .add(browseButton))
                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
                 .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
                     .add(downloadButton)
                     .add(agreeCheckBox)
                     .add(readlicenseButton))
-                .add(18, 18, 18)
-                .add(statusPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                .add(downloadStatusLabel)
+                .addContainerGap(org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -427,7 +421,8 @@ private void agreeCheckBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN
         if(state == DownloadState.COMPLETED) {
             setDownloadState(DownloadState.AVAILABLE);
         } else {
-            downloadButton.setEnabled(agreeCheckBox.isSelected());
+            boolean writableLoc = AddServerLocationPanel.canCreate(new File(hk2HomeTextField.getText()));
+            downloadButton.setEnabled(agreeCheckBox.isSelected() && writableLoc);
         }
 }//GEN-LAST:event_agreeCheckBoxActionPerformed
     
@@ -440,7 +435,6 @@ private void agreeCheckBoxActionPerformed(java.awt.event.ActionEvent evt) {//GEN
     private javax.swing.JLabel hk2HomeLabel;
     private javax.swing.JTextField hk2HomeTextField;
     private javax.swing.JButton readlicenseButton;
-    private javax.swing.JPanel statusPanel;
     // End of variables declaration//GEN-END:variables
     
 }
