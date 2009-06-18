@@ -43,6 +43,7 @@ package org.netbeans.modules.java.j2seproject;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
+import java.io.File;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
@@ -52,10 +53,18 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.spi.project.SourceGroupModifierImplementation;
+import org.netbeans.spi.project.support.GenericSources;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
+import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
 import org.openide.util.ChangeSupport;
+import org.openide.util.NbBundle;
 
 /**
  * Implementation of {@link Sources} interface for J2SEProject.
@@ -65,20 +74,19 @@ public class J2SESources implements Sources, PropertyChangeListener, ChangeListe
     private static final String BUILD_DIR_PROP = "${" + J2SEProjectProperties.BUILD_DIR + "}";    //NOI18N
     private static final String DIST_DIR_PROP = "${" + J2SEProjectProperties.DIST_DIR + "}";    //NOI18N
 
+    private final Project project;
     private final AntProjectHelper helper;
     private final PropertyEvaluator evaluator;
     private final SourceRoots sourceRoots;
     private final SourceRoots testRoots;
-    private SourcesHelper sourcesHelper;
+    private boolean dirty;
     private Sources delegate;
-    /**
-     * Flag to forbid multiple invocation of {@link SourcesHelper#registerExternalRoots} 
-     **/
-    private boolean externalRootsRegistered;    
     private final ChangeSupport changeSupport = new ChangeSupport(this);
+    private SourceGroupModifierImplementation sgmi;
 
-    J2SESources(AntProjectHelper helper, PropertyEvaluator evaluator,
+    J2SESources(Project project, AntProjectHelper helper, PropertyEvaluator evaluator,
                 SourceRoots sourceRoots, SourceRoots testRoots) {
+        this.project = project;
         this.helper = helper;
         this.evaluator = evaluator;
         this.sourceRoots = sourceRoots;
@@ -86,7 +94,7 @@ public class J2SESources implements Sources, PropertyChangeListener, ChangeListe
         this.sourceRoots.addPropertyChangeListener(this);
         this.testRoots.addPropertyChangeListener(this);        
         this.evaluator.addPropertyChangeListener(this);
-        initSources(); // have to register external build roots eagerly
+        delegate = initSources(); // have to register external build roots eagerly
     }
 
     /**
@@ -101,46 +109,78 @@ public class J2SESources implements Sources, PropertyChangeListener, ChangeListe
             public SourceGroup[] run() {
                 Sources _delegate;
                 synchronized (J2SESources.this) {
-                    if (delegate == null) {                    
+                    if (dirty) {
+                        delegate.removeChangeListener(J2SESources.this);
                         delegate = initSources();
                         delegate.addChangeListener(J2SESources.this);
+                        dirty = false;
                     }
                     _delegate = delegate;
                 }
-                return _delegate.getSourceGroups(type);
-            }
-        });
-    }
-
-    private Sources initSources() {        
-        this.sourcesHelper = new SourcesHelper(helper, evaluator);   //Safe to pass APH        
-        register(sourceRoots);
-        register(testRoots);
-        this.sourcesHelper.addNonSourceRoot (BUILD_DIR_PROP);
-        this.sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
-        externalRootsRegistered = false;
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {                
-                if (!externalRootsRegistered) {
-                    sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-                    externalRootsRegistered = true;
+                SourceGroup[] groups = _delegate.getSourceGroups(type);
+                if (type.equals(Sources.TYPE_GENERIC)) {
+                    FileObject libLoc = getSharedLibraryFolderLocation();
+                    if (libLoc != null) {
+                        SourceGroup[] grps = new SourceGroup[groups.length + 1];
+                        System.arraycopy(groups, 0, grps, 0, groups.length);
+                        grps[grps.length - 1] = GenericSources.group(null, libLoc, 
+                                "sharedlibraries", // NOI18N
+                                NbBundle.getMessage(J2SESources.class, "LibrarySourceGroup_DisplayName"), 
+                                null, null);
+                        return grps;
+                    }
                 }
+                return groups;
             }
         });
-        return this.sourcesHelper.createSources();
+    }
+    
+    private FileObject getSharedLibraryFolderLocation() {
+        String libLoc = helper.getLibrariesLocation();
+        if (libLoc != null) {
+            String libLocEval = evaluator.evaluate(libLoc);
+            File file = null;
+            if (libLocEval != null) {
+                file = helper.resolveFile(libLocEval);
+            }
+            FileObject libLocFO = FileUtil.toFileObject(file);
+            if (libLocFO != null) {
+                //#126366 this can happen when people checkout the project but not the libraries description 
+                //that is located outside the project
+                FileObject libLocParent = libLocFO.getParent();
+                return libLocParent;
+            }
+        } 
+        return null;
     }
 
-    private void register(SourceRoots roots) {
+    SourceGroupModifierImplementation getSourceGroupModifierImplementation() {
+        return sgmi;
+    }
+    
+    private Sources initSources() {
+        final SourcesHelper sourcesHelper = new SourcesHelper(project, helper, evaluator);   //Safe to pass APH
+        register(sourcesHelper, sourceRoots, JavaProjectConstants.SOURCES_HINT_MAIN);
+        register(sourcesHelper, testRoots, JavaProjectConstants.SOURCES_HINT_TEST);
+        sourcesHelper.addNonSourceRoot(BUILD_DIR_PROP);
+        sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT, false);
+        sgmi = sourcesHelper.createSourceGroupModifierImplementation();
+        return sourcesHelper.createSources();
+    }
+
+    private void register(SourcesHelper sourcesHelper, SourceRoots roots, String hint) {
         String[] propNames = roots.getRootProperties();
         String[] rootNames = roots.getRootNames();
         for (int i = 0; i < propNames.length; i++) {
             String prop = propNames[i];
             String displayName = roots.getRootDisplayName(rootNames[i], prop);
             String loc = "${" + prop + "}"; // NOI18N
-            String includes = "${" + J2SEProjectProperties.INCLUDES + "}"; // NOI18N
-            String excludes = "${" + J2SEProjectProperties.EXCLUDES + "}"; // NOI18N
-            sourcesHelper.addPrincipalSourceRoot(loc, includes, excludes, displayName, null, null); // NOI18N
-            sourcesHelper.addTypedSourceRoot(loc, includes, excludes, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, null, null); // NOI18N
+            String includes = "${" + ProjectProperties.INCLUDES + "}"; // NOI18N
+            String excludes = "${" + ProjectProperties.EXCLUDES + "}"; // NOI18N
+            sourcesHelper.sourceRoot(loc).includes(includes).excludes(excludes).hint(hint).displayName(displayName)
+                    .add() // principal root
+                    .type(JavaProjectConstants.SOURCES_TYPE_JAVA).add();    // typed root
         }
     }
 
@@ -154,17 +194,16 @@ public class J2SESources implements Sources, PropertyChangeListener, ChangeListe
 
     private void fireChange() {
         synchronized (this) {
-            if (delegate != null) {
-                delegate.removeChangeListener(this);
-                delegate = null;
-            }
+            dirty = true;
         }
         changeSupport.fireChange();
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
         String propName = evt.getPropertyName();
-        if (SourceRoots.PROP_ROOT_PROPERTIES.equals(propName) ||
+        // was listening to PROP_ROOT_PROPERTIES, changed to PROP_ROOTS in #143633 as changes
+        // from SourceGroupModifierImplementation need refresh too
+        if (SourceRoots.PROP_ROOTS.equals(propName)  ||
             J2SEProjectProperties.BUILD_DIR.equals(propName)  ||
             J2SEProjectProperties.DIST_DIR.equals(propName)) {
             this.fireChange();
@@ -175,4 +214,4 @@ public class J2SESources implements Sources, PropertyChangeListener, ChangeListe
         this.fireChange();
     }
 
-}
+        }

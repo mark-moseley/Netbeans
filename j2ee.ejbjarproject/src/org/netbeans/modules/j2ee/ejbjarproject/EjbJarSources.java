@@ -43,18 +43,21 @@ package org.netbeans.modules.j2ee.ejbjarproject;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
-import java.io.File;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.ejbjarproject.ui.EjbJarLogicalViewProvider;
 import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
-import org.openide.filesystems.FileUtil;
 import org.openide.util.Mutex;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.java.api.common.SourceRoots;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
+import org.netbeans.spi.project.SourceGroupModifierImplementation;
+import org.netbeans.spi.project.SourceGroupModifierImplementation;
 import org.netbeans.spi.project.support.ant.SourcesHelper;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.PropertyEvaluator;
@@ -65,20 +68,18 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
     private static final String BUILD_DIR_PROP = "${" + EjbJarProjectProperties.BUILD_DIR + "}";    //NOI18N
     private static final String DIST_DIR_PROP = "${" + EjbJarProjectProperties.DIST_DIR + "}";    //NOI18N
 
+    private final Project project;
     private final AntProjectHelper helper;
     private final PropertyEvaluator evaluator;
     private final SourceRoots sourceRoots;
     private final SourceRoots testRoots;
     private Sources delegate;
-    /**
-     * Flag to forbid multiple invocation of {@link SourcesHelper#registerExternalRoots} 
-     **/
-    private boolean externalRootsRegistered;    
     private final ChangeSupport changeSupport = new ChangeSupport(this);
-    private SourcesHelper sourcesHelper;
+    private boolean dirty;
 
-    EjbJarSources(AntProjectHelper helper, PropertyEvaluator evaluator,
+    EjbJarSources(Project project, AntProjectHelper helper, PropertyEvaluator evaluator,
                 SourceRoots sourceRoots, SourceRoots testRoots) {
+        this.project = project;
         this.helper = helper;
         this.evaluator = evaluator;
         this.sourceRoots = sourceRoots;
@@ -86,7 +87,7 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
         this.sourceRoots.addPropertyChangeListener(this);
         this.testRoots.addPropertyChangeListener(this);
         this.evaluator.addPropertyChangeListener(this);
-        initSources(); // have to register external build roots eagerly
+        delegate = initSources(); // have to register external build roots eagerly
     }
 
     /**
@@ -101,9 +102,11 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
             public SourceGroup[] run() {
                 Sources _delegate;
                 synchronized (EjbJarSources.this) {
-                    if (delegate == null) {
+                    if (dirty) {
+                        delegate.removeChangeListener(EjbJarSources.this);
                         delegate = initSources();
                         delegate.addChangeListener(EjbJarSources.this);
+                        dirty = false;
                     }
                     _delegate = delegate;
                 }
@@ -112,73 +115,16 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
         });
     }
 
+    SourceGroupModifierImplementation sgmi;
+
+    SourceGroupModifierImplementation getSourceGroupModifierImplementation() {
+        return sgmi;
+    }
+
     private Sources initSources() {
-        sourcesHelper = new SourcesHelper(helper, evaluator);
-        File projectDir = FileUtil.toFile(this.helper.getProjectDirectory());
-        String[] propNames = sourceRoots.getRootProperties();
-        String[] rootNames = sourceRoots.getRootNames();
-        for (int i = 0; i < propNames.length; i++) {
-            String displayName = rootNames[i];
-            String prop = "${" + propNames[i] + "}";
-            if (displayName.length() ==0) {
-                //If the prop is src.dir use the default name
-                if ("src.dir".equals(propNames[i])) {   //NOI18N
-                    displayName = SourceRoots.DEFAULT_SOURCE_LABEL;
-                }
-                else {
-                    //If the name is not given, it should be either a relative path in the project dir
-                    //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
-                    if (sourceRoot != null) {
-                        String srPath = sourceRoot.getAbsolutePath();
-                        String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
-                        if (srPath.startsWith(pdPath)) {
-                            displayName = srPath.substring(pdPath.length());
-                        }
-                        else {
-                            displayName = sourceRoot.getAbsolutePath();
-                        }
-                    }
-                    else {
-                        displayName = SourceRoots.DEFAULT_SOURCE_LABEL;
-                    }
-                }
-            }
-            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            sourcesHelper.addTypedSourceRoot(prop, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, /*XXX*/null, null);
-        }
-        propNames = testRoots.getRootProperties();
-        rootNames = testRoots.getRootNames();
-        for (int i = 0; i < propNames.length; i++) {
-            String displayName = rootNames[i];
-            String prop = "${" + propNames[i] + "}";
-            if (displayName.length() ==0) {
-                //If the prop is test.src.dir use the default name
-                if ("test.src.dir".equals(propNames[i])) {   //NOI18N
-                    displayName = SourceRoots.DEFAULT_TEST_LABEL;
-                }
-                else {
-                    //If the name is not given, it should be either a relative path in the project dir
-                    //or absolute path when the root is not under the project dir
-                    File sourceRoot = helper.resolveFile(evaluator.evaluate(prop));
-                    if (sourceRoot != null) {
-                        String srPath = sourceRoot.getAbsolutePath();
-                        String pdPath = projectDir.getAbsolutePath() + File.separatorChar;
-                        if (srPath.startsWith(pdPath)) {
-                            displayName = srPath.substring(pdPath.length());
-                        }
-                        else {
-                            displayName = sourceRoot.getAbsolutePath();
-                        }
-                    }
-                    else {
-                        displayName = SourceRoots.DEFAULT_TEST_LABEL;
-                    }
-                }
-            }
-            sourcesHelper.addPrincipalSourceRoot(prop, displayName, /*XXX*/null, null);
-            sourcesHelper.addTypedSourceRoot(prop, JavaProjectConstants.SOURCES_TYPE_JAVA, displayName, /*XXX*/null, null);
-        }
+        SourcesHelper sourcesHelper = new SourcesHelper(project, helper, evaluator);
+        register(sourcesHelper, sourceRoots, JavaProjectConstants.SOURCES_HINT_MAIN);
+        register(sourcesHelper, testRoots, JavaProjectConstants.SOURCES_HINT_TEST);
         
         // Configuration Files
         String configFilesLabel = org.openide.util.NbBundle.getMessage(EjbJarLogicalViewProvider.class, "LBL_Node_DocBase"); //NOI18N
@@ -187,18 +133,26 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
         sourcesHelper.addNonSourceRoot(BUILD_DIR_PROP);
         sourcesHelper.addNonSourceRoot(DIST_DIR_PROP);
         
-        externalRootsRegistered = false;
-        ProjectManager.mutex().postWriteRequest(new Runnable() {
-            public void run() {
-                if (!externalRootsRegistered) {
-                    sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
-                    externalRootsRegistered = true;
-                }
-            }
-        });
+        sourcesHelper.registerExternalRoots(FileOwnerQuery.EXTERNAL_ALGORITHM_TRANSIENT);
+        sgmi = sourcesHelper.createSourceGroupModifierImplementation();
         return sourcesHelper.createSources();
     }
 
+    private void register(SourcesHelper sourcesHelper, SourceRoots roots, String hint) {
+        String[] propNames = roots.getRootProperties();
+        String[] rootNames = roots.getRootNames();
+        for (int i = 0; i < propNames.length; i++) {
+            String prop = propNames[i];
+            String displayName = roots.getRootDisplayName(rootNames[i], prop);
+            String loc = "${" + prop + "}"; // NOI18N
+            String includes = "${" + ProjectProperties.INCLUDES + "}"; // NOI18N
+            String excludes = "${" + ProjectProperties.EXCLUDES + "}"; // NOI18N
+            sourcesHelper.sourceRoot(loc).includes(includes).excludes(excludes).hint(hint).displayName(displayName)
+                    .add() // principal root
+                    .type(JavaProjectConstants.SOURCES_TYPE_JAVA).add();    // typed root
+        }
+     }
+    
     public void addChangeListener(ChangeListener changeListener) {
         changeSupport.addChangeListener(changeListener);
     }
@@ -209,17 +163,16 @@ public class EjbJarSources implements Sources, PropertyChangeListener, ChangeLis
 
     private void fireChange() {
         synchronized (this) {
-            if (delegate != null) {
-                delegate.removeChangeListener(this);
-                delegate = null;
-            }
+            dirty = true;
         }
         changeSupport.fireChange();
     }
     
     public void propertyChange(PropertyChangeEvent evt) {
         String propName = evt.getPropertyName();
-        if (SourceRoots.PROP_ROOT_PROPERTIES.equals(propName)
+        // was listening to PROP_ROOT_PROPERTIES, changed to PROP_ROOTS in #143633 as changes
+        // from SourceGroupModifierImplementation need refresh too
+        if (SourceRoots.PROP_ROOTS.equals(propName)
                 || EjbJarProjectProperties.BUILD_DIR.equals(propName)
                 || EjbJarProjectProperties.DIST_DIR.equals(propName)) {
             this.fireChange();
