@@ -53,13 +53,14 @@ import java.util.Properties;
 import javax.swing.event.ChangeListener;
 import org.apache.tools.ant.module.api.support.ActionUtils;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
 import org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation;
+import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.Lookup;
+import org.openide.util.test.MockLookup;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
 import org.openide.windows.OutputListener;
@@ -78,9 +79,15 @@ public final class JavaAntLoggerTest extends NbTestCase {
     private File simpleAppDir;
     private Properties props;
     
+    @Override
     protected void setUp() throws Exception {
         super.setUp();
-        MockServices.setServices(IOP.class, IFL.class, SFBQ.class);
+        MockLookup.setInstances(new IOP(), new IFL(), new SFBQ(), new StatusDisplayer() {
+            public String getStatusText() {return "";}
+            public void setStatusText(String text) {}
+            public void addChangeListener(ChangeListener l) {}
+            public void removeChangeListener(ChangeListener l) {}
+        });
         simpleAppDir = new File(getDataDir(), "simple-app");
         assertTrue("have dir " + simpleAppDir, simpleAppDir.isDirectory());
         Lookup.getDefault().lookup(SFBQ.class).setSimpleAppDir(simpleAppDir);
@@ -94,6 +101,23 @@ public final class JavaAntLoggerTest extends NbTestCase {
         assertTrue("file " + junitJar + " exists", junitJar.isFile());
         props = new Properties();
         props.setProperty("libs.junit.classpath", junitJar.getAbsolutePath()); // #50261
+    }
+
+    private void assertHyperlinkPattern(String resourceAndLineNumber, String line) {
+        assertEquals(resourceAndLineNumber, String.valueOf(JavaAntLogger.parseStackTraceLine(line)));
+    }
+
+    public void testHyperlinkPattern() throws Exception {
+        assertHyperlinkPattern("simpleapp/Clazz.java:4", "\tat simpleapp.Clazz.run(Clazz.java:4)");
+        assertHyperlinkPattern("simpleapp/Clazz.java:4", "\tat simpleapp.Clazz.<clinit>(Clazz.java:4)");
+        assertHyperlinkPattern("Main.java:4", "\tat Main.run(Main.java:4)");
+        assertHyperlinkPattern("simpleapp/Clazz.java:4", "simpleapp.Clazz.run(Clazz.java:4)"); // # 153057
+        assertHyperlinkPattern("org/openide/filesystems/MultiFileObject.java:1",
+                "\tat org.openide.filesystems.MultiFileObject.fileFolderCreated(Unknown Source)"); // #17734
+        assertHyperlinkPattern("org/openide/filesystems/MultiFileObject.java:1",
+                "\tat org.openide.filesystems.MultiFileObject$Inner$1.fileFolderCreated(Unknown Source)"); // #17734
+        assertHyperlinkPattern("some/pkg/PublicOuterClass.java:123", "\tat some.pkg.PrivateOuterClass.meth(PublicOuterClass.java:123)");
+        assertHyperlinkPattern("používá/Háček.java:4", "\tat používá.Háček.run(Háček.java:4)");
     }
     
     public void testHyperlinkRun() throws Exception {
@@ -113,7 +137,7 @@ public final class JavaAntLoggerTest extends NbTestCase {
         assertTrue("got a hyperlink for Clazz.run NPE in " + hyperlinkedErr, hyperlinkedErr.contains("\tat simpleapp.Clazz.run(Clazz.java:4)"));
     }
     
-    public static final class SFBQ implements SourceForBinaryQueryImplementation {
+    private static final class SFBQ implements SourceForBinaryQueryImplementation {
         
         private URL buildClasses, buildTestClasses;
         private FileObject src, testSrc;
@@ -164,7 +188,8 @@ public final class JavaAntLoggerTest extends NbTestCase {
         
     }
     
-    public static final class IOP extends IOProvider implements InputOutput {
+    @SuppressWarnings("deprecation") // for flushReader
+    private static final class IOP extends IOProvider implements InputOutput {
         
         public IOP() {}
 
@@ -188,7 +213,6 @@ public final class JavaAntLoggerTest extends NbTestCase {
             return new StringReader("");
         }
 
-        @SuppressWarnings("deprecation")
         public Reader flushReader() {
             return getIn();
         }
@@ -239,6 +263,7 @@ public final class JavaAntLoggerTest extends NbTestCase {
             message(s, l != null);
         }
 
+        @Override
         public void println(String x) {
             message(x, false);
         }
@@ -255,7 +280,7 @@ public final class JavaAntLoggerTest extends NbTestCase {
     }
 
     /** Copied from AntLoggerTest. */
-    public static final class IFL extends InstalledFileLocator {
+    private static final class IFL extends InstalledFileLocator {
         public IFL() {}
         public File locate(String relativePath, String codeNameBase, boolean localized) {
             if (relativePath.equals("ant/nblib/bridge.jar")) {
