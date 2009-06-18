@@ -135,12 +135,14 @@ public class VariablesTableModel implements TableModel, Constants {
         if ( LOCALS_VALUE_COLUMN_ID.equals (columnID) ||
              WATCH_VALUE_COLUMN_ID.equals (columnID)
         ) {
+            if (VariablesViewButtons.isShowValuesAsString()) {
+                return getValueAt(row, LOCALS_TO_STRING_COLUMN_ID);
+            }
             if (row instanceof JPDAWatch) {
                 JPDAWatch w = (JPDAWatch) row;
                 String e = w.getExceptionDescription ();
                 if (e != null)
-                    return ">" + e + "<";
-                    // return BoldVariablesTableModelFilterFirst.toHTML(">" + e + "<", false, false, Color.RED);
+                    return BoldVariablesTableModelFilterFirst.toHTML(">" + e + "<", false, false, Color.RED);
                 try {
                         return w.getValue ();
                 } finally {
@@ -149,21 +151,7 @@ public class VariablesTableModel implements TableModel, Constants {
             } else 
             if (row instanceof Variable) {
                 try {
-                    if (VariablesViewButtons.isShowValuesAsString()) {
-                        if (row instanceof ObjectVariable) {
-                            ObjectVariable objVar = (ObjectVariable) row;
-                            StringBuffer buf = new StringBuffer();
-                            buf.append(getShort(objVar.getType()));
-                            buf.append(" (#");
-                            buf.append(objVar.getUniqueID());
-                            buf.append(')');
-                            return buf.toString();
-                        } else {
-                            return ((Variable) row).getValue ();
-                        }
-                    } else {
-                        return ((Variable) row).getValue ();
-                    }
+                    return ((Variable) row).getValue ();
                 } finally {
                     fireChildrenChange(row);
                 }
