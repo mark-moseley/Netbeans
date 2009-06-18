@@ -42,6 +42,8 @@
 package org.netbeans.modules.cnd.apt.support;
 
 import java.util.List;
+import java.util.Map;
+import org.netbeans.modules.cnd.apt.impl.support.APTBaseMacroMap;
 import org.netbeans.modules.cnd.apt.impl.support.APTHandlersSupportImpl;
 
 /**
@@ -67,14 +69,37 @@ public class APTHandlersSupport {
         APTHandlersSupportImpl.invalidatePreprocHandler(preprocHandler);
     }
  
-    public static APTIncludeHandler createIncludeHandler(StartEntry startFile, List<String> sysIncludePaths, List<String> userIncludePaths) {
+    public static APTIncludeHandler createIncludeHandler(StartEntry startFile, List<IncludeDirEntry> sysIncludePaths, List<IncludeDirEntry> userIncludePaths) {
         return APTHandlersSupportImpl.createIncludeHandler(startFile, sysIncludePaths, userIncludePaths);
     }
 
     public static APTMacroMap createMacroMap(APTMacroMap sysMap, List<String> userMacros) {
         return APTHandlersSupportImpl.createMacroMap(sysMap, userMacros);
     }
-    
+
+    public static Map<CharSequence, APTMacro> extractMacroMap(APTPreprocHandler.State state){
+        return APTHandlersSupportImpl.extractMacroMap(state);
+    }
+
+    public static APTBaseMacroMap.State extractMacroMapState(APTPreprocHandler.State state){
+        return APTHandlersSupportImpl.extractMacroMapState(state);
+    }
+
+    public static StateKey getMacroMapID(APTPreprocHandler.State state){
+        return APTHandlersSupportImpl.getMacroMapID(state);
+    }
+
+    public static boolean isEmptyActiveMacroMap(APTPreprocHandler.State state) {
+        return APTHandlersSupportImpl.isEmptyActiveMacroMap(state);
+    }
+
+    public static int getMacroSize(APTPreprocHandler.State state) {
+        return APTHandlersSupportImpl.getMacroSize(state);
+    }
+
+    public static int getIncludeStackDepth(APTPreprocHandler.State state) {
+        return APTHandlersSupportImpl.getIncludeStackDepth(state);
+    }
     ////////////////////////////////////////////////////////////////////////////
     // help methods for preprocessor states
 //    public static APTPreprocHandler.State copyPreprocState(APTPreprocHandler.State orig) {
@@ -95,5 +120,26 @@ public class APTHandlersSupport {
     
     public static APTPreprocHandler.State createInvalidPreprocState(APTPreprocHandler.State orig) {
         return APTHandlersSupportImpl.createInvalidPreprocState(orig);
+    }
+
+    public static final class StateKey {
+        private final int crc1,crc2;
+        public StateKey(int crc1, int crc2){
+            this.crc1 = crc1;
+            this.crc2 = crc2;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof StateKey) {
+                return crc1 == ((StateKey)obj).crc1 && crc2 == ((StateKey)obj).crc2;
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return crc1 ^ crc2;
+        }
     }
 }
