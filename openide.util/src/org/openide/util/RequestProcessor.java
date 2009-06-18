@@ -41,6 +41,7 @@
 
 package org.openide.util;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -48,6 +49,7 @@ import java.util.ListIterator;
 import java.util.Stack;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.Executor;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -113,10 +115,11 @@ import java.util.logging.Logger;
  *     }
  * }
  * </PRE>
+ * Since version 7.16 it implements {@link Executor}
  * 
  * @author Petr Nejedly, Jaroslav Tulach
  */
-public final class RequestProcessor {
+public final class RequestProcessor implements Executor{
     /** the static instance for users that do not want to have own processor */
     private static RequestProcessor DEFAULT = new RequestProcessor();
 
@@ -126,14 +129,19 @@ public final class RequestProcessor {
     private static RequestProcessor UNLIMITED = new RequestProcessor("Default RequestProcessor", 50); // NOI18N
 
     /** A shared timer used to pass timeouted tasks to pending queue */
-    private static Timer starterThread = new Timer(true);
+    private static final Timer starterThread = new Timer(true);
 
     /** logger */
     private static Logger logger;
 
     /** The counter for automatic naming of unnamed RequestProcessors */
     private static int counter = 0;
-    static final boolean SLOW = Boolean.getBoolean("org.openide.util.RequestProcessor.Item.SLOW");
+    private static final boolean SLOW;
+    static {
+        boolean slow = false;
+        assert slow = true;
+        SLOW = slow;
+    }
 
     /** The name of the RequestProcessor instance */
     String name;
@@ -144,7 +152,7 @@ public final class RequestProcessor {
 
     /** The lock covering following four fields. They should be accessed
      * only while having this lock held. */
-    private Object processorLock = new Object();
+    private final Object processorLock = new Object();
 
     /** The set holding all the Processors assigned to this RequestProcessor */
     private HashSet<Processor> processors = new HashSet<Processor>();
@@ -165,6 +173,8 @@ public final class RequestProcessor {
     
     /** support for interrupts or not? */
     private boolean interruptThread;
+    /** fill stacktraces when task is posted? */
+    private boolean enableStackTraces;
 
     /** Creates new RequestProcessor with automatically assigned unique name. */
     public RequestProcessor() {
@@ -213,11 +223,34 @@ public final class RequestProcessor {
      * @since 6.3
      */
     public RequestProcessor(String name, int throughput, boolean interruptThread) {
+        this(name, throughput, interruptThread, SLOW);
+    }
+
+    /** Creates a new named <code>RequestProcessor</code> that allows to disable stack trace filling.
+     * By default, when assertions are on, each task posted on <code>RequestProcessor</code> stores
+     * the stack trace at the time of posting. When an exception is later thrown from the task,
+     * it allows to print not only stack trace of the task but also stack trace of the code that posted it.
+     * However this may be a performance bottleneck in cases when hundreds of short task are scheduled.
+     * This constructor then allows to create <code>RequestProcessor</code> which never stores stack traces
+     * at the time of posting.
+     * <p>
+     * See constructor {@link #RequestProcessor(String, int, boolean)} for details of <code>interruptThread</code>
+     * parameter.
+     * </p>
+     * @param name the name to use for the request processor thread
+     * @param throughput the maximal count of requests allowed to run in parallel
+     * @param interruptThread true if {@link RequestProcessor.Task#cancel} shall interrupt the thread
+     * @param enableStackTraces <code>false</code> when request processor should not fill stack traces when task is posted.
+     *              Default is <code>true</code> when assertions are enabled, <code>false</code> otherwise.
+     * @since 7.24
+     */
+    public RequestProcessor(String name, int throughput, boolean interruptThread, boolean enableStackTraces) {
         this.throughput = throughput;
         this.name = (name != null) ? name : ("OpenIDE-request-processor-" + (counter++));
         this.interruptThread = interruptThread;
+        this.enableStackTraces = enableStackTraces;
     }
-    
+
     
     /** The getter for the shared instance of the <CODE>RequestProcessor</CODE>.
      * This instance is shared by anybody who
@@ -240,6 +273,15 @@ public final class RequestProcessor {
         return UNLIMITED;
     }
 
+    /** Implements contract of {@link Executor}. 
+     * Simply delegates to {@link #post(java.lang.Runnable)}.
+     * @param command the runnable to execute
+     * @since 7.16
+     */
+    public void execute(Runnable command) {
+        post(command);
+    }
+    
     /** This methods asks the request processor to start given
      * runnable immediately. The default priority is {@link Thread#MIN_PRIORITY}.
      *
@@ -324,10 +366,8 @@ public final class RequestProcessor {
     */
     public boolean isRequestProcessorThread() {
         Thread c = Thread.currentThread();
-
-        //        return c instanceof Processor && ((Processor)c).source == this;
         synchronized (processorLock) {
-            return processors.contains(c);
+            return c instanceof Processor && processors.contains((Processor) c);
         }
     }
 
@@ -554,6 +594,7 @@ public final class RequestProcessor {
             this.priority = priority;
         }
 
+        @Override
         public void run() {
             try {
                 notifyRunning();
@@ -611,7 +652,9 @@ public final class RequestProcessor {
                     item.clear(null);
                 }
 
-                item = new Item(this, RequestProcessor.this);
+                item = enableStackTraces ?
+                    new SlowItem(this, RequestProcessor.this) :
+                    new FastItem(this, RequestProcessor.this);
                 localItem = item;
             }
 
@@ -693,8 +736,10 @@ public final class RequestProcessor {
         * request processor thread and in such case runs the task immediatelly
         * to prevent deadlocks.
         */
+        @Override
         public void waitFinished() {
             if (isRequestProcessorThread()) { //System.err.println(
+                boolean runAtAll;
                 boolean toRun;
                 
                 Logger em = logger();
@@ -708,7 +753,8 @@ public final class RequestProcessor {
                 synchronized (processorLock) {
                     // correct line:    toRun = (item == null) ? !isFinished (): (item.clear() && !isFinished ());
                     // the same:        toRun = !isFinished () && (item == null ? true : item.clear ());
-                    toRun = !isFinished() && ((item == null) || item.clear(null));
+                    runAtAll = !isFinished();
+                    toRun = runAtAll && ((item == null) || item.clear(null));
                     if (loggable) {
                         em.fine("    ## finished: " + isFinished()); // NOI18N
                         em.fine("    ## item: " + item); // NOI18N
@@ -726,9 +772,9 @@ public final class RequestProcessor {
                         em.fine("    ## not running it synchronously"); // NOI18N
                     }
 
-                    if (lastThread != Thread.currentThread()) {
+                    if (runAtAll && lastThread != Thread.currentThread()) {
                         if (loggable) {
-                            em.fine("    ## waiting for it to be finished"); // NOI18N
+                            em.fine("    ## waiting for it to be finished: " + lastThread + " now: " + Thread.currentThread()); // NOI18N
                         }
                         super.waitFinished();
                     }
@@ -759,6 +805,7 @@ public final class RequestProcessor {
         *    timeout period, false otherwise
         *  @since 5.0
         */
+        @Override
         public boolean waitFinished(long timeout) throws InterruptedException {
             if (isRequestProcessorThread()) {
                 boolean toRun;
@@ -784,6 +831,7 @@ public final class RequestProcessor {
             }
         }
 
+        @Override
         public String toString() {
             return "RequestProcessor.Task [" + name + ", " + priority + "] for " + super.toString(); // NOI18N
         }
@@ -792,11 +840,11 @@ public final class RequestProcessor {
     /* One item representing the task pending in the pending queue */
     private static class Item extends Exception {
         private final RequestProcessor owner;
-        private Object action;
-        private boolean enqueued;
+        Object action;
+        boolean enqueued;
+        String message;
 
         Item(Task task, RequestProcessor rp) {
-            super("Posted StackTrace"); // NOI18N
             action = task;
             owner = rp;
         }
@@ -828,8 +876,43 @@ public final class RequestProcessor {
             return getTask().getPriority();
         }
 
+        public @Override String getMessage() {
+            return message;
+        }
+
+    }
+
+    private static class FastItem extends Item {
+        FastItem(Task task, RequestProcessor rp) {
+            super(task, rp);
+        }
+
+        @Override
         public Throwable fillInStackTrace() {
-            return SLOW ? super.fillInStackTrace() : this;
+            return this;
+        }
+    }
+    private static class SlowItem extends Item {
+
+        SlowItem(Task task, RequestProcessor rp) {
+            super(task, rp);
+        }
+
+        @Override
+        public Throwable fillInStackTrace() {
+            Throwable ret = super.fillInStackTrace();
+            StackTraceElement[] arr = ret.getStackTrace();
+            for (int i = 1; i < arr.length; i++) {
+                if (arr[i].getClassName().startsWith("java.lang")) {
+                    continue;
+                }
+                if (arr[i].getClassName().startsWith(RequestProcessor.class.getName())) {
+                    continue;
+                }
+                ret.setStackTrace(Arrays.asList(arr).subList(i - 1, arr.length).toArray(new StackTraceElement[0]));
+                break;
+            }
+            return ret;
         }
     }
 
@@ -844,7 +927,7 @@ public final class RequestProcessor {
      */
     private static class Processor extends Thread {
         /** A stack containing all the inactive Processors */
-        private static Stack<Processor> pool = new Stack<Processor>();
+        private static final Stack<Processor> pool = new Stack<Processor>();
 
         /* One minute of inactivity and the Thread will die if not assigned */
         private static final int INACTIVE_TIMEOUT = 60000;
@@ -861,7 +944,7 @@ public final class RequestProcessor {
         private boolean idle = true;
 
         /** Waiting lock */
-        private Object lock = new Object();
+        private final Object lock = new Object();
 
         public Processor() {
             super(getTopLevelThreadGroup(), "Inactive RequestProcessor thread"); // NOI18N
@@ -929,6 +1012,7 @@ public final class RequestProcessor {
         /**
          * The method that will repeatedly wait for a request and perform it.
          */
+        @Override
         public void run() {
             for (;;) {
                 RequestProcessor current = null;
@@ -996,9 +1080,6 @@ public final class RequestProcessor {
                         // for debugging hooks
                         em.log(Level.SEVERE, null, oome);
                     } catch (StackOverflowError e) {
-                        // Try as hard as possible to get a real stack trace
-                        e.printStackTrace();
-
                         // recoverable too
                         doNotify(todo, e);
                     } catch (Throwable t) {
@@ -1058,10 +1139,12 @@ public final class RequestProcessor {
 
         /** @see "#20467" */
         private static void doNotify(RequestProcessor.Task todo, Throwable ex) {
-            logger().log(Level.SEVERE, null, ex);
-            if (SLOW) {
-                logger.log(Level.SEVERE, null, todo.item);
+            if (SLOW && todo.item.message == null) {
+                todo.item.message = "task failed due to: " + ex;
+                todo.item.initCause(ex);
+                ex = todo.item;
             }
+            logger().log(Level.SEVERE, "Error in RequestProcessor " + todo.debug(), ex);
         }
 
         /**

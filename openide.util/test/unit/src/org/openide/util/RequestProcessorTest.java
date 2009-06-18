@@ -42,11 +42,13 @@
 package org.openide.util;
 
 import java.lang.ref.*;
-import java.util.*;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import junit.framework.Test;
 import org.openide.ErrorManager;
-import junit.framework.*;
 import org.netbeans.junit.*;
-import org.openide.util.Task;
 
 public class RequestProcessorTest extends NbTestCase {
     static {
@@ -59,12 +61,23 @@ public class RequestProcessorTest extends NbTestCase {
         super(testName);
     }
 
+    public static Test suite() {
+        Test t = null;
+//        t = new RequestProcessorTest("testPriorityInversionOnFinishedTasks");
+        if (t == null) {
+            t = new NbTestSuite(RequestProcessorTest.class);
+        }
+        return t;
+    }
+
+    @Override
     protected void setUp () throws Exception {
         super.setUp();
         
         log = ErrorManager.getDefault().getInstance("TEST-" + getName());
     }
 
+    @Override
     protected void runTest() throws Throwable {
         assertNotNull ("ErrManager has to be in lookup", org.openide.util.Lookup.getDefault ().lookup (ErrManager.class));
         ErrManager.messages.setLength(0);
@@ -103,10 +116,11 @@ public class RequestProcessorTest extends NbTestCase {
                 return System.identityHashCode (x) - System.identityHashCode (this);
             }
             
+            @Override
             public String toString () {
                 return "O: " + order;
             }
-        };
+        }
         
         // prepare the tasks 
         X[] arr = new X[10];
@@ -150,6 +164,16 @@ public class RequestProcessorTest extends NbTestCase {
         assertGC("runnable should be collected", wr);
     }
 
+    public void testStackOverFlowInRunnable() throws Exception {
+        Runnable r = new Runnable() {public void run() { throw new StackOverflowError(); }};
+
+        CharSequence msgs = Log.enable("org.openide.util", Level.SEVERE);
+        new RequestProcessor(getName()).post(r).waitFinished();
+        if (msgs.toString().contains("fillInStackTrace")) {
+            fail("There shall be no fillInStackTrace:\n" + msgs);
+        }
+    }
+
     /* This might be issue as well, but taking into account the typical lifecycle
         of a RP and its size, I won't invest in fixing this now. 
      *//*
@@ -164,7 +188,8 @@ public class RequestProcessorTest extends NbTestCase {
         rp = null;
         assertGC("runnable should be collected", wr);
     } /**/  
-    
+
+    @RandomlyFails
     public void testScheduleAndIsFinished() throws InterruptedException {
         class Run implements Runnable {
             public boolean run;
@@ -233,6 +258,7 @@ public class RequestProcessorTest extends NbTestCase {
                 
             }
             
+            @Override
             public String toString () {
                 return " R index " + index;
             }
@@ -364,6 +390,7 @@ public class RequestProcessorTest extends NbTestCase {
                 }
             }
             
+            @Override
             public String toString () {
                 return " R index " + index;
             }
@@ -396,6 +423,59 @@ public class RequestProcessorTest extends NbTestCase {
         // now we should ensure that the RP warned everyone about the 
         // priority inheritance and all its possible complications (t2 running
         // later than t3)
+    }
+
+    public void testPriorityInversionOnFinishedTasks () throws Exception {
+        RequestProcessor rp = new RequestProcessor (getName());
+
+        class R extends Handler implements Runnable {
+            RequestProcessor.Task waitFor;
+            boolean msgOk;
+
+            public R (int i) {
+            }
+
+            public void run () {
+                if (waitFor != null) {
+                    waitFor.waitFinished();
+                }
+            }
+
+            @Override
+            public void publish(LogRecord record) {
+                if (record.getMessage().contains("not running it synchronously")) {
+                    msgOk = true;
+                    waitFor.schedule(100);
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() throws SecurityException {
+            }
+        }
+        R snd = new R(2);
+        snd.waitFor = rp.post(new R(1));
+
+        RequestProcessor.logger().addHandler(snd);
+        Level prev = RequestProcessor.logger().getLevel();
+        RequestProcessor.logger().setLevel(Level.FINEST);
+        try {
+            snd.waitFor.waitFinished();
+            assertTrue("Finished", snd.waitFor.isFinished());
+
+            RequestProcessor.Task task = rp.post(snd);
+            task.waitFinished();
+            assertTrue("Finished as well", task.isFinished());
+
+            assertTrue("Message arrived", snd.msgOk);
+        } finally {
+            RequestProcessor.logger().setLevel(prev);
+            RequestProcessor.logger().removeHandler(snd);
+        }
     }
     
     /** Test of finalize method, of class org.openide.util.RequestProcessor. */
@@ -536,6 +616,7 @@ class R extends Object implements Runnable {
         class WaitThread extends Thread {
             public boolean finished;
             
+            @Override
             public void run () {
                 task.waitFinished ();
                 synchronized (this) {
@@ -1078,9 +1159,9 @@ class R extends Object implements Runnable {
                         lock.notify();
                         try {
                             lock.wait();
-                        } catch (InterruptedException ex) {
-                            this.ex = ex;
-                            ex.printStackTrace();
+                        } catch (InterruptedException interrex) {
+                            this.ex = interrex;
+                            interrex.printStackTrace();
                             fail ("No InterruptedException");
                         }
                         log.log("wait for lock over");
@@ -1099,6 +1180,7 @@ class R extends Object implements Runnable {
                 }
             }
             
+            @Override
             public String toString () {
                 return name;
             }
@@ -1137,6 +1219,7 @@ class R extends Object implements Runnable {
         
     }
 
+    @RandomlyFails // NB-Core-Build #1211
     public void testInterruptedStatusWorksInInversedTasksWhenInterruptedSoon() throws Exception {
         RequestProcessor rp = new RequestProcessor ("testInterruptedStatusWorksInInversedTasksWhenInterruptedSoon", 1, true);
         
@@ -1264,7 +1347,80 @@ class R extends Object implements Runnable {
             x.notifyAll();
         }
     }
-    
+
+    private static class TestHandler extends Handler {
+        boolean stFilled = false;
+        boolean exceptionCaught = false;
+
+        @Override
+        public void publish(LogRecord rec) {
+            if (rec.getThrown() != null) {
+                for (StackTraceElement elem : rec.getThrown().getStackTrace()) {
+                    if (elem.getMethodName().contains("testStackTraceFillingDisabled")) {
+                        stFilled = true;
+                        break;
+                    }
+                }
+                exceptionCaught = true;
+            }
+        }
+
+        public void clear() {
+            stFilled = false;
+            exceptionCaught = false;
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() throws SecurityException {
+        }
+    }
+
+    public void testStackTraceFillingDisabled() throws InterruptedException {
+        boolean ea = false;
+        assert (ea = true);
+        assertTrue("Test must be run with enabled assertions", ea);
+        Logger l = RequestProcessor.logger();
+        TestHandler handler = new TestHandler();
+        l.addHandler(handler);
+        try {
+            RequestProcessor rp = new RequestProcessor("test rp #1", 1);
+            Task t = rp.post(new Runnable() {
+
+                public void run() {
+                    throw new RuntimeException("Testing filled stacktrace");
+                }
+            });
+//            t.waitFinished(); // does not work, thread gets notified before the exception is logged
+            int timeout = 0;
+            while (! handler.exceptionCaught && timeout++ < 100) {
+                Thread.sleep(50);
+            }
+            assertTrue("Waiting for task timed out", timeout < 100);
+            assertTrue("Our testing method not found in stack trace", handler.stFilled);
+
+            handler.clear();
+            timeout = 0;
+            rp = new RequestProcessor("test rp #2", 1, false, false);
+            t = rp.post(new Runnable() {
+
+                public void run() {
+                    throw new RuntimeException("Testing 'short' stacktrace");
+                }
+            });
+            while (! handler.exceptionCaught && timeout++ < 100) {
+                Thread.sleep(50);
+            }
+            assertTrue("Waiting for task timed out", timeout < 100);
+            assertFalse("Our testing method found in stack trace", handler.stFilled);
+        } finally {
+            l.removeHandler(handler);
+        }
+    }
+
     private static void doGc (int count, Reference toClear) {
         java.util.ArrayList<byte[]> l = new java.util.ArrayList<byte[]> (count);
         while (count-- > 0) {
@@ -1364,7 +1520,7 @@ class R extends Object implements Runnable {
         }
         
         public static ErrManager get () {
-            return (ErrManager)org.openide.util.Lookup.getDefault ().lookup (ErrManager.class);
+            return org.openide.util.Lookup.getDefault ().lookup (ErrManager.class);
         }
         
         public Throwable annotate (Throwable t, int severity, String message, String localizedMessage, Throwable stackTrace, java.util.Date date) {
