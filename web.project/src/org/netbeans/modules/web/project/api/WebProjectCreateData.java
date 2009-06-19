@@ -42,6 +42,7 @@
 package org.netbeans.modules.web.project.api;
 
 import java.io.File;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
 import org.openide.filesystems.FileObject;
 
 /**
@@ -50,15 +51,16 @@ import org.openide.filesystems.FileObject;
  *
  * @author Radko Najman
  */
-public class WebProjectCreateData {
+public final class WebProjectCreateData {
 
     //common to create and import project
     private File projectDir;
     private String name;
     private String serverInstanceID;
-    private String javaEEVersion;
+    private Profile javaEEProfile;
     private String sourceLevel;
     private String javaPlatformName;
+    private String serverLibraryName;
     
     //only for create project
     private String contextPath;
@@ -75,6 +77,10 @@ public class WebProjectCreateData {
     private String buildfile;
     private FileObject webInfFolder;
     private boolean javaSourceBased = true;
+    
+    private String librariesDefinition;
+
+    private boolean webXmlRequired;
     
     /**
      * Creates a new instance of WebProjectCreateData
@@ -130,20 +136,31 @@ public class WebProjectCreateData {
         this.serverInstanceID = serverInstanceID;
     }
 
+    public Profile getJavaEEProfile() {
+        return javaEEProfile;
+    }
+
+    public void setJavaEEProfile(Profile javaEEProfile) {
+        this.javaEEProfile = javaEEProfile;
+    }
+
+
     /**
      * Gets Java EE version
      * @return Java EE version
+     * @deprecated
      */    
     public String getJavaEEVersion() {
-        return javaEEVersion;
+        return getJavaEEProfile().toPropertiesString();
     }
 
     /**
      * Sets Java EE version
      * @param javaEEVersion Java EE version. Cannot be null.
+     * @deprecated
      */    
     public void setJavaEEVersion(String javaEEVersion) {
-        this.javaEEVersion = javaEEVersion;
+        setJavaEEProfile(Profile.fromPropertiesString(javaEEVersion));
     }
 
     /**
@@ -370,6 +387,30 @@ public class WebProjectCreateData {
      */
     public boolean getJavaSourceBased() {
         return this.javaSourceBased;
+    }
+
+    public String getLibrariesDefinition() {
+        return librariesDefinition;
+    }
+
+    public void setLibrariesDefinition(String librariesDefinition) {
+        this.librariesDefinition = librariesDefinition;
+    }
+
+    public String getServerLibraryName() {
+        return serverLibraryName;
+    }
+
+    public void setServerLibraryName(String serverLibraryName) {
+        this.serverLibraryName = serverLibraryName;
+    }
+
+    public boolean isWebXmlRequired() {
+        return webXmlRequired;
+    }
+
+    public void setWebXmlRequired(boolean webXmlRequired) {
+        this.webXmlRequired = webXmlRequired;
     }
 
 }
