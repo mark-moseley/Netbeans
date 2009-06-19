@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -166,7 +166,7 @@ final class ExplorerActionsImpl {
             );
         }
 
-        updateActions();
+        updateActions(true);
     }
 
     /** Detach from manager currently being listened on. */
@@ -197,7 +197,7 @@ final class ExplorerActionsImpl {
     /** Updates the state of all actions.
      * @param path list of selected nodes
      */
-    private void updateActions() {
+    private void updateActions(boolean updatePasteAction) {
         if (manager == null) {
             return;
         }
@@ -270,7 +270,9 @@ final class ExplorerActionsImpl {
             deleteActionPerformerNoConfirm.setEnabled(false);
         }
 
-        updatePasteAction(path);
+        if (updatePasteAction) {
+            updatePasteAction(path);
+        }
     }
 
     /** Adds all parent nodes into the set.
@@ -325,8 +327,13 @@ final class ExplorerActionsImpl {
             }
 
             if (node != null) {
-                Transferable trans = getClipboard().getContents(this);
-                updatePasteTypes(trans, node);
+                try {
+                    Transferable trans = getClipboard().getContents(this);
+                    updatePasteTypes(trans, node);
+                } catch (NullPointerException npe) {
+                    Logger.getLogger (ExplorerActionsImpl.class.getName ()).
+                        log (Level.INFO, "Caused by http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6322854", npe);
+                }
             }
         }
     }
@@ -409,6 +416,11 @@ final class ExplorerActionsImpl {
         }
     }
 
+    private boolean actionsUpdateScheduled() {
+        ActionStateUpdater asu = actionStateUpdater;
+        return asu != null ? asu.updateScheduled() : false;
+    }
+
     /** Paste type used when in clipbopard is MultiTransferable */
     private static class MultiPasteType extends PasteType {
         /** Array of transferables */
@@ -455,6 +467,7 @@ final class ExplorerActionsImpl {
         OwnPaste() {
         }
 
+        @Override
         public boolean isEnabled() {
             updateActionsState();
 
@@ -476,6 +489,7 @@ final class ExplorerActionsImpl {
             );
         }
 
+        @Override
         public Object getValue(String s) {
             updateActionsState();
 
@@ -498,9 +512,11 @@ final class ExplorerActionsImpl {
             copyCut = b;
         }
 
+        @Override
         public boolean isEnabled() {
-            updateActionsState();
-
+            if (actionsUpdateScheduled()) {
+                updateActions(false);
+            }
             return super.isEnabled();
         }
 
@@ -552,15 +568,21 @@ final class ExplorerActionsImpl {
             this.confirmDelete = confirmDelete;
         }
 
+        @Override
         public boolean isEnabled() {
-            updateActionsState();
-
+            if (actionsUpdateScheduled()) {
+                updateActions(false);
+            }
             return super.isEnabled();
         }
 
         public void actionPerformed(ActionEvent ev) {
-            final Node[] sel = manager.getSelectedNodes();
+            ExplorerManager em = manager;
+            if (em == null) {
+                return;
+            }
 
+            final Node[] sel = em.getSelectedNodes();
             if ((sel == null) || (sel.length == 0)) {
                 return;
             }
@@ -578,11 +600,9 @@ final class ExplorerActionsImpl {
             if (!confirmDelete || doConfirm(sel)) {
                 // clear selected nodes
                 try {
-                    if (manager != null) {
-                        manager.setSelectedNodes(new Node[] {  });
-                    }
+                    em.setSelectedNodes(new Node[]{});
                 } catch (PropertyVetoException e) {
-                    // never thrown, setting empty selected nodes cannot be vetoed
+                // never thrown, setting empty selected nodes cannot be vetoed
                 }
 
                 doDestroy(sel);
@@ -649,17 +669,19 @@ final class ExplorerActionsImpl {
      * them if they are frequent and performs the update of actions state. */
     private class ActionStateUpdater implements PropertyChangeListener, ClipboardListener, ActionListener, Runnable {
         private final Timer timer;
-        private boolean planned;
 
         ActionStateUpdater() {
-            timer = new FixIssue29405Timer(150, this);
+            timer = new Timer(200, this);
             timer.setCoalesce(true);
             timer.setRepeats(false);
         }
 
+        boolean updateScheduled() {
+            return timer.isRunning();
+        }
+
         public synchronized void propertyChange(PropertyChangeEvent e) {
             timer.restart();
-            planned = true;
         }
 
         public void clipboardChanged(ClipboardEvent ev) {
@@ -677,50 +699,15 @@ final class ExplorerActionsImpl {
         }
 
         public void actionPerformed(ActionEvent evt) {
-            updateActions();
-
-            synchronized (this) {
-                timer.stop();
-                planned = false;
-            }
+            updateActions(true);
         }
 
         /** Updates actions states now if there is pending event. */
         public void update() {
-            boolean update;
-
-            synchronized (this) {
-                update = planned;
-            }
-
-            if (update) {
+            if (timer.isRunning()) {
                 timer.stop();
-                updateActions();
+                updateActions(true);
             }
         }
     }
-
-    /** Timer which fixes problem with running status (issue #29405). */
-    private static class FixIssue29405Timer extends Timer {
-        private boolean running;
-
-        public FixIssue29405Timer(int delay, ActionListener l) {
-            super(delay, l);
-        }
-
-        public void restart() {
-            super.restart();
-            running = true;
-        }
-
-        public void stop() {
-            running = false;
-            super.stop();
-        }
-
-        public boolean isRunning() {
-            return running;
-        }
-    }
-     // End of FixIssue29405Timer class.
 }
