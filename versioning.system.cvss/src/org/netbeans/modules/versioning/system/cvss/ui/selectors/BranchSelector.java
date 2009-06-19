@@ -65,6 +65,8 @@ import java.util.*;
 import java.util.List;
 import java.io.File;
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Allows to select branches for given repository path,
@@ -148,6 +150,90 @@ s     * Selects tag or branch for versioned files. Shows modal UI.
         }
     }
 
+    /**
+     * 1. Checkout (non-recursively) content of the module
+     * 2. Return list of all normal files checked out
+     * 
+     * In case the checkout does not create any normal files (only folders) try to dive into those until we get some
+     * real files that we can log.
+     * 
+     * @param moduleName
+     * @return never returns null
+     */
+    private File [] getLoggableFiles(String moduleName) throws CommandException, AuthenticationException {
+        
+        GlobalOptions gtx = CvsVersioningSystem.createGlobalOptions();
+        if (root != null) {
+            gtx.setCVSRoot(root.toString());  // XXX why is it needed? Client already knows, who is definitive source of cvs root?
+        }
+        
+        File checkoutFolder = Kit.createTmpFolder();
+        if (checkoutFolder == null) {
+            error(org.openide.util.NbBundle.getMessage(BranchSelector.class, "BK2015"));
+            return new File[0];
+        }
+
+        CheckoutCommand checkout = new CheckoutCommand();
+        checkout.setRecursive(false);
+
+        // non recursive operation doe not work with "." module
+        // #58208 so here a random one is choosen
+        if (".".equals(moduleName)) {  // NOI18N
+            List l = listRepositoryPath(root, "");  // NOI18N
+            int max = l.size();
+            int counter = max;
+            Random random = new Random();
+            while (counter-- > 0) {
+                int rnd = random.nextInt(max);
+                String path = (String) l.get(rnd);
+                if ("CVSROOT".equals(path)) continue;  // NOI18N
+                moduleName = path;
+                break;
+            }
+        }
+        checkout.setModule(moduleName);
+        File[] checkoutFiles = new File[] {checkoutFolder};
+        checkout.setFiles(checkoutFiles);
+
+        Client client = Kit.createClient(root);
+        client.setLocalPath(checkoutFolder.getAbsolutePath());
+        try {
+            client.executeCommand(checkout, gtx);
+        } finally {
+            try {
+                client.getConnection().close();
+            } catch (Throwable e) {
+                Logger.getLogger(BranchSelector.class.getName()).log(Level.INFO, null, e);
+            }
+        }
+
+        File folderToCheck = new File(checkoutFolder, moduleName);
+        if (!folderToCheck.isDirectory()) {
+            folderToCheck = checkoutFolder;
+        }
+        
+        List<File> filesToLog = new ArrayList<File>();
+        for (File child : folderToCheck.listFiles()) {
+            if ("CVSROOT".equals(child.getName())) continue;  // NOI18N
+            if ("CVS".equals(child.getName())) continue;  // NOI18N
+            filesToLog.add(child);
+            
+        }
+        if (filesToLog.size() > 0) return (File[]) filesToLog.toArray(new File[filesToLog.size()]);
+
+        // there are no files to log, let us dive deeper
+        List<String> fileList = listRepositoryPath(root, moduleName);
+
+        for (String child : fileList) {
+            String childModule = moduleName + "/" + child;
+            File [] childLoggable = getLoggableFiles(childModule);
+            if (childLoggable.length > 0) return childLoggable;
+        }
+        
+        // tried hard but there are no files to log for the module
+        return new File[0];
+    }
+    
     /** Background runnable*/
     public void run() {
 
@@ -156,56 +242,18 @@ s     * Selects tag or branch for versioned files. Shows modal UI.
             gtx.setCVSRoot(root.toString());  // XXX why is it needed? Client already knows, who is definitive source of cvs root?
         }
         File checkoutFolder = null;
+        Client client = null;
         try {
 
             File[] files;
             File localPath;
             if (file == null) {
-                // netbeans.org rlog does not work, we need to create some sort of fake log command
-
-                checkoutFolder = Kit.createTmpFolder();
-                if (checkoutFolder == null) {
-                    error(org.openide.util.NbBundle.getMessage(BranchSelector.class, "BK2015"));
-                    return;
-                }
-
-                CheckoutCommand checkout = new CheckoutCommand();
-                checkout.setRecursive(false);
-
-                // non recursive operation doe snot work with "." module
-                // #58208 so here a random one is choosen
-                if (".".equals(module)) {  // NOI18N
-                    Client client = Kit.createClient(root);
-                    List l = ModuleSelector.listRepositoryPath(client, root, "");  // NOI18N
-                    Iterator it = l.iterator();
-                    int max = l.size();
-                    int counter = max;
-                    Random random = new Random();
-                    while (counter-- > 0) {
-                        int rnd = random.nextInt(max);
-                        String path = (String) l.get(rnd);
-                        if ("CVSROOT".equals(path)) continue;  // NOI18N
-                        module = path;
-                        break;
-                    }
-                }
-                checkout.setModule(module);
-                File[] checkoutFiles = new File[] {checkoutFolder};
-                checkout.setFiles(checkoutFiles);
-
-                Client client = Kit.createClient(root);
-                client.setLocalPath(checkoutFolder.getAbsolutePath());
-                client.executeCommand(checkout, gtx);
-
-                files = checkoutFolder.listFiles();
-                localPath = checkoutFolder;
-
-                // seek for the first non-administrative file
-                for (int i = 0; i<files.length; i++) {
-                    if (files[i].isFile()) continue;
-                    if ("CVSROOT".equals(files[i].getName())) continue;  // NOI18N
-                    files = files[i].listFiles();
-                    break;
+ 
+                files = getLoggableFiles(module);
+                if (files.length > 0) {
+                    localPath = files[0].getParentFile();
+                } else {
+                    localPath = null;
                 }
 
             } else {
@@ -242,7 +290,7 @@ s     * Selects tag or branch for versioned files. Shows modal UI.
                     }
                 }
             }
-            Client client = Kit.createClient(root);
+            client = Kit.createClient(root);
             
             final Set tags = new TreeSet();
             final Set branches = new TreeSet();
@@ -295,6 +343,13 @@ s     * Selects tag or branch for versioned files. Shows modal UI.
             err.annotate(e, org.openide.util.NbBundle.getMessage(BranchSelector.class, "BK2016"));
             err.notify(e);
         } finally {
+            try {
+                if (client != null) {
+                    client.getConnection().close();
+                }
+            } catch (Throwable e) {
+                Logger.getLogger(BranchSelector.class.getName()).log(Level.INFO, null, e);
+            }
             Kit.deleteRecursively(checkoutFolder);
         }
     }
@@ -339,6 +394,27 @@ s     * Selects tag or branch for versioned files. Shows modal UI.
 
     private void error(String msg) {
         rootNode.setDisplayName(msg);
+    }
+
+    /**
+     * Lists subfolders in given repository folder.
+     *
+     * @param client engine to be used
+     * @param root identifies repository
+     * @param path "/" separated repository folder path (e.g. "javacvs/cvsmodule")
+     * @return folders never <code>null</code>
+     */
+    private List<String> listRepositoryPath (CVSRoot root, String path) throws CommandException, AuthenticationException {
+        Client client = Kit.createClient(root);
+        try {
+            return ModuleSelector.listRepositoryPath(client, root, path);
+        } finally {
+            try {
+                client.getConnection().close();
+            } catch (Throwable e) {
+                Logger.getLogger(BranchSelector.class.getName()).log(Level.INFO, null, e);
+            }
+        }
     }
 
 }
