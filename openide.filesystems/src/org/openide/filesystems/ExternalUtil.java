@@ -101,7 +101,14 @@ final class ExternalUtil extends Object {
         while (ex.getCause() != null) {
             ex = ex.getCause();
         }
-        ex.initCause(stack);
+        try {
+            ex.initCause(stack);
+        } catch (IllegalStateException ise) {
+            // #164760 - fallback when initCause fails (e.g. for ClassNotFoundException)
+            Exception e = new Exception(ex.getMessage(), stack);
+            e.setStackTrace(ex.getStackTrace());
+            return e;
+        }
         return orig;
     }
 
@@ -142,16 +149,18 @@ final class ExternalUtil extends Object {
     
     /** Initializes the context and errManager
      */
-    private static synchronized void initialize() {
+    private static void initialize() {
+        Lookup lkp = Lookup.getDefault();
+        
         Repository r;
         synchronized (ExternalUtil.class) {
             r = repository;
         }
-        
+
         if (r == null) {
             assert ADD_FS == null;
             ADD_FS = new AtomicReference<FileSystem>();
-            Repository registeredRepository = Lookup.getDefault().lookup(Repository.class);
+            Repository registeredRepository = lkp.lookup(Repository.class);
             Repository realRepository = assignRepository(registeredRepository);
             
             
@@ -212,6 +221,9 @@ final class ExternalUtil extends Object {
                     } finally {
                         is.close();
                     }
+                }
+                for (URL generatedLayer : NbCollections.iterable(l.getResources("META-INF/generated-layer.xml"))) { // NOI18N
+                    layerUrls.add(generatedLayer);
                 }
                 layers.setXmlUrls(layerUrls.toArray(new URL[layerUrls.size()]));
                 LOG.log(Level.FINE, "Loading classpath layers: {0}", layerUrls);
