@@ -46,6 +46,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
+import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.apisupport.project.ManifestManager;
 import org.netbeans.modules.apisupport.project.NbModuleProject;
@@ -89,6 +90,13 @@ abstract class AbstractEntryWithSources extends AbstractEntry {
         }
         return allPackageNames;
     }
+
+    private FileObject sourceFO;
+    private FileObject getSourceLocationFileObject() {
+        if (sourceFO == null || ! sourceFO.isValid())
+            sourceFO = FileUtil.toFileObject(getSourceLocation());
+        return sourceFO;
+    }
     
     private void scanForClasses(Set<String> result, String pkg, File dir, boolean recurse) throws IOException {
         if (!dir.isDirectory()) {
@@ -113,13 +121,14 @@ abstract class AbstractEntryWithSources extends AbstractEntry {
 
     public String[] getRunDependencies() {
         Set<String> deps = new TreeSet<String>();
-        FileObject source = FileUtil.toFileObject(getSourceLocation());
+        FileObject source = getSourceLocationFileObject();
         if (source == null) { // ??
             return new String[0];
         }
         NbModuleProject project;
         try {
-            project = (NbModuleProject) ProjectManager.getDefault().findProject(source);
+            Project p = ProjectManager.getDefault().findProject(source);
+            project = p == null ? null : p.getLookup().lookup(NbModuleProject.class);
         } catch (IOException e) {
             Util.err.notify(ErrorManager.INFORMATIONAL, e);
             return new String[0];
@@ -130,6 +139,7 @@ abstract class AbstractEntryWithSources extends AbstractEntry {
         Element data = project.getPrimaryConfigurationData();
         Element moduleDependencies = Util.findElement(data,
             "module-dependencies", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+        assert moduleDependencies != null : "Malformed metadata in " + project;
         for (Element dep : Util.findSubElements(moduleDependencies)) {
             if (Util.findElement(dep, "run-dependency", // NOI18N
                     NbModuleProjectType.NAMESPACE_SHARED) == null) {
@@ -144,7 +154,7 @@ abstract class AbstractEntryWithSources extends AbstractEntry {
     }
 
     public String getSpecificationVersion() {
-        FileObject source = FileUtil.toFileObject(getSourceLocation());
+        FileObject source = getSourceLocationFileObject();
         if (source != null) {
             NbModuleProject project;
             try {
@@ -158,5 +168,5 @@ abstract class AbstractEntryWithSources extends AbstractEntry {
         }
         return null;
     }
-    
+
 }
