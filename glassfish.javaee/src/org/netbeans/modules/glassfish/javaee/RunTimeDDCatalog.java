@@ -39,7 +39,7 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.j2ee.sun.ide.j2ee;
+package org.netbeans.modules.glassfish.javaee;
 
 import java.beans.FeatureDescriptor;
 import java.beans.PropertyChangeListener;
@@ -47,7 +47,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.Vector;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.xml.api.model.GrammarEnvironment;
 import org.netbeans.modules.xml.api.model.GrammarQuery;
 import org.openide.util.ImageUtilities;
@@ -56,17 +62,20 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.netbeans.modules.xml.api.model.DTDUtil;
 import org.netbeans.api.xml.services.UserCatalog;
-import org.netbeans.modules.j2ee.sun.api.ServerLocationManager;
 import org.netbeans.modules.xml.api.model.GrammarQueryManager;
 import org.netbeans.modules.xml.catalog.spi.CatalogDescriptor;
 import org.netbeans.modules.xml.catalog.spi.CatalogListener;
 import org.netbeans.modules.xml.catalog.spi.CatalogReader;
+import org.netbeans.spi.server.ServerInstanceProvider;
 import org.xml.sax.EntityResolver;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 
-/** Catalog for App Server 8PE DTDs that enables completion support in editor.
+/** Catalog for GlassFish V3 DTDs that enables completion support in editor.
+ *  This is basically a copy of the class in org.netbeans.modules.j2ee.sun.ide.j2ee
+ *  with a few changes for maintaining 2 instances and for getting the root in a
+ *  slightly different way.
  *
  * @author Ludo
  */
@@ -75,7 +84,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
     
     private static final String XML_XSD="http://www.w3.org/2001/xml.xsd"; // NOI18N
     private static final String XML_XSD_DEF="<?xml version='1.0'?><xs:schema targetNamespace=\"http://www.w3.org/XML/1998/namespace\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xml:lang=\"en\"><xs:attribute name=\"lang\" type=\"xs:language\"><xs:annotation><xs:documentation>In due course, we should install the relevant ISO 2- and 3-letter codes as the enumerated possible values . . .</xs:documentation></xs:annotation></xs:attribute></xs:schema>"; // NOI18N
-    private  static final String TypeToURLMap[] = {
+    private static final String TypeToURLMap[] = {
         "-//Sun Microsystems, Inc.//DTD Sun ONE Application Server 7.0 J2EE Application 1.3//EN" 	, "sun-application_1_3-0.dtd" ,
         "-//Sun Microsystems, Inc.//DTD Sun ONE Application Server 8.0 J2EE Application 1.4//EN" 	, "sun-application_1_4-0.dtd" , ///[THIS IS DEPRECATED]
         "-//Sun Microsystems, Inc.//DTD Application Server 8.0 J2EE Application 1.4//EN"                , "sun-application_1_4-0.dtd" ,
@@ -126,8 +135,12 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
         "-//Sun Microsystems, Inc.//DTD JSP Tag Library 1.1//EN"                                        , "web-jsptaglibrary_1_1.dtd",
     };
     
-    /*******NetBeans 3.6 is NOT ready yet to support schemas for code completion... What a pity!:        */
-    private  static final String SchemaToURLMap[] = {
+    private static final String JavaEE6TypeToURLMap[] = {
+        "-//Sun Microsystems, Inc.//DTD GlassFish v3 Servlet 3.0//EN"                         , "sun-web-app_3_0-0.dtd" ,
+    };
+
+        /*******NetBeans 3.6 is NOT ready yet to support schemas for code completion... What a pity!:        */
+    private static final String SchemaToURLMap[] = {
         
         "SCHEMA:http://java.sun.com/xml/ns/j2ee/ejb-jar_2_1.xsd"                    , "ejb-jar_2_1",
         
@@ -153,26 +166,65 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
 
     };
     
-    File platformRootDir=null;
-    
+    private static final String JavaEE6SchemaToURLMap[] = {
+
+        "SCHEMA:http://java.sun.com/xml/ns/javaee/ejb-jar_3_1.xsd"                    , "ejb-jar_3_1",
+        "SCHEMA:http://java.sun.com/xml/ns/j2ee/jsp_2_2.xsd"                        , "jsp_2_2",
+        "SCHEMA:http://java.sun.com/xml/ns/j2ee/web-app_3_0.xsd"                    , "web-app_3_0",
+        "SCHEMA:http://java.sun.com/xml/ns/j2ee/web-common_3_0.xsd"                    , "web-common_3_0",
+        "SCHEMA:http://java.sun.com/xml/ns/j2ee/web-fragment_3_0.xsd"                    , "web-fragment_3_0",
+
+    };
+
+    private static Map<ServerInstanceProvider, RunTimeDDCatalog> ddCatalogMap = new HashMap<ServerInstanceProvider, RunTimeDDCatalog>();
+    private static RunTimeDDCatalog preludeDDCatalog;
+    private static RunTimeDDCatalog javaEE6DDCatalog;
+
+    private File platformRootDir=null;
+    private String displayNameKey;
+    private String shortDescriptionKey;
+    private boolean hasAdditionalMap = false;
+
     /** Creates a new instance of RunTimeDDCatalog */
-    private RunTimeDDCatalog() {
+    public RunTimeDDCatalog() {
+    }
+    
+    public void setInstanceProvider(ServerInstanceProvider ip) {
+        if (ddCatalogMap.get(ip) == null) {
+            ddCatalogMap.put(ip, this);
+        }
+    }
+    /** Factory method providing catalog for XML completion of DD */
+    public static RunTimeDDCatalog getRunTimeDDCatalog(ServerInstanceProvider ip){
+        return ddCatalogMap.get(ip);
     }
 
-    private static RunTimeDDCatalog ddCatalog;
-    
     /** Factory method providing catalog for XML completion of DD */
-    public static synchronized RunTimeDDCatalog getRunTimeDDCatalog(){
-        if (ddCatalog==null) {
-            ddCatalog = new RunTimeDDCatalog();
+    public static synchronized RunTimeDDCatalog getPreludeRunTimeDDCatalog(){
+        if (preludeDDCatalog==null) {
+            preludeDDCatalog = new RunTimeDDCatalog();
+            preludeDDCatalog.displayNameKey = "LBL_PreludeRunTimeDDCatalog"; // NOI18N
+            preludeDDCatalog.shortDescriptionKey = "DESC_PreludeRunTimeDDCatalog"; // NOI18N
         }
-        return ddCatalog;
+        return preludeDDCatalog;
     }
+
+    /** Factory method providing catalog for XML completion of DD */
+    public static synchronized RunTimeDDCatalog getEE6RunTimeDDCatalog(){
+        if (javaEE6DDCatalog==null) {
+            javaEE6DDCatalog = new RunTimeDDCatalog();
+            javaEE6DDCatalog.displayNameKey = "LBL_V3RunTimeDDCatalog"; // NOI18N
+            javaEE6DDCatalog.shortDescriptionKey = "DESC_V3RunTimeDDCatalog"; // NOI18N
+            javaEE6DDCatalog.hasAdditionalMap = true;
+        }
+        return javaEE6DDCatalog;
+    }
+
     /**
      * Get String iterator representing all public IDs registered in catalog.
      * @return null if cannot proceed, try later.
      */
-    public java.util.Iterator getPublicIDs() {
+    public Iterator getPublicIDs() {
         if (platformRootDir == null) {
             return null;
         }
@@ -180,17 +232,27 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
             return null;
         }
         
-        String  installRoot = platformRootDir.getAbsolutePath(); 
+        String installRoot = platformRootDir.getAbsolutePath(); 
         if (installRoot == null) {
             return null;
         }
         
-        java.util.List list = new java.util.ArrayList();
+        List<String> list = new ArrayList<String>();
         for (int i=0;i<TypeToURLMap.length;i = i+2){
             list.add(TypeToURLMap[i]);
         }
+        if (hasAdditionalMap) {
+            for (int i=0;i<JavaEE6TypeToURLMap.length;i = i+2){
+                list.add(JavaEE6TypeToURLMap[i]);
+            }
+        }
         for (int i=0;i<SchemaToURLMap.length;i = i+2){
             list.add(SchemaToURLMap[i]);
+        }
+        if (hasAdditionalMap) {
+            for (int i=0;i<JavaEE6SchemaToURLMap.length;i = i+2){
+                list.add(JavaEE6SchemaToURLMap[i]);
+            }
         }
         
         return list.listIterator();
@@ -219,7 +281,21 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 try{
                     return file.toURI().toURL().toExternalForm();  
                 }catch(Exception e){
+                    Logger.getLogger("glassfish-javaee").log(Level.INFO, file.getAbsolutePath(), e); // NOI18N
                     return "";
+                }
+            }
+        }
+        if (hasAdditionalMap) {
+            for (int i=0;i<JavaEE6TypeToURLMap.length;i = i+2){
+                if (JavaEE6TypeToURLMap[i].equals(publicId)){
+                    File file = new File(installRoot+"/lib/"+loc+"/"+JavaEE6TypeToURLMap[i+1]);
+                    try{
+                        return file.toURI().toURL().toExternalForm();
+                    }catch(Exception e){
+                        Logger.getLogger("glassfish-javaee").log(Level.INFO, file.getAbsolutePath(), e); // NOI18N
+                        return "";
+                    }
                 }
             }
         }
@@ -231,6 +307,25 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 
             }
         }
+        if (hasAdditionalMap) {
+            for (int i=0;i<JavaEE6SchemaToURLMap.length;i = i+2){
+                if (JavaEE6SchemaToURLMap[i].equals(publicId)){
+
+                    // xsds are in the server and NB can now use them for code completion
+                    // old code required dtds and would have done something like this:
+                    // return "nbres:/org/netbeans/modules/j2ee/sun/ide/resources/"+JavaEE6SchemaToURLMap[i+1]+".dtd";
+                    // because before NB could use xsd for code completion, the module had a
+                    // hacked copy of the dtd to deal with that
+                    File file = new File(installRoot+"/lib/"+loc+"/"+JavaEE6SchemaToURLMap[i+1]+".xsd");
+                    try{
+                        return file.toURI().toURL().toExternalForm();
+                    }catch(Exception e){
+                        Logger.getLogger("glassfish-javaee").log(Level.INFO, file.getAbsolutePath(), e); // NOI18N
+                        return "";
+                    }
+                }
+            }
+        }
         return null;
     }
     
@@ -238,15 +333,21 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
      * Refresh content according to content of mounted catalog.
      */
     public void refresh() {
-        File newLoc = ServerLocationManager.getLatestPlatformLocation();
+        fireCatalogListeners();
+    }
+
+    /**
+     * Refresh content according to content of mounted catalog.
+     */
+    public void refresh(File newLoc) {
         if (platformRootDir!=newLoc){
             platformRootDir = newLoc;
-            getRunTimeDDCatalog().fireCatalogListeners();
+            refresh();
         }
     
     }
     
-    private List catalogListeners = new ArrayList(1);
+    private List<CatalogListener> catalogListeners = new ArrayList<CatalogListener>(1);
     
     /**
      * Optional operation allowing to listen at catalog for changes.
@@ -272,8 +373,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
     }
     
     public  void fireCatalogListeners() {
-        platformRootDir = ServerLocationManager.getLatestPlatformLocation();
-        java.util.Iterator iter = catalogListeners.iterator();
+        Iterator iter = catalogListeners.iterator();
         while (iter.hasNext()) {
             CatalogListener l = (CatalogListener) iter.next();
             l.notifyInvalidate();
@@ -288,7 +388,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
      * @return I18N display name
      */
     public String getDisplayName() {
-        return NbBundle.getMessage(RunTimeDDCatalog.class, "LBL_RunTimeDDCatalog");
+        return NbBundle.getMessage(RunTimeDDCatalog.class, displayNameKey);
     }
     
     /**
@@ -304,7 +404,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
      * @return I18N short description
      */
     public String getShortDescription() {
-        return NbBundle.getMessage(RunTimeDDCatalog.class, "DESC_RunTimeDDCatalog");
+        return NbBundle.getMessage(RunTimeDDCatalog.class, shortDescriptionKey);
     }
     
     /** Unregister the listener.  */
@@ -373,6 +473,8 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
 
     private static final String WEBAPP_3_0_XSD="web-app_3_0.xsd"; // NOI18N
 
+    private static final String WEBFRAGMENT_3_0_XSD="web-fragment_3_0.xsd"; // NOI18N
+
     public static final String PERSISTENCE_NS = "http://java.sun.com/xml/ns/persistence"; // NOI18N
     private static final String PERSISTENCE_TAG="persistence"; //NOI18N
     private static final String PERSISTENCE_XSD="persistence_1_0.xsd"; // NOI18N
@@ -421,7 +523,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
             try{
                 SCHEMASLOCATION= file.toURI().toURL().toExternalForm();
             }catch(Exception e){
-                
+                Logger.getLogger("glassfish-javaee").log(Level.INFO, file.getAbsolutePath(), e); // NOI18N
             }
 
             
@@ -443,6 +545,9 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
         }
         else if (systemId!=null && systemId.endsWith(WEBAPP_3_0_XSD)) {
             return new org.xml.sax.InputSource(SCHEMASLOCATION+WEBAPP_3_0_XSD);
+        }
+        else if (systemId!=null && systemId.endsWith(WEBFRAGMENT_3_0_XSD)) {
+            return new org.xml.sax.InputSource(SCHEMASLOCATION+WEBFRAGMENT_3_0_XSD);
         }
         else if (systemId!=null && systemId.endsWith(APP_5_XSD)) {
             return new org.xml.sax.InputSource(SCHEMASLOCATION+APP_5_XSD);
@@ -481,8 +586,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
     
     public Enumeration enabled(GrammarEnvironment ctx) {
         if (ctx.getFileObject() == null) return null;
-        InputSource is= ctx.getInputSource();
-        java.util.Enumeration en = ctx.getDocumentChildren();
+        Enumeration en = ctx.getDocumentChildren();
         while (en.hasMoreElements()) {
             Node next = (Node) en.nextElement();
             if (next.getNodeType() == next.DOCUMENT_TYPE_NODE) {
@@ -493,13 +597,13 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (EJB_JAR_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && J2EE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
                     }
                     else  if (xmlns!=null && JAVAEE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -509,13 +613,13 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (APP_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && J2EE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
                     }
                     else   if (xmlns!=null && JAVAEE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -524,7 +628,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (WEBAPP_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && JAVAEE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -534,13 +638,13 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (APPCLIENT_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && J2EE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
                     }
                     else   if (xmlns!=null && JAVAEE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -549,7 +653,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (PERSISTENCEORM_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && PERSISTENCEORM_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -560,7 +664,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (PERSISTENCE_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && PERSISTENCE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -571,18 +675,18 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
                 if (WEBSERVICES_TAG.equals(tag)) {  // NOI18N
                     String xmlns = element.getAttribute(XMLNS_ATTR);
                     if (xmlns!=null && J2EE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
                     } else   if (xmlns!=null && JAVAEE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
                     }
                     else   if (xmlns!=null && IBM_J2EE_NS.equals(xmlns)) {
-                        java.util.Vector v = new java.util.Vector();
+                        Vector<Node> v = new Vector<Node>();
                         v.add(next);
                         return v.elements();
                         //   return org.openide.util.Enumerations.singleton(next);
@@ -684,7 +788,7 @@ public class RunTimeDDCatalog extends GrammarQueryManager implements CatalogRead
         try{
             prefix= file.toURI().toURL().toExternalForm();
         }catch(Exception e){
-            
+            Logger.getLogger("glassfish-javaee").log(Level.INFO, file.getAbsolutePath(), e); // NOI18N
         }
         if (name.equals("http://java.sun.com/xml/ns/jax-rpc/ri/config")){
             return prefix +"jax-rpc-ri-config.xsd";
