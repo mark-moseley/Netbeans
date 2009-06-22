@@ -64,10 +64,22 @@ public class ServerTest extends NbTestCase {
     public static Test suite() {
         Configuration conf = NbModuleSuite.createConfiguration(ServerTest.class).
         addTest(AddRemovePreludeInstanceMethods.class, "addPreludeInstance").
+        addTest(StartStopServer.class, "startPreludeServer", "restartPreludeServer").
+        addTest(StartStopServer.class, "stopPreludeServer", "startDebugPreludeServer", "stopPreludeServer").
+        addTest(AddRemovePreludeInstanceMethods.class, "checkJavaDB").
         addTest(AddRemovePreludeInstanceMethods.class, "removePreludeInstance");
+        
+
+        
+
         if (null != GlassfishInstanceProvider.getEe6()) {
-            return NbModuleSuite.create(conf.addTest(AddRemoveV3InstanceMethods.class, "addV3Instance").
-            addTest(AddRemoveV3InstanceMethods.class, "removeV3Instance"));
+
+            conf = conf.addTest(AddRemovePreludeInstanceMethods.class, "addPreludeInstance").
+                    addTest(StartStopServer.class, "startPreludeServer", "restartPreludeServer").
+                    addTest(StartStopServer.class, "stopPreludeServer", "startDebugPreludeServer", "stopPreludeServer").
+                    addTest(AddRemovePreludeInstanceMethods.class, "checkJavaDB").
+                    addTest(AddRemovePreludeInstanceMethods.class, "removePreludeInstance");
+            return NbModuleSuite.create(conf);
         } else {
             return NbModuleSuite.create(conf);
         }
