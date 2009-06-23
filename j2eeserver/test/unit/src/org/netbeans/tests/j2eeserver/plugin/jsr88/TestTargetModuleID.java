@@ -40,49 +40,67 @@
  */
 
 
-package org.netbeans.tests.j2eeserver.plugin.registry;
+package org.netbeans.tests.j2eeserver.plugin.jsr88;
 
-import org.netbeans.tests.j2eeserver.plugin.jsr88.*;
-import javax.enterprise.deploy.spi.factories.DeploymentFactory;
-import javax.enterprise.deploy.spi.DeploymentManager;
+import javax.enterprise.deploy.shared.ModuleType;
 import javax.enterprise.deploy.spi.Target;
+import javax.enterprise.deploy.spi.TargetModuleID;
+
 /**
  *
  * @author  nn136682
  */
-public class NodeFactory implements org.netbeans.modules.j2ee.deployment.plugins.spi.RegistryNodeFactory {
+public class TestTargetModuleID implements TargetModuleID {
 
-    /** Creates a new instance of NodeFactory */
-    public NodeFactory() {
+    private final Target target;
+
+    private final String moduleID;
+
+    private final  ModuleType type;
+
+    private TestTargetModuleID parent;
+
+    private TestTargetModuleID[] children;
+
+    public TestTargetModuleID(Target target, String module, ModuleType type) {
+        this.target = target;
+        this.moduleID = module.replace('.', '_');
+        this.type = type;
+    }
+    public TargetModuleID[] getChildTargetModuleID() {
+        return children;
     }
 
-    public org.openide.nodes.Node getFactoryNode(org.openide.util.Lookup lookup) {
-        DeploymentFactory depFactory = (DeploymentFactory) lookup.lookup(DeploymentFactory.class);
-        if (depFactory == null || ! (depFactory instanceof TestDeploymentFactory)) {
-            System.out.println("WARNING: getFactoryNode lookup returned "+depFactory);
-            return null;
-        }
-        System.out.println("INFO: getFactoryNode returning new plugin node");
-        return new PluginNode((TestDeploymentFactory)depFactory);
+    public ModuleType getModuleType() {
+        return type;
     }
-    
-    public org.openide.nodes.Node getManagerNode(org.openide.util.Lookup lookup) {
-        DeploymentManager depManager = (DeploymentManager) lookup.lookup(DeploymentManager.class);
-        if (depManager == null || ! (depManager instanceof TestDeploymentManager)) {
-            System.out.println("WARNING: getManagerNode lookup returned "+depManager);
-            return null;
-        }
-        System.out.println("INFO: getManagerNode returning new Manager node");
-        return new ManagerNode((TestDeploymentManager)depManager);
+
+    public String getModuleID() {
+        return moduleID;
     }
-    
-    public org.openide.nodes.Node getTargetNode(org.openide.util.Lookup lookup) {
-        Target target = (Target) lookup.lookup(Target.class);
-        if (target == null || ! (target instanceof TestTarget) ) {
-            System.out.println("WARNING: getTargetNode lookup returned "+target);
-            return null;
-        }
-        System.out.println("INFO: getManagerNode returning new Target node");
-        return new TargNode((TestTarget)target);
+
+    public TargetModuleID getParentTargetModuleID() {
+        return parent;
+    }
+
+    public Target getTarget() {
+        return target;
+    }
+
+    public String getWebURL() {
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "TestPlugin:" + target.getName() + ":" + moduleID;
+    }
+
+    public TestTargetModuleID getParent() {
+        return parent;
+    }
+
+    public String getModuleUrl() {
+        return moduleID;
     }
 }

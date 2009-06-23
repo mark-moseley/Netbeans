@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,41 +31,50 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
+package org.netbeans.modules.j2ee.deployment.devmodules.api;
 
-package org.netbeans.tests.j2eeserver.plugin.jsr88;
-
-import javax.enterprise.deploy.spi.*;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import org.netbeans.modules.j2ee.deployment.impl.ServerRegistryTestBase;
+import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
+import org.netbeans.tests.j2eeserver.plugin.jsr88.TestDeploymentManager;
 
 /**
  *
- * @author  gfink
+ * @author Petr Hejl
  */
-public class Targ implements Target {
+public class J2eePlatformTest extends ServerRegistryTestBase {
 
-    String name;
-    public Targ(String name) {
-        this.name = name;
+    private static final String TEST_URL = "fooservice:j2eePlatformTest";
+
+    private static final String TEST_USERNAME = "username";
+
+    private static final String TEST_PASSWORD = "password";
+
+    private static final String TEST_DISPLAY_NAME = "j2eePlatformTest";
+
+    public J2eePlatformTest(String name) {
+        super(name);
     }
 
-    public String getDescription() {
-        return "Description for " + name;
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        Map<String, String> props = new HashMap<String, String>();
+        props.put(TestDeploymentManager.PLATFORM_ROOT_PROPERTY, getWorkDirPath());
+
+        InstanceProperties.createInstanceProperties(TEST_URL,
+                TEST_USERNAME, TEST_PASSWORD, TEST_DISPLAY_NAME);
     }
 
-    public String getName() {
-        return name;
-    }
-
-    Map modules = new HashMap();
-    public void add(TargetModuleID tmid) {
-        modules.put(tmid.toString(), tmid);
-    }
-    public TargetModuleID getTargetModuleID(String id) {
-        return (TargetModuleID) modules.get(id);
-    }
-    public TargetModuleID[] getTargetModuleIDs() {
-        return (TargetModuleID[]) modules.values().toArray(new TargetModuleID[0]);
+    public void testLookup() {
+        J2eePlatform platform = Deployment.getDefault().getJ2eePlatform(TEST_URL);
+        assertNotNull(platform.getLookup());
     }
 }
