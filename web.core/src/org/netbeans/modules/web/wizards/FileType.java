@@ -38,55 +38,48 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.web.wizards;
 
-class FileType {
-    private String name, suffix;
+public class FileType {
+
+    private String name,  suffix;
 
     private FileType(String name, String suffix) {
-	this.name = name;
-	this.suffix = suffix;
+        this.name = name;
+        this.suffix = suffix;
     }
 
-    public String toString() { return name; }
+    @Override
+    public String toString() {
+        return name;
+    }
 
-    public String getSuffix() { return suffix; }
-
+    public String getSuffix() {
+        return suffix;
+    }
     public static final FileType SERVLET =
-	new FileType("servlet", "java");
-
+            new FileType("servlet", "java");
     public static final FileType FILTER =
-	new FileType("filter", "java");
-
+            new FileType("filter", "java");
     public static final FileType LISTENER =
-	new FileType("listener", "java");
-
-    public static final FileType JSP = 
-	new FileType("jsp", "jsp"); 
-
-    public static final FileType JSPDOC = 
-	new FileType("jspdoc", "jspx"); 
-
-    public static final FileType JSPF = 
-	new FileType("jspf", "jspf"); 
-
-    public static final FileType TAG = 
-	new FileType("tag_file", "tag");
-    
-    public static final FileType TAGLIBRARY = 
-	new FileType("tag_library", "tld");
-
-    public static final FileType TAG_HANDLER = 
-	new FileType("tag_handler", "java");
-    
-    public static final FileType HTML = 
-	new FileType("html", "html"); 
-    
-    public static final FileType XHTML = 
-	new FileType("xhtml", "xhtml"); 
-
-    public static final FileType CSS = 
-	new FileType("css", "css"); 
+            new FileType("listener", "java");
+    public static final FileType JSP =
+            new FileType("jsp", "jsp");
+    public static final FileType JSPDOC =
+            new FileType("jspdoc", "jspx");
+    public static final FileType JSPF =
+            new FileType("jspf", "jspf");
+    public static final FileType TAG =
+            new FileType("tag_file", "tag");
+    public static final FileType TAGLIBRARY =
+            new FileType("tag_library", "tld");
+    public static final FileType TAG_HANDLER =
+            new FileType("tag_handler", "java");
+    public static final FileType HTML =
+            new FileType("html", "html");
+    public static final FileType XHTML =
+            new FileType("xhtml", "xhtml");
+    public static final FileType CSS =
+            new FileType("css", "css");
 } 
 
