@@ -38,51 +38,32 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.web.jsf.impl.facesmodel;
 
-package org.netbeans.modules.web.jsf.api.facesmodel;
+import org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor;
+import org.netbeans.modules.web.jsf.api.facesmodel.FacesValidatorId;
+import org.w3c.dom.Element;
 
-import java.util.List;
-
-import org.netbeans.modules.web.jsf.api.metamodel.FacesConverter;
-import org.netbeans.modules.web.jsf.impl.facesmodel.JSFConfigQNames;
 
 /**
- * The "converter" element represents a concrete Converter
- * implementation class that should be registered under the
- * specified converter identifier.  Converter identifiers must
- * be unique within the entire web application.
- * 
- * Nested "attribute" elements identify generic attributes that
- * may be configured on the corresponding UIComponent in order
- * to affect the operation of the Converter.  Nested "property"
- * elements identify JavaBeans properties of the Converter
- * implementation class that may be configured to affect the
- * operation of the Converter.  "attribute" and "property"
- * elements are intended to allow component developers to
- * more completely describe their components to tools and users.
- * These elements have no required runtime semantics.
- * @author Petr Pisl, ads
+ * @author ads
+ *
  */
-public interface Converter  extends FacesConfigElement, DescriptionGroup, 
-    FacesConverter, IdentifiableElement , AttributeContainer, PropertyContainer
-{
+class ValidatorIdImpl extends TextComponentImpl implements FacesValidatorId {
 
-    String CONVERTER_CLASS = JSFConfigQNames.CONVERTER_CLASS.getLocalName();
+    ValidatorIdImpl( JSFConfigModelImpl model, Element element ) {
+        super(model, element);
+    }
     
-    String CONVERTER_FOR_CLASS = JSFConfigQNames.CONVERTER_FOR_CLASS.getLocalName();
-    
-    String CONVERTER_ID = JSFConfigQNames.CONVERTER_ID.getLocalName();
-    
-    String CONVERTER_EXTENSION = JSFConfigQNames.CONVERTER_EXTENSION.getLocalName();
-    
-    void setConverterClass(String value);
-    
-    void setConverterForClass(String value);
-    
-    void setConverterId(String value);
-    
-    List<ConverterExtension> getConverterExtensions();
-    void addConverterExtension( ConverterExtension extension );
-    void addConverterExtension( int index, ConverterExtension extension );
-    void removeConverterExtension( ConverterExtension extension );
+    ValidatorIdImpl( JSFConfigModelImpl model ) {
+        this(model, createElementNS(model, JSFConfigQNames.VALIDATOR_ID));
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigComponent#accept(org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor)
+     */
+    public void accept( JSFConfigVisitor visitor ) {
+        visitor.visit(this );
+    }
+
 }

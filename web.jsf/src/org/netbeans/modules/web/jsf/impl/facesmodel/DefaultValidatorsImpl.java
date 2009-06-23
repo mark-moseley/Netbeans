@@ -38,51 +38,67 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.web.jsf.impl.facesmodel;
 
-package org.netbeans.modules.web.jsf.api.facesmodel;
-
+import java.util.ArrayList;
 import java.util.List;
 
-import org.netbeans.modules.web.jsf.api.metamodel.FacesConverter;
-import org.netbeans.modules.web.jsf.impl.facesmodel.JSFConfigQNames;
+import org.netbeans.modules.web.jsf.api.facesmodel.DefaultValidators;
+import org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor;
+import org.netbeans.modules.web.jsf.api.facesmodel.FacesValidatorId;
+import org.netbeans.modules.web.jsf.api.metamodel.ValidatorId;
+import org.w3c.dom.Element;
+
 
 /**
- * The "converter" element represents a concrete Converter
- * implementation class that should be registered under the
- * specified converter identifier.  Converter identifiers must
- * be unique within the entire web application.
- * 
- * Nested "attribute" elements identify generic attributes that
- * may be configured on the corresponding UIComponent in order
- * to affect the operation of the Converter.  Nested "property"
- * elements identify JavaBeans properties of the Converter
- * implementation class that may be configured to affect the
- * operation of the Converter.  "attribute" and "property"
- * elements are intended to allow component developers to
- * more completely describe their components to tools and users.
- * These elements have no required runtime semantics.
- * @author Petr Pisl, ads
+ * @author ads
+ *
  */
-public interface Converter  extends FacesConfigElement, DescriptionGroup, 
-    FacesConverter, IdentifiableElement , AttributeContainer, PropertyContainer
+class DefaultValidatorsImpl extends IdentifiableComponentImpl implements
+        DefaultValidators
 {
 
-    String CONVERTER_CLASS = JSFConfigQNames.CONVERTER_CLASS.getLocalName();
+    DefaultValidatorsImpl( JSFConfigModelImpl model, Element element ) {
+        super(model, element);
+    }
     
-    String CONVERTER_FOR_CLASS = JSFConfigQNames.CONVERTER_FOR_CLASS.getLocalName();
-    
-    String CONVERTER_ID = JSFConfigQNames.CONVERTER_ID.getLocalName();
-    
-    String CONVERTER_EXTENSION = JSFConfigQNames.CONVERTER_EXTENSION.getLocalName();
-    
-    void setConverterClass(String value);
-    
-    void setConverterForClass(String value);
-    
-    void setConverterId(String value);
-    
-    List<ConverterExtension> getConverterExtensions();
-    void addConverterExtension( ConverterExtension extension );
-    void addConverterExtension( int index, ConverterExtension extension );
-    void removeConverterExtension( ConverterExtension extension );
+    DefaultValidatorsImpl( JSFConfigModelImpl model) {
+        this(model, createElementNS(model, JSFConfigQNames.DEFAULT_VALIDATORS));
+    }
+
+    public void addValidatorId( FacesValidatorId id ) {
+        appendChild( VALIDATOR_ID, id);
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.DefaultValidators#addValidatorId(int, org.netbeans.modules.web.jsf.api.facesmodel.ValidatorId)
+     */
+    public void addValidatorId( int index, FacesValidatorId id ) {
+        insertAtIndex( VALIDATOR_ID, id, index, FacesValidatorId.class );
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.DefaultValidators#getValidatorIds()
+     */
+    public List<ValidatorId> getValidatorIds() {
+        List<FacesValidatorId> list = getChildren( FacesValidatorId.class );
+        List<ValidatorId> result = new ArrayList<ValidatorId>( list );
+        // add here validator id from annotations 
+        return result;
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.DefaultValidators#removeValidatorId(org.netbeans.modules.web.jsf.api.facesmodel.ValidatorId)
+     */
+    public void removeValidatorId( FacesValidatorId id ) {
+        removeChild( VALIDATOR_ID, id);
+    }
+
+    /* (non-Javadoc)
+     * @see org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigComponent#accept(org.netbeans.modules.web.jsf.api.facesmodel.JSFConfigVisitor)
+     */
+    public void accept( JSFConfigVisitor visitor ) {
+        visitor.visit( this );
+    }
+
 }
