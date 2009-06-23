@@ -43,28 +43,27 @@ package org.netbeans.modules.web.wizards;
 
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
-
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-
+import org.openide.loaders.TemplateWizard;
 import org.openide.util.NbBundle;
 import org.openide.util.HelpCtx;
 
-/* Wizard panel that collects additional info for Filters
+/** Wizard panel that collects additional info for Filters
  *
  * @author Ana von Klopp
  */
-
 class DeployDataExtraPanel extends BaseWizardPanel {
 
     private ServletData deployData;
     private JLabel jLinstruction;
     private InitParamPanel paramPanel;
+    private TemplateWizard wizard;
 
     private static final long serialVersionUID = -2720213209076965116L;
 
-    DeployDataExtraPanel(TargetEvaluator evaluator) { 
-
+    DeployDataExtraPanel(TargetEvaluator evaluator, TemplateWizard wizard) {
+        this.wizard = wizard;
 	deployData = (ServletData)(evaluator.getDeployData()); 
 	setName(NbBundle.getMessage(DeployDataExtraPanel.class, 
 				    "TITLE_ddpanel_filter_2")); 
@@ -74,7 +73,6 @@ class DeployDataExtraPanel extends BaseWizardPanel {
     }
 
     private void initComponents () {
-
 	// Layout description
 	setLayout(new java.awt.GridBagLayout());
 	setPreferredSize(new java.awt.Dimension(450, 250));
@@ -114,7 +112,7 @@ class DeployDataExtraPanel extends BaseWizardPanel {
 	this.add(jLinstruction, fullRowC); 
 
 	// 2. Init param table 
-	paramPanel = new InitParamPanel(deployData, this); 
+	paramPanel = new InitParamPanel(deployData, this, wizard);
 	this.add(paramPanel, tablePanelC); 
 
 	// 3. Add vertical filler at the bottom
@@ -125,10 +123,6 @@ class DeployDataExtraPanel extends BaseWizardPanel {
     public void setData() { 
 	jLinstruction.setEnabled(deployData.makeEntry()); 
 	paramPanel.setEnabled(deployData.makeEntry()); 
-    } 
-
-    public void log(String s) { 
-	System.out.println("DeployDataExtraPanel" + s); //NOI18N
     } 
 
     public HelpCtx getHelp() {
