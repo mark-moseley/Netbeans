@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,44 +41,65 @@
 
 package org.netbeans.modules.db.explorer.dlg;
 
-import java.awt.*;
-import java.awt.event.*;
+import java.awt.Dialog;
+import java.awt.Dimension;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.InputStream;
-import java.util.*;
-import java.text.MessageFormat;
+import java.lang.reflect.InvocationTargetException;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Vector;
+import java.util.concurrent.Callable;
+import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.table.*;
+import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.border.BevelBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+import javax.swing.event.TableModelEvent;
+import javax.swing.event.TableModelListener;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
+import javax.swing.table.TableModel;
+import org.netbeans.lib.ddl.DDLException;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 import org.netbeans.lib.ddl.impl.Specification;
-import org.netbeans.lib.ddl.impl.CreateTable;
-import org.netbeans.lib.ddl.util.CommandBuffer;
-import org.netbeans.lib.ddl.impl.CreateIndex;
 import org.netbeans.lib.ddl.util.PListReader;
-import org.netbeans.modules.db.explorer.infos.DatabaseNodeInfo;
-import org.netbeans.modules.db.util.TextFieldValidator;
-import org.netbeans.modules.db.util.ValidableTextField;
+import org.netbeans.modules.db.explorer.DbUtilities;
+import org.openide.NotificationLineSupport;
 import org.openide.awt.Mnemonics;
-import org.openide.util.Utilities;
 
 public class CreateTableDialog {
-    boolean result = false;
     Dialog dialog = null;
     JTextField dbnamefield, dbownerfield;
     JTable table;
-    JComboBox ownercombo;
-    JButton addbtn, delbtn;
+    JButton addbtn, delbtn, editBtn;
     Specification spec;
-    private Vector ttab;
+    private DialogDescriptor descriptor = null;
+    private NotificationLineSupport statusLine;
+
 
     private static Map dlgtab = null;
     private static final String filename = "org/netbeans/modules/db/resources/CreateTableDialog.plist"; // NOI18N
-    private ResourceBundle bundle = NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle"); // NOI18N
     private static Logger LOGGER = Logger.getLogger(
             CreateTableDialog.class.getName());
 
@@ -87,7 +108,7 @@ public class CreateTableDialog {
             ClassLoader cl = CreateTableDialog.class.getClassLoader();
             InputStream stream = cl.getResourceAsStream(filename);
             if (stream == null) {
-                String message = MessageFormat.format(NbBundle.getBundle("org.netbeans.modules.db.resources.Bundle").getString("EXC_UnableToOpenStream"), new String[] {filename}); // NOI18N
+                String message = NbBundle.getMessage (CreateTableDialog.class, "EXC_UnableToOpenStream", filename); // NOI18N
                 throw new Exception(message);
             }
             PListReader reader = new PListReader(stream);
@@ -101,7 +122,7 @@ public class CreateTableDialog {
         return dlgtab;
     }
 
-    public CreateTableDialog(final Specification spe, DatabaseNodeInfo nfo) throws java.sql.SQLException {
+    public CreateTableDialog(final Specification spe, final String schema) {
         spec = spe;
         try {
             JLabel label;
@@ -115,8 +136,8 @@ public class CreateTableDialog {
             // Table name field
 
             label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("CreateTableName")); // NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_CreateTableNameA11yDesc"));
+            Mnemonics.setLocalizedText(label, NbBundle.getMessage (CreateTableDialog.class, "CreateTableName")); // NOI18N
+            label.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableNameA11yDesc"));
             constr.anchor = GridBagConstraints.WEST;
             constr.weightx = 0.0;
             constr.weighty = 0.0;
@@ -133,49 +154,26 @@ public class CreateTableDialog {
             constr.gridx = 1;
             constr.gridy = 0;
             constr.insets = new java.awt.Insets (2, 2, 2, 2);
-            dbnamefield = new JTextField(bundle.getString("CreateTableUntitledName"), 10); // NOI18N
-            dbnamefield.setToolTipText(bundle.getString("ACS_CreateTableNameTextFieldA11yDesc"));
-            dbnamefield.getAccessibleContext().setAccessibleName(bundle.getString("ACS_CreateTableNameTextFieldA11yName"));
+            dbnamefield = new JTextField(NbBundle.getMessage (CreateTableDialog.class, "CreateTableUntitledName"), 10); // NOI18N
+            dbnamefield.setToolTipText(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableNameTextFieldA11yDesc"));
+            dbnamefield.getAccessibleContext().setAccessibleName(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableNameTextFieldA11yName"));
             label.setLabelFor(dbnamefield);
             layout.setConstraints(dbnamefield, constr);
             pane.add(dbnamefield);
+            dbnamefield.getDocument().addDocumentListener(new DocumentListener() {
 
-            // Table owner combo
+                public void insertUpdate(DocumentEvent e) {
+                    validate();
+                }
 
-            label = new JLabel();
-            Mnemonics.setLocalizedText(label, bundle.getString("CreateTableOwner")); // NOI18N
-            label.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_CreateTableOwnerA11yDesc"));
-            constr.anchor = GridBagConstraints.WEST;
-            constr.weightx = 0.0;
-            constr.weighty = 0.0;
-            constr.fill = GridBagConstraints.NONE;
-            constr.insets = new java.awt.Insets (2, 10, 2, 2);
-            constr.gridx = 2;
-            constr.gridy = 0;
-            layout.setConstraints(label, constr);
-            pane.add(label);
+                public void removeUpdate(DocumentEvent e) {
+                    validate();
+                }
 
-            Vector users = new Vector();
-            String schema = nfo.getDriverSpecification().getSchema();
-            if (schema != null && schema.length() > 0)
-                users.add(schema);
-            else
-                users.add(" "); //NOI18N
-
-            constr.fill = GridBagConstraints.HORIZONTAL;
-            constr.weightx = 0.0;
-            constr.weighty = 0.0;
-            constr.gridx = 3;
-            constr.gridy = 0;
-            constr.insets = new java.awt.Insets (2, 2, 2, 2);
-            ownercombo = new JComboBox(users);
-            ownercombo.setSelectedIndex(0);
-            ownercombo.setRenderer(new ListCellRendererImpl());
-            ownercombo.setToolTipText(bundle.getString("ACS_CreateTableOwnerComboBoxA11yDesc"));
-            ownercombo.getAccessibleContext().setAccessibleName(bundle.getString("ACS_CreateTableOwnerComboBoxA11yName"));
-            label.setLabelFor(ownercombo);
-            layout.setConstraints(ownercombo, constr);
-            pane.add(ownercombo);
+                public void changedUpdate(DocumentEvent e) {
+                    validate();
+                }
+            });
 
             // Table columns in scrollpane
 
@@ -189,32 +187,36 @@ public class CreateTableDialog {
             constr.insets = new java.awt.Insets (2, 2, 2, 2);
             table = new DataTable(new DataModel());
             table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-            table.setToolTipText(bundle.getString("ACS_CreateTableColumnTableA11yDesc"));
-            table.getAccessibleContext().setAccessibleName(bundle.getString("ACS_CreateTableColumnTableA11yName"));
-            table.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_CreateTableColumnTableA11yDesc"));
+            table.setToolTipText(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableColumnTableA11yDesc"));
+            table.getAccessibleContext().setAccessibleName(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableColumnTableA11yName"));
+            table.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableColumnTableA11yDesc"));
             JScrollPane scrollpane = new JScrollPane(table);
             scrollpane.setBorder(new BevelBorder(BevelBorder.LOWERED));
             layout.setConstraints(scrollpane, constr);
             pane.add(scrollpane);
 
-            // Setup cell editors for table
+            table.addMouseListener(new MouseAdapter() {
 
-            Map tmap = spec.getTypeMap();
-            ttab = new Vector(tmap.size());
-            Iterator iter = tmap.keySet().iterator();
-            while (iter.hasNext()) {
-                String iterkey = (String)iter.next();
-                String iterval = (String)tmap.get(iterkey);
-                ttab.add(new TypeElement(iterkey, iterval));
-            }
+                @Override
+                public void mouseClicked(MouseEvent event) {
+                    if (event.getClickCount() == 2) {
+                        editBtn.doClick();
+                    }
+                }
+            });
+            table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
 
-            final JComboBox combo = new JComboBox(ttab);
-            combo.setSelectedIndex(0);
-            table.setDefaultEditor(String.class, new DataCellEditor(new JTextField()));
-            table.getColumn("type").setCellEditor(new ComboBoxEditor(combo)); // NOI18N
-            table.getColumn("size").setCellEditor(new DataCellEditor(new ValidableTextField(new TextFieldValidator.integer()))); // NOI18N
-            table.getColumn("scale").setCellEditor(new DataCellEditor(new ValidableTextField(new TextFieldValidator.integer()))); // NOI18N
-            table.setRowHeight(combo.getPreferredSize().height);
+                public void valueChanged(ListSelectionEvent e) {
+                    // update Edit and Remove buttons
+                    validate();
+                }
+            });
+            table.getModel().addTableModelListener(new TableModelListener() {
+
+                public void tableChanged(TableModelEvent e) {
+                    validate();
+                }
+            });
 
             // Button pane
 
@@ -226,7 +228,7 @@ public class CreateTableDialog {
             constr.gridy = 1;
             constr.insets = new java.awt.Insets (2, 8, 2, 2);
             JPanel btnpane = new JPanel();
-            GridLayout btnlay = new GridLayout(2,1,0,5);
+            GridLayout btnlay = new GridLayout(3,1,0,5);
             btnpane.setLayout(btnlay);
             layout.setConstraints(btnpane, constr);
             pane.add(btnpane);
@@ -234,126 +236,159 @@ public class CreateTableDialog {
             // Button add column
 
             addbtn = new JButton();
-            Mnemonics.setLocalizedText(addbtn, bundle.getString("CreateTableAddButtonTitle")); // NOI18N
-            addbtn.setToolTipText(bundle.getString("ACS_CreateTableAddButtonTitleA11yDesc"));
+            Mnemonics.setLocalizedText(addbtn, NbBundle.getMessage (CreateTableDialog.class, "CreateTableAddButtonTitle")); // NOI18N
+            addbtn.setToolTipText(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableAddButtonTitleA11yDesc"));
             btnpane.add(addbtn);
             addbtn.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent event) {
-                    if (table.getCellEditor() != null) {
-                        table.getCellEditor().stopCellEditing();
+
+                    ColumnItem columnItem = AddTableColumnDialog.showDialog(spec, null);
+                    if (columnItem != null) {
+                        DataModel model = (DataModel) table.getModel();
+                        model.addRow(columnItem);
                     }
-                    DataModel model = (DataModel)table.getModel();
-                    ColumnItem item = new ColumnItem();
-                    item.setProperty(ColumnItem.TYPE, ttab.elementAt(0));
-                    model.addRow(item);
+                }
+            });
+
+            // Button edit column
+
+            editBtn = new JButton();
+            Mnemonics.setLocalizedText(editBtn, NbBundle.getMessage(CreateTableDialog.class, "CreateTableEditButtonTitle")); // NOI18N
+            editBtn.setToolTipText(NbBundle.getMessage(CreateTableDialog.class, "ACS_CreateTableEditButtonTitleA11yDesc")); // NOI18N
+            btnpane.add(editBtn);
+            editBtn.addActionListener(new ActionListener() {
+
+                public void actionPerformed(ActionEvent event) {
+                    int selectedIndex = table.getSelectedRow();
+                    if (selectedIndex != -1) {
+                        ColumnItem selectedColumnItem = ((DataModel) table.getModel()).getRow(selectedIndex);
+                        ColumnItem columnItemModified = AddTableColumnDialog.showDialog(spec, selectedColumnItem);
+                        if (columnItemModified != null) {
+                            DataModel model = (DataModel) table.getModel();
+                            model.removeRow(selectedIndex);
+                            model.insertRow(selectedIndex, columnItemModified);
+                        }
+                    }
                 }
             });
 
             // Button delete column
 
             delbtn = new JButton();
-            Mnemonics.setLocalizedText(delbtn, bundle.getString("CreateTableRemoveButtonTitle")); // NOI18N
-            delbtn.setToolTipText(bundle.getString("ACS_CreateTableRemoveButtonTitleA11yDesc"));
+            Mnemonics.setLocalizedText(delbtn, NbBundle.getMessage (CreateTableDialog.class, "CreateTableRemoveButtonTitle")); // NOI18N
+            delbtn.setToolTipText(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableRemoveButtonTitleA11yDesc")); // NOI18N
             btnpane.add(delbtn);
             delbtn.addActionListener(new ActionListener() {
                 public void actionPerformed(ActionEvent event) {
-                    if (table.getCellEditor() != null) {
-                        table.getCellEditor().stopCellEditing();
-                    }
                     int idx = table.getSelectedRow();
-                    if (idx != -1)
-                        ((DataModel)table.getModel()).removeRow(idx);
+                    if (idx != -1) {
+                        ((DataModel) table.getModel()).removeRow(idx);
+                    }
                 }
             });
 
             ActionListener listener = new ActionListener() {
                 public void actionPerformed(ActionEvent event) {
                     final ActionEvent evt = event;
-                    if (table.getCellEditor() != null) {
-                        table.getCellEditor().stopCellEditing();
+                    if (evt.getSource() == DialogDescriptor.OK_OPTION) {
+                        try {
+                            final String tablename = getTableName();
+                            final DataModel dataModel = (DataModel)table.getModel();
+                            final Vector data = dataModel.getData();
+
+                            boolean wasException = DbUtilities.doWithProgress(null, new Callable<Boolean>() {
+                                public Boolean call() throws Exception {
+                                    CreateTableDDL ddl = new CreateTableDDL(
+                                            spec, schema, tablename);
+
+                                    return ddl.execute(data, dataModel.getTablePrimaryKeys());
+                                }
+                            });
+
+                            // was execution of commands with or without exception?
+                            if(!wasException) {
+                                // dialog is closed after successfully create table
+                                dialog.setVisible(false);
+                                dialog.dispose();
+                            }
+                            //dialog is not closed after unsuccessfully create table
+
+                        } catch (InvocationTargetException e) {
+                            Throwable cause = e.getCause();
+                            if (cause instanceof DDLException) {
+                                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(e.getMessage(), NotifyDescriptor.ERROR_MESSAGE));
+                            } else {
+                                LOGGER.log(Level.INFO, null, cause);
+                                DbUtilities.reportError(NbBundle.getMessage (CreateTableDialog.class, "ERR_UnableToCreateTable"), e.getMessage());
+                            }
+                        }
                     }
-                    RequestProcessor.getDefault().post(new Runnable() {
-                        public void run () {
-                          if (evt.getSource() == DialogDescriptor.OK_OPTION) {
-                              result = validate();
-
-                              CommandBuffer cbuff = new CommandBuffer();
-                              Vector idxCommands = new Vector();
-
-                              if (! result) {
-                                  String msg = bundle.getString("EXC_InsufficientCreateTableInfo");
-                                  DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(msg, NotifyDescriptor.ERROR_MESSAGE));
-                              }
-                                  try {
-                                      String tablename = getTableName();
-                                      DataModel dataModel = (DataModel)table.getModel();
-                                      Vector data = dataModel.getData();
-                                      String owner = ((String)ownercombo.getSelectedItem()).trim();
-                                      
-                                      CreateTableDDL ddl = new CreateTableDDL(
-                                              spec, owner, tablename);
-                                      
-                                      boolean wasException =
-                                          ddl.execute(data, dataModel.getTablePrimaryKeys());
-
-                                      //bugfix for #31064
-                                      combo.setSelectedItem(combo.getSelectedItem());
-
-                                      // was execution of commands with or without exception?
-                                      if(!wasException) {
-                                          // dialog is closed after successfully create table
-                                          dialog.setVisible(false);
-                                          dialog.dispose();
-                                      }
-                                      //dialog is not closed after unsuccessfully create table
-
-                                  } catch (Exception e) {
-                                      e.printStackTrace();
-
-                                  }
-                              } else {
-                              }
-                          }
-                    }, 0);       
-               }
+                }
             };
 
-            pane.getAccessibleContext().setAccessibleDescription(bundle.getString("ACS_CreateTableDialogA11yDesc"));
+            pane.getAccessibleContext().setAccessibleDescription(NbBundle.getMessage (CreateTableDialog.class, "ACS_CreateTableDialogA11yDesc")); // NOI18N
 
-            addbtn.doClick();
-            DialogDescriptor descriptor = new DialogDescriptor(pane, bundle.getString("CreateTableDialogTitle"), true, listener); // NOI18N
+            descriptor = new DialogDescriptor(pane, NbBundle.getMessage (CreateTableDialog.class, "CreateTableDialogTitle"), true, listener); // NOI18N
+            statusLine = descriptor.createNotificationLineSupport();
             // inbuilt close of the dialog is only after CANCEL button click
             // after OK button is dialog closed by hand
             Object [] closingOptions = {DialogDescriptor.CANCEL_OPTION};
             descriptor.setClosingOptions(closingOptions);
             dialog = DialogDisplayer.getDefault().createDialog(descriptor);
             dialog.setResizable(true);
+            validate();
         } catch (MissingResourceException ex) {
             ex.printStackTrace();
         }
     }
 
-    public boolean run() {
-        if (dialog != null) dialog.setVisible(true);
-        return result;
+    /**
+     *  Shows Create Table dialog and creates a new table in specified schema.
+     * @param spec DB specification
+     * @param schema DB schema to create table in
+     * @return true if new table successfully created, false if cancelled
+     */
+    public static boolean showDialogAndCreate(final Specification spec, final String schema) {
+        final CreateTableDialog dlg = new CreateTableDialog(spec, schema);
+        dlg.dialog.setVisible(true);
+        if (dlg.descriptor.getValue() == DialogDescriptor.OK_OPTION) {
+            return true;
+        }
+        return false;
     }
 
-    public String getTableName() {
+    private String getTableName() {
         return dbnamefield.getText();
     }
 
-    private boolean validate() {
+    /** Validate and update state of UI. */
+    private void validate() {
+        assert statusLine != null : "Notification status line not available";  //NOI18N
+
+        boolean oneRowSelected = table.getSelectedRowCount() == 1;
+        editBtn.setEnabled(oneRowSelected);
+        delbtn.setEnabled(oneRowSelected);
+
         String tname = getTableName();
-        if (tname == null || tname.length()<1)
-            return false;
+        if (tname == null || tname.length() < 1) {
+            statusLine.setInformationMessage(NbBundle.getMessage(CreateTableDialog.class, "CreateTableMissingTableName"));
+            updateOK(false);
+            return;
+        }
+        if (table.getModel().getRowCount() == 0) {
+            statusLine.setInformationMessage(NbBundle.getMessage(CreateTableDialog.class, "CreateTableNoColumns"));
+            updateOK(false);
+            return;
+        }
+        statusLine.clearMessages();
+        updateOK(true);
+    }
 
-        Vector cols = ((DataModel)table.getModel()).getData();
-        Enumeration colse = cols.elements();
-        while(colse.hasMoreElements())
-            if (!((ColumnItem)colse.nextElement()).validate())
-                return false;
-
-        return true;
+    /** Updates OK button. */
+    private void updateOK(boolean valid) {
+        if (descriptor != null) {
+            descriptor.setValid(valid);
+        }
     }
 
     class DataTable extends JTable {
@@ -372,7 +407,7 @@ public class CreateTableDialog {
                 TableColumn col = cmodel.getColumn(i);
                 Map cmap = ColumnItem.getColumnProperty(i);
                 col.setIdentifier(cmap.get("name")); //NOI18N
-                columnName = bundle.getString("CreateTable_" + i); //NOI18N
+                columnName = NbBundle.getMessage (CreateTableDialog.class, "CreateTable_" + i); //NOI18N
                 columnWidth = (new Double(getFontMetrics(getFont()).getStringBounds(columnName, getGraphics()).getWidth())).intValue() + 20;
                 if (cmap.containsKey("width")) { // NOI18N
                     if (((Integer)cmap.get("width")).intValue() < columnWidth)
@@ -394,69 +429,6 @@ public class CreateTableDialog {
             }
             width = Math.min(Math.max(width, 380), Toolkit.getDefaultToolkit().getScreenSize().width - 100);
             setPreferredScrollableViewportSize(new Dimension(width, 150));
-        }
-    }
-
-    class FocusInvoker implements Runnable {
-        private JTextField xxx;
-        public FocusInvoker(JTextField fld) {
-            xxx=fld;
-        }
-
-        public void run() {
-            xxx.selectAll();
-        }
-    }
-
-    class DataCellEditor extends DefaultCellEditor {
-        static final long serialVersionUID =3855371868128838794L;
-
-        public DataCellEditor(final JTextField x) {
-            super(x);
-            setClickCountToStart(1);
-        }
-    }
-    
-    class PopupInvoker implements Runnable {
-        private JComboBox jComboBox;
-
-        public PopupInvoker(JComboBox aJComboBox) {
-            jComboBox = aJComboBox;
-        }
-
-        public void run() {
-            try {
-                jComboBox.showPopup();
-            } catch (IllegalComponentStateException icse) {
-                // This is a valid exception that occurs
-                // if the jComboBox is somehow hide. Do nothing.
-            }
-        }
-
-    }
-
-    class ComboBoxEditor extends DefaultCellEditor {
-        public ComboBoxEditor(final JComboBox jComboBox) {
-            super(jComboBox);
-            jComboBox.addFocusListener(new FocusListener() {
-                public void focusGained(FocusEvent e) {
-                    SwingUtilities.invokeLater(new PopupInvoker(jComboBox));
-                }
-
-                public void focusLost(FocusEvent e) {}
-            });
-        }
-    }
-
-    private static final class ListCellRendererImpl extends DefaultListCellRenderer {
-        
-        public Dimension getPreferredSize() {
-            Dimension size = super.getPreferredSize();
-            // hack to fix issue 65759
-            if (Utilities.isWindows()) {
-                size.width += 4;
-            }
-            return size;
         }
     }
 }
