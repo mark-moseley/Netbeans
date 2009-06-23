@@ -53,7 +53,9 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
+import org.netbeans.modules.j2ee.persistence.api.PersistenceLocation;
 import org.netbeans.modules.websvc.api.jaxws.project.WSUtils;
+import org.netbeans.modules.websvc.api.support.SourceGroups;
 import org.netbeans.modules.websvc.spi.jaxws.client.ProjectJAXWSClientSupport;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.netbeans.spi.java.project.classpath.ProjectClassPathExtender;
@@ -103,16 +105,18 @@ public class J2SEProjectJAXWSClientSupport extends ProjectJAXWSClientSupport /*i
     }
 
     public FileObject getWsdlFolder(boolean create) throws IOException {
-        //EditableProperties ep = updateHelper.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        EditableProperties ep = WSUtils.getEditableProperties(project, AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        assert ep!=null;
-        String metaInfStr = ep.getProperty("meta.inf.dir"); //NOI18N
-        String wsdlFolderStr = metaInfStr + "/" + WSDL_FOLDER; // NOI18N
-        FileObject wsdlFolder = project.getProjectDirectory().getFileObject(wsdlFolderStr);
-        if (wsdlFolder == null && create) {
-            wsdlFolder = FileUtil.createFolder(project.getProjectDirectory(), wsdlFolderStr);
+        if (create) {
+            FileObject metaInfDir = PersistenceLocation.createLocation(project);
+            if (metaInfDir != null) {
+                return FileUtil.createFolder(metaInfDir, WSDL_FOLDER);
+            }
+        } else {
+            FileObject metaInfDir = PersistenceLocation.getLocation(project);
+            if (metaInfDir != null) {
+                return metaInfDir.getFileObject(WSDL_FOLDER);
+            }
         }
-        return wsdlFolder;
+        return null;
     }
 
     public String addServiceClient(String clientName, String wsdlUrl, String packageName, boolean isJsr109) {
@@ -302,21 +306,27 @@ public class J2SEProjectJAXWSClientSupport extends ProjectJAXWSClientSupport /*i
      * @return
      */
     private boolean isOldJdk16(String java_version) {
-        if (java_version.startsWith("1.6")) { //NOI18N
+        if (java_version.startsWith("1.6.0")) { //NOI18N
             int index = java_version.indexOf("_");
             if (index > 0) {
                 String releaseVersion = java_version.substring(index+1);
-                try {
-                    Integer rv = Integer.valueOf(releaseVersion);
-                    if (rv >=4) return false;
-                    else return true;
-                } catch (NumberFormatException ex) {
-                    // return true for some strange jdk versions
-                    return true;
+                StringTokenizer tokens = new StringTokenizer(releaseVersion,"-_. "); //NOI18N
+                String updateVersion = tokens.nextToken();
+                if (updateVersion != null) {
+                    try {
+                        Integer rv = Integer.valueOf(updateVersion);
+                        if (rv >=4) return false;
+                        else return true;
+                    } catch (NumberFormatException ex) {
+                        // return true for some strange jdk versions
+                        return false;
+                    }
+                } else {
+                    return false;
                 }
             } else {
                 // return true for some strange jdk versions
-                return true;
+                return false;
             }
         } else {
             return false;
