@@ -98,7 +98,7 @@ public final class MessageEJBWizard implements WizardDescriptor.InstantiatingIte
         EjbJar ejbModule = EjbJar.getEjbJar(pkg);
         
         // TODO: UI - add checkbox for Java EE 5 to create also EJB 2.1 style EJBs
-        boolean isSimplified = ejbModule.getJ2eePlatformVersion().equals(J2eeModule.JAVA_EE_5);
+        boolean isSimplified = Profile.fromPropertiesString(ejbModule.getJ2eePlatformVersion()).compareTo(Profile.JAVA_EE_5) >= 0;
         MessageGenerator generator = MessageGenerator.create(
                 Templates.getTargetName(wiz),
                 pkg,
@@ -152,7 +152,7 @@ public final class MessageEJBWizard implements WizardDescriptor.InstantiatingIte
 
         public boolean isValid() {
             if (!org.netbeans.modules.j2ee.common.Util.isValidServerInstance(getProject())) {
-                getWizardDescriptor().putProperty("WizardPanel_errorMessage",
+                getWizardDescriptor().putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
                         NbBundle.getMessage(MessageEJBWizard.class, "ERR_MissingServer")); // NOI18N
                 return false;
             }
