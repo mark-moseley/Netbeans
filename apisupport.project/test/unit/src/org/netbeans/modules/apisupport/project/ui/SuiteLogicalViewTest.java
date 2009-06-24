@@ -48,9 +48,9 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 import org.netbeans.api.project.ProjectManager;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.apisupport.project.TestBase;
 import org.netbeans.modules.apisupport.project.suite.SuiteProject;
-import org.netbeans.modules.apisupport.project.ui.SuiteLogicalView.SuiteRootNode;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
@@ -106,23 +106,13 @@ public class SuiteLogicalViewTest extends TestBase {
         ep.setProperty("app.name", "sweetness");
         ep.setProperty("app.title", "Sweetness is Now!");
         p.getHelper().putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
+        TestBase.waitForNodesUpdate();
         assertEquals(new HashSet<String>(Arrays.asList(Node.PROP_NAME, Node.PROP_DISPLAY_NAME)), nl.changed);
         assertEquals("Sweetness is Now!", n.getName());
         assertEquals("Sweetness is Now!", n.getDisplayName());
     }
-    
-    public void testProjectFiles() throws Exception {
-        SuiteProject suite = generateSuite("suite");
-        TestBase.generateSuiteComponent(suite, "module");
-        suite.open();
-        SuiteRootNode rootNode = (SuiteRootNode) suite.getLookup().lookup(LogicalViewProvider.class).createLogicalView();
-        Set<FileObject> expected = new HashSet<FileObject>(Arrays.asList(
-            suite.getProjectDirectory().getFileObject("nbproject"),
-            suite.getProjectDirectory().getFileObject("build.xml")
-        ));
-        assertTrue(expected.equals(rootNode.getProjectFiles()));
-    }
-    
+
+    @RandomlyFails
     public void testImportantFiles() throws Exception {
         // so getDisplayName is taken from english bundle
         Locale.setDefault(Locale.US);
