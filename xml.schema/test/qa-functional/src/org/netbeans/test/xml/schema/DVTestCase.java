@@ -39,81 +39,162 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.test.xml.schema.core;
+package org.netbeans.test.xml.schema;
 
+import org.netbeans.test.xml.schema.abe.*;
 import java.awt.Point;
+import java.awt.event.KeyEvent;
 import java.util.zip.CRC32;
 import javax.swing.tree.TreePath;
+import junit.framework.TestSuite;
 import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.JellyTestCase;
 import org.netbeans.jellytools.NewFileWizardOperator;
 import org.netbeans.jellytools.NewJavaFileNameLocationStepOperator;
 import org.netbeans.jellytools.OutputOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.WizardOperator;
 import org.netbeans.jellytools.actions.SaveAllAction;
 import org.netbeans.jellytools.nodes.Node;
 import org.netbeans.jellytools.nodes.ProjectRootNode;
 import org.netbeans.jemmy.operators.JButtonOperator;
-import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JDialogOperator;
 import org.netbeans.jemmy.operators.JListOperator;
 import org.netbeans.jemmy.operators.JPopupMenuOperator;
 import org.netbeans.jemmy.operators.JRadioButtonOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.jemmy.operators.JTreeOperator;
-import org.netbeans.test.xml.schema.core.lib.SchemaMultiView;
-import org.netbeans.test.xml.schema.core.lib.util.Helpers;
+import org.netbeans.test.xml.schema.lib.SchemaMultiView;
+import org.netbeans.test.xml.schema.lib.util.Helpers;
 
 /**
  *
- * @author ca@netbeans.org
+ * @author Mikhail Matveev
  */
 
-public class AcceptanceTestCase extends JellyTestCase {
+public class DVTestCase extends JellyTestCase {
     
     static final String [] m_aTestMethods = {
-        "createNewSchema",
-                "createSchemaComponents",
-                "customizeSchema",
-                "checkSourceCRC",
-                "refactorComplexType",
+        "createLASchema",
+        "DesignPane",
+        //"createNewElement",
+                //"createSchemaComponents",
+                //"customizeSchema",
+                //"checkSourceCRC",
                 "applyDesignPattern"
     };
     
     static final String TEST_SCHEMA_NAME = "testSchema";
     static final String SCHEMA_EXTENSION = ".xsd";
     
-    public AcceptanceTestCase(String arg0) {
+    static SchemaMultiView multiView;
+    static DesignViewOperator dvOperator;
+    
+    public DVTestCase(String arg0) {
         super(arg0);
     }
     
-    public static junit.framework.TestSuite suite() {
-        junit.framework.TestSuite testSuite = new junit.framework.TestSuite("Acceptance suite");
+    public static TestSuite suite() {
+        TestSuite testSuite = new TestSuite(DVTestCase.class.getName());
         
         for (String strMethodName : m_aTestMethods) {
-            testSuite.addTest(new AcceptanceTestCase(strMethodName));
+            testSuite.addTest(new DVTestCase(strMethodName));
         }
         
         return testSuite;
     }
     
-    public void createNewSchema() {
+    
+    public void createLASchema() {
         startTest();
         
         NewFileWizardOperator opNewFileWizard = NewFileWizardOperator.invoke();
         opNewFileWizard.selectCategory("XML");
-        opNewFileWizard.selectFileType("XML Schema");
+        opNewFileWizard.selectFileType("Loan Application Sample Schema");
         opNewFileWizard.next();
         
         NewJavaFileNameLocationStepOperator opNewFileNameLocationStep = new NewJavaFileNameLocationStepOperator();
         opNewFileNameLocationStep.setObjectName(TEST_SCHEMA_NAME);
         opNewFileWizard.finish();
         
-        TopComponentOperator opTopComponent = new TopComponentOperator(TEST_SCHEMA_NAME + SCHEMA_EXTENSION);
+        endTest();
+    }
+    
+    public void DesignPane(){
+        startTest();        
+        
+        multiView=new SchemaMultiView(TEST_SCHEMA_NAME);
+        multiView.switchToDesign();
+        dvOperator=new DesignViewOperator(multiView.getTopComponentOperator());        
+        
+        // JemmyProperties.getCurrentOutput().printLine("Complex type root: " + dvOperator.getComplexTypesRoot().getCenterX() + " " + dvOperator.getComplexTypesRoot().getCenterY());                    
+        // JemmyProperties.getCurrentOutput().printLine("Elements root: " + dvOperator.getElementsRoot().getCenterX() + " " + dvOperator.getElementsRoot().getCenterY());                           
+        
+        // dvOperator.getComplexTypesRoot().clickForPopup();
+        
+        DVNodeOperator autoLoan=new DVNodeOperator(dvOperator,"autoLoanApplication");
+        
+        autoLoan.addAttribute("TheAttr");
+        autoLoan.pushKey(KeyEvent.VK_ENTER);
+        autoLoan.addAttribute("TheAttr1");
+        autoLoan.pushKey(KeyEvent.VK_ENTER);
+        
+//
+//        autoLoan.setExpanded(false);
+//        Helpers.waitNoEvent();
+//        
+//        autoLoan.clickForPopupRobot();
+//        new JPopupMenuOperator().pushMenu("Properties");        
+//        Helpers.waitNoEvent();
+//        new JDialogOperator().close();
+//        Helpers.waitNoEvent();
+//
+//        autoLoan.setExpanded(true);
+//        Helpers.waitNoEvent();
+//        
+        Helpers.recurseComponent(1,dvOperator.getSource());
+//        
+//        DVNodeOperator term=new DVNodeOperator(autoLoan,"loan",true,true);
+//        term.renameInplace("renameTerm");
+//        
+//        dvOperator.getNameSpace().renameInplace("new namespace");
+//        Helpers.waitNoEvent();
+//        
+//        autoLoan.clickForPopupRobot();
+//        new JPopupMenuOperator().pushMenu("Properties");        
+//        Helpers.waitNoEvent();
+//        new JDialogOperator().close();
+//        Helpers.waitNoEvent();
+        
+        DVNodeOperator newEl=dvOperator.addElement("myElement");
+        Helpers.waitNoEvent();
+        newEl.renameInplace("inplaceNewName");
+        Helpers.waitNoEvent();
+        newEl.renameRefactor("refactorNewName");
+        Helpers.waitNoEvent();
+        newEl.delete();
+        Helpers.waitNoEvent();
+        
+        dvOperator.getComplexTypesRoot();
         
         endTest();
+    }
+    
+    public void createNewElement(){                
+        
+        startTest();        
+        
+        dvOperator.getElementsRoot().clickForPopupRobot();
+        new JPopupMenuOperator().pushMenu("Add|Element");
+        Helpers.waitNoEvent();
+        dvOperator.getComplexTypesRoot().clickForPopupRobot();
+        new JPopupMenuOperator().pushMenu("Add|Complex Type");
+        Helpers.waitNoEvent();
+        
+        Helpers.recurseComponent(1,multiView.getTopComponentOperator().getSource());
+        
+        endTest();
+        
     }
     
     public void createSchemaComponents() {
@@ -202,71 +283,6 @@ public class AcceptanceTestCase extends JellyTestCase {
         endTest();
     }
     
-    public void checkSourceCRC() {
-        startTest();
-        
-        final long goldenCRC32 = 2295334600L;
-        
-        SchemaMultiView opMultiView = new SchemaMultiView(TEST_SCHEMA_NAME);
-        opMultiView.switchToSource();
-        
-        EditorOperator opEditor = new EditorOperator(TEST_SCHEMA_NAME);
-        String strText = opEditor.getText();
-        
-        opMultiView.switchToSchema();
-        
-        strText = strText.replaceAll("[  [\t\f\r]]", "");
-        Helpers.writeJemmyLog("{" + strText + "}");
-        
-        CRC32 crc32 = new CRC32();
-        crc32.update(strText.getBytes());
-        long checkSum = crc32.getValue();
-        Helpers.writeJemmyLog("CRC32=" + checkSum);
-        if ( checkSum != goldenCRC32) {
-            fail("Schema source check sum doesn't match golden value");
-        }
-        
-        endTest();
-    }
-    
-    public void refactorComplexType() {
-        startTest();
-        
-        SchemaMultiView opMultiView = new SchemaMultiView(TEST_SCHEMA_NAME);
-        
-        JListOperator opList0 = opMultiView.getColumnListOperator(0);
-        opList0.selectItem("Complex Types");
-        
-        JListOperator opList1 = opMultiView.getColumnListOperator(1);
-        callPopupOnListItem(opList1, "CT", "Refactor|Rename...");
-        
-        JDialogOperator opDialog = new JDialogOperator();
-        new JTextFieldOperator(opDialog).setText("CT1");
-        new JButtonOperator(opDialog, "Refactor").pushNoBlock();
-        opDialog.waitClosed();
-        
-        opList0 = opMultiView.getColumnListOperator(0);
-        opList0.selectItem("Elements");
-        Helpers.waitNoEvent();
-        
-        opList1 = opMultiView.getColumnListOperator(1);
-        opList1.selectItem("E");
-        Helpers.waitNoEvent();
-        
-        JListOperator opList2 = opMultiView.getColumnListOperator(2);
-        opList2.selectItem("CT1");
-        
-        opMultiView.switchToSource();
-        boolean bValid = isSchemaValid(TEST_SCHEMA_NAME);
-        opMultiView.switchToSchema();
-        
-        if (!bValid) {
-            failInvalidSchema();
-        }
-        
-        endTest();
-    }
-    
     public void applyDesignPattern() {
         startTest();
         
@@ -302,6 +318,33 @@ public class AcceptanceTestCase extends JellyTestCase {
         
         endTest();
     }
+
+    public void checkSourceCRC() {
+        startTest();
+        
+        final long goldenCRC32 = 2295334600L;
+        
+        multiView.switchToSource();
+        
+        EditorOperator opEditor = new EditorOperator(TEST_SCHEMA_NAME);
+        String strText = opEditor.getText();
+        
+        multiView.switchToDesign();
+        
+        strText = strText.replaceAll("[  [\t\f\r]]", "");
+        Helpers.writeJemmyLog("{" + strText + "}");
+        
+        CRC32 crc32 = new CRC32();
+        crc32.update(strText.getBytes());
+        long checkSum = crc32.getValue();
+        Helpers.writeJemmyLog("CRC32=" + checkSum);
+        if ( checkSum != goldenCRC32) {
+            fail("Schema source check sum doesn't match golden value");
+        }
+        
+        endTest();
+    }   
+
     
     private boolean isSchemaValid(String strSchemaName) {
         boolean bValid = true;
@@ -339,4 +382,10 @@ public class AcceptanceTestCase extends JellyTestCase {
     public void tearDown() {
         new SaveAllAction().performAPI();
     }
+
+    protected void startTest(){
+        super.startTest();
+        Helpers.closeUMLWarningIfOpened();
+    }
+
 }
