@@ -42,9 +42,7 @@ package org.netbeans.modules.mercurial;
 
 import org.netbeans.modules.turbo.TurboProvider;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 
-import org.netbeans.modules.mercurial.Mercurial;
 import java.util.logging.Level;
 
 import java.io.*;
@@ -61,21 +59,32 @@ class DiskMapTurboProvider implements TurboProvider {
 
     private static final int STATUS_VALUABLE = FileInformation.STATUS_MANAGED & ~FileInformation.STATUS_VERSIONED_UPTODATE;
     private static final String CACHE_DIRECTORY = "mercurialcache"; // NOI18N
-    
+
     private File cacheStore;
     private int                             storeSerial;
 
     private int                             cachedStoreSerial = -1;
     private Map<File, FileInformation> cachedValues;
-    
+
     DiskMapTurboProvider() {
         initCacheStore();
     }
 
+    Map<File, FileInformation> getCachedValues() {
+        if (cachedValues != null) {
+            return cachedValues;
+        }
+        return Collections.emptyMap();
+    }
+
     synchronized Map<File, FileInformation>  getAllModifiedValues() {
-        if (cachedStoreSerial != storeSerial || cachedValues == null) {
-            cachedValues = new HashMap<File, FileInformation>();
+        if (modifiedFilesChanged() || cachedValues == null) {
+            HashMap<File, FileInformation> modifiedValues = new HashMap<File, FileInformation>();
             File [] files = cacheStore.listFiles();
+            if(files == null) {
+                cachedValues = Collections.unmodifiableMap(modifiedValues);
+                return cachedValues;
+            }
             for (int i = 0; i < files.length; i++) {
                 File file = files[i];
                 if (file.getName().endsWith(".bin") == false) { // NOI18N
@@ -107,7 +116,7 @@ class DiskMapTurboProvider implements TurboProvider {
                             File f = (File) j.next();
                             FileInformation info = (FileInformation) value.get(f);
                             if ((info.getStatus() & DiskMapTurboProvider.STATUS_VALUABLE) != 0) {
-                                cachedValues.put(f, info);
+                                modifiedValues.put(f, info);
                             }
                         }
                     }
@@ -120,7 +129,7 @@ class DiskMapTurboProvider implements TurboProvider {
                 }
             }
             cachedStoreSerial = storeSerial;
-            cachedValues = Collections.unmodifiableMap(cachedValues);
+            cachedValues = Collections.unmodifiableMap(modifiedValues);
         }
         return cachedValues;
     }
@@ -267,6 +276,10 @@ class DiskMapTurboProvider implements TurboProvider {
         return true;
     }
 
+    boolean modifiedFilesChanged() {
+        return cachedStoreSerial != storeSerial;
+    }
+
     private void skip(InputStream is, long len) throws IOException {
         while (len > 0) {
             long n = is.skip(len);
@@ -341,7 +354,7 @@ class DiskMapTurboProvider implements TurboProvider {
         if (userDir != null) {
             cacheStore = new File(new File(new File (userDir, "var"), "cache"), DiskMapTurboProvider.CACHE_DIRECTORY); // NOI18N
         } else {
-            File cachedir = FileUtil.toFile(Repository.getDefault().getDefaultFileSystem().getRoot());
+            File cachedir = FileUtil.toFile(FileUtil.getConfigRoot());
             cacheStore = new File(cachedir, DiskMapTurboProvider.CACHE_DIRECTORY); // NOI18N
         }
         cacheStore.mkdirs();
