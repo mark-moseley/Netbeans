@@ -45,10 +45,7 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
-import java.io.IOException;
 import java.util.*;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
@@ -57,12 +54,10 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.WebApp;
 import org.netbeans.modules.j2ee.dd.api.web.WebAppMetadata;
 import org.netbeans.modules.j2ee.deployment.common.api.ConfigurationException;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleFactory;
-import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementation;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.deployment.common.api.EjbChangeDescriptor;
 import org.netbeans.modules.web.project.classpath.ClassPathProviderImpl;
@@ -81,7 +76,9 @@ import org.netbeans.modules.j2ee.dd.api.webservices.*;
 import org.netbeans.modules.j2ee.dd.spi.MetadataUnit;
 import org.netbeans.modules.j2ee.dd.spi.web.WebAppMetadataModelFactory;
 import org.netbeans.modules.j2ee.dd.spi.webservices.WebservicesMetadataModelFactory;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementation2;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
+import org.netbeans.modules.java.api.common.ant.UpdateHelper;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
 
 /** A web module implementation on top of project.
@@ -89,7 +86,7 @@ import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
  * @author  Pavel Buzek
  */
 public final class ProjectWebModule extends J2eeModuleProvider 
-  implements WebModuleImplementation, J2eeModuleImplementation, ModuleChangeReporter, 
+  implements WebModuleImplementation, J2eeModuleImplementation2, ModuleChangeReporter,
   EjbChangeDescriptor, PropertyChangeListener {
       
     public static final String FOLDER_WEB_INF = "WEB-INF";//NOI18N
@@ -204,10 +201,16 @@ public final class ProjectWebModule extends J2eeModuleProvider
     }
 
     public FileObject getDocumentBase (boolean silent) {
-        FileObject docBase = getFileObject(WebProjectProperties.WEB_DOCBASE_DIR);
+        String value = helper.getAntProjectHelper().getStandardPropertyEvaluator()
+                .getProperty(WebProjectProperties.WEB_DOCBASE_DIR);
+
+        return resolveDocumentBase(value, silent);
+    }
+
+    FileObject resolveDocumentBase(String value, boolean silent) {
+        FileObject docBase = value != null ? helper.getAntProjectHelper().resolveFileObject(value) : null;
         if (docBase == null && !silent) {
-            String relativePath = helper.getAntProjectHelper().getStandardPropertyEvaluator().getProperty(WebProjectProperties.WEB_DOCBASE_DIR);
-            String path = (relativePath != null ? helper.getAntProjectHelper().resolvePath(relativePath) : null);
+            String path = (value != null ? helper.getAntProjectHelper().resolvePath(value) : null);
             String errorMessage;
             if (path != null) {
                 errorMessage = NbBundle.getMessage(ProjectWebModule.class, "MSG_DocBase_Corrupted", project.getName(), path);
@@ -237,17 +240,29 @@ public final class ProjectWebModule extends J2eeModuleProvider
     }
     
     public FileObject getWebInf (boolean silent) {
-        FileObject webInf = getFileObject(WebProjectProperties.WEBINF_DIR);
-        
+        String value = helper.getAntProjectHelper().getStandardPropertyEvaluator()
+                .getProperty(WebProjectProperties.WEBINF_DIR);
+
+        return resolveWebInf(null, value, silent, false);
+    }
+
+    FileObject resolveWebInf(String docBaseValue, String webInfValue, boolean silent, boolean useDocBase) {
+        FileObject webInf = webInfValue != null ? helper.getAntProjectHelper().resolveFileObject(webInfValue) : null;
+
         //temporary solution for < 6.0 projects
         if (webInf == null) {
-            FileObject documentBase = getDocumentBase(silent);
+            FileObject documentBase = null;
+            if (useDocBase) {
+                documentBase = resolveDocumentBase(docBaseValue, silent);
+            } else {
+                documentBase = getDocumentBase(silent);
+            }
             if (documentBase == null) {
                 return null;
             }
             webInf = documentBase.getFileObject (FOLDER_WEB_INF);        
         }
-        
+
         if (webInf == null && !silent) {
             showErrorMessage(NbBundle.getMessage(ProjectWebModule.class,"MSG_WebInfCorrupted2")); //NOI18N
         }
@@ -260,6 +275,14 @@ public final class ProjectWebModule extends J2eeModuleProvider
     
     public File getConfDirAsFile() {
         return getFile(WebProjectProperties.CONF_DIR);
+    }
+    
+    public FileObject getPersistenceXmlDir() {
+        return getFileObject(WebProjectProperties.PERSISTENCE_XML_DIR);
+    }
+    
+    public File getPersistenceXmlDirAsFile() {
+        return getFile(WebProjectProperties.PERSISTENCE_XML_DIR);
     }
     
     public ClassPathProvider getClassPathProvider () {
@@ -299,6 +322,11 @@ public final class ProjectWebModule extends J2eeModuleProvider
         return this;
     }
 
+    @Override
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        return project.getDeployOnSaveSupport();
+    }
+    
     public File getDeploymentConfigurationFile(String name) {
         assert name != null : "File name of the deployement configuration file can't be null"; //NOI18N
         
@@ -329,10 +357,6 @@ public final class ProjectWebModule extends J2eeModuleProvider
     public FileObject getModuleFolder () {
         return getDocumentBase ();
     }
-
-    public boolean useDefaultServer () {
-        return false;
-    }
     
     public String getServerID () {
         String inst = getServerInstanceID ();
@@ -355,8 +379,10 @@ public final class ProjectWebModule extends J2eeModuleProvider
         WebProjectProperties.setServerInstance(project, helper, severInstanceID);
     }
     
-    public Iterator getArchiveContents () throws java.io.IOException {
-        return new IT (getContentDirectory ());
+    public Iterator<J2eeModule.RootedEntry> getArchiveContents () throws java.io.IOException {
+        FileObject content = getContentDirectory();
+        content.refresh();
+        return new IT(content);
     }
 
     public FileObject getContentDirectory() {
@@ -469,27 +495,25 @@ public final class ProjectWebModule extends J2eeModuleProvider
         return this;
     }
 
-    public Object getModuleType () {
-        return J2eeModule.WAR;
+    public J2eeModule.Type getModuleType () {
+        return J2eeModule.Type.WAR;
     }
 
     public String getModuleVersion () {
-        // we don't want to use MetadataModel here as it can block
-        String version = null;
-        try {
-            FileObject ddFO = getDeploymentDescriptor();
-            if (ddFO != null) {
-                WebApp webApp = DDProvider.getDefault().getDDRoot(ddFO);
-                version = webApp.getVersion();
-            }
-        } catch (IOException e) {
-            Logger.getLogger("global").log(Level.WARNING, null, e); // NOI18N
+        // return a version based on the Java EE version
+        Profile platformVersion = Profile.fromPropertiesString(getJ2eePlatformVersion());
+        if (Profile.JAVA_EE_6_FULL.equals(platformVersion) || Profile.JAVA_EE_6_WEB.equals(platformVersion)) {
+            return WebApp.VERSION_3_0;
+        } else if (Profile.JAVA_EE_5.equals(platformVersion)) {
+            return WebApp.VERSION_2_5;
+        } else if (Profile.J2EE_14.equals(platformVersion)) {
+            return WebApp.VERSION_2_4;
+        } else if (Profile.J2EE_13.equals(platformVersion)) {
+            return WebApp.VERSION_2_3;
+        } else {
+            // return 2.5 as default value
+            return WebApp.VERSION_3_0;
         }
-        if (version == null) {
-            // XXX should return a version based on the Java EE version
-            version = WebApp.VERSION_2_5;
-        }
-        return version;
     }
     
     public void propertyChange(PropertyChangeEvent evt) {
@@ -551,7 +575,7 @@ public final class ProjectWebModule extends J2eeModuleProvider
         Sources sources = ProjectUtils.getSources(project);
         SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
         
-        List roots = new LinkedList();
+        List<FileObject> roots = new LinkedList<FileObject>();
         FileObject documentBase = getDocumentBase();
         if (documentBase != null)
             roots.add(documentBase);
@@ -561,7 +585,7 @@ public final class ProjectWebModule extends J2eeModuleProvider
         }
         
         FileObject[] rootArray = new FileObject[roots.size()];
-        return (FileObject[])roots.toArray(rootArray);        
+        return roots.toArray(rootArray);
     }
     
     private boolean isProjectOpened() {
@@ -620,12 +644,12 @@ public final class ProjectWebModule extends J2eeModuleProvider
         return propertyChangeSupport;
     }
     
-    private static class IT implements Iterator {
-        ArrayList ch;
+    private static class IT implements Iterator<J2eeModule.RootedEntry> {
+        ArrayList<FileObject> ch;
         FileObject root;
         
         private IT (FileObject f) {
-            this.ch = new ArrayList ();
+            this.ch = new ArrayList<FileObject>();
             ch.add (f);
             this.root = f;
         }
@@ -634,8 +658,8 @@ public final class ProjectWebModule extends J2eeModuleProvider
             return ! ch.isEmpty();
         }
         
-        public Object next () {
-            FileObject f = (FileObject) ch.get(0);
+        public J2eeModule.RootedEntry next () {
+            FileObject f = ch.get(0);
             ch.remove(0);
             if (f.isFolder()) {
                 f.refresh();
