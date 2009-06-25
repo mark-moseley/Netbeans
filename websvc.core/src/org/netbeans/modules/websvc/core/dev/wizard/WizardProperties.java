@@ -44,6 +44,8 @@ package org.netbeans.modules.websvc.core.dev.wizard;
 public class WizardProperties {
     public static final String WEB_SERVICE_TYPE = "webServiceType"; // NOI18N
     public static final String DELEGATE_TO_SESSION_BEAN = "delegateToSessionBean"; // NOI18N
+    public static final String IS_STATELESS_BEAN = "endpointAsStatelessBean"; // NOI18N
+
     public static final String WSDL_FILE_PATH = "wsdlFilePath"; //NOI18N
     public static final String WSDL_URL = "wsdl_url"; //NOI18N
     
@@ -55,4 +57,5 @@ public class WizardProperties {
     public static final String WSDL_SERVICE = "wsdlService"; //NOI18N
     public static final String WSDL_PORT = "wsdlPort"; //NOI18N
     public static final String WSDL_SERVICE_HANDLER = "wsdlServiceHandler"; //NOI18N
+     public static final String USE_PROVIDER = "useProvider"; //NOI18N
 }

@@ -55,12 +55,10 @@ import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ui.OpenProjects;
-import org.netbeans.modules.j2ee.api.ejbjar.EjbJar;
-import org.netbeans.modules.j2ee.common.Util;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
-import org.netbeans.modules.web.api.webmodule.WebModule;
-import org.netbeans.modules.websvc.api.webservices.WebServicesSupport;
+import org.netbeans.modules.websvc.core.JaxWsUtils;
+import org.netbeans.modules.websvc.core.WSStackUtils;
 import org.netbeans.spi.project.ui.LogicalViewProvider;
 import org.openide.DialogDescriptor;
 import org.openide.DialogDisplayer;
@@ -85,10 +83,8 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
     
     private boolean jsr109Supported;
     private boolean jsr109oldSupported;
-    private boolean jwsdpSupported;
-    private boolean jaxWsInJ2ee14Supported;
-    private WebModule wm;
-    private EjbJar em;
+    private boolean isWebModule;
+    WSStackUtils stackUtils;
     
     /** Creates new form WebServiceTypePanel */
     public WebServiceTypePanel(Project project) {
@@ -96,10 +92,9 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         
         initComponents();
         
-        jsr109Supported = PlatformUtil.isJsr109Supported(project);
-        jsr109oldSupported = PlatformUtil.isJsr109OldSupported(project);
-        jwsdpSupported = PlatformUtil.isJWSDPSupported(project);
-        jaxWsInJ2ee14Supported = PlatformUtil.isJaxWsInJ2ee14Supported(project);
+        stackUtils = new WSStackUtils(project);
+        jsr109Supported = stackUtils.isJsr109Supported();
+        jsr109oldSupported = stackUtils.isJsr109OldSupported();
         
         //convert Java class not implemented for 5.5 release, disable components
         jRadioButtonConvert.setEnabled(false);
@@ -110,14 +105,24 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         jLabelConvert.setVisible(false);
         jTextFieldConvert.setVisible(false);
         jButtonConvert.setVisible(false);
+
+        if (JaxWsUtils.isEjbJavaEE5orHigher(project)) {
+            sessionBeanCB.setSelected(true);
+            sessionBeanCB.setEnabled(false);
+        } else if (isEjbInWebSupported(project)) {
+            sessionBeanCB.setEnabled(true);
+        } else {
+            sessionBeanCB.setEnabled(false);
+        }
         
         //disable encapsulate session bean for j2se project
-        wm = WebModule.getWebModule(project.getProjectDirectory());
-        em = EjbJar.getEjbJar(project.getProjectDirectory());
-        if ((em == null && wm == null)
-        ||  //disable encapsulate session beans for Tomcat
-                ((!jsr109Supported && !jsr109oldSupported ||
-                (!jsr109Supported && jsr109oldSupported && jwsdpSupported ))) ) {
+        J2eeModuleProvider j2eeModuleProvider = project.getLookup().lookup(J2eeModuleProvider.class);
+        if (j2eeModuleProvider != null) {
+            isWebModule = J2eeModule.Type.WAR.equals(j2eeModuleProvider.getJ2eeModule().getType());
+        }
+                if ( (j2eeModuleProvider == null) ||
+                //disable encapsulate session beans for Tomcat
+                (!jsr109Supported && !jsr109oldSupported) ) {
             disableDelegateToEJB();
         }
         
@@ -142,19 +147,18 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         jLabelConvert = new javax.swing.JLabel();
         jTextFieldConvert = new javax.swing.JTextField();
         jButtonConvert = new javax.swing.JButton();
+        sessionBeanCB = new javax.swing.JCheckBox();
 
         buttonGroup1.add(jRadioButtonScratch);
         jRadioButtonScratch.setSelected(true);
         org.openide.awt.Mnemonics.setLocalizedText(jRadioButtonScratch, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_EmptyWebService")); // NOI18N
         jRadioButtonScratch.setToolTipText(org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "HINT_EmptyWebService")); // NOI18N
         jRadioButtonScratch.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        jRadioButtonScratch.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         buttonGroup1.add(jRadioButtonDelegate);
         org.openide.awt.Mnemonics.setLocalizedText(jRadioButtonDelegate, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_EncapsulateSessionBean")); // NOI18N
         jRadioButtonDelegate.setToolTipText(org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "HINT_EnterpriseBean")); // NOI18N
         jRadioButtonDelegate.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        jRadioButtonDelegate.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         jLabelDelegate.setLabelFor(jTextFieldDelegate);
         org.openide.awt.Mnemonics.setLocalizedText(jLabelDelegate, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_EnterpriseBean")); // NOI18N
@@ -175,7 +179,6 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         buttonGroup1.add(jRadioButtonConvert);
         org.openide.awt.Mnemonics.setLocalizedText(jRadioButtonConvert, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_ConvertJavaClass")); // NOI18N
         jRadioButtonConvert.setBorder(javax.swing.BorderFactory.createEmptyBorder(0, 0, 0, 0));
-        jRadioButtonConvert.setMargin(new java.awt.Insets(0, 0, 0, 0));
 
         jLabelConvert.setLabelFor(jTextFieldConvert);
         org.openide.awt.Mnemonics.setLocalizedText(jLabelConvert, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_JavaClass")); // NOI18N
@@ -185,6 +188,8 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
 
         org.openide.awt.Mnemonics.setLocalizedText(jButtonConvert, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_Browse")); // NOI18N
         jButtonConvert.setEnabled(false);
+
+        org.openide.awt.Mnemonics.setLocalizedText(sessionBeanCB, org.openide.util.NbBundle.getMessage(WebServiceTypePanel.class, "LBL_WsAsSessionBean")); // NOI18N
 
         org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
         this.setLayout(layout);
@@ -210,7 +215,10 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
                     .add(jButtonConvert)
                     .add(jButtonDelegate)))
             .add(layout.createSequentialGroup()
-                .add(jRadioButtonConvert, 0, 497, Short.MAX_VALUE)
+                .add(jRadioButtonConvert, 0, 550, Short.MAX_VALUE)
+                .addContainerGap())
+            .add(layout.createSequentialGroup()
+                .add(sessionBeanCB)
                 .addContainerGap())
         );
 
@@ -234,7 +242,9 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
                     .add(jLabelConvert)
                     .add(jButtonConvert)
                     .add(jTextFieldConvert, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(184, Short.MAX_VALUE))
+                .add(18, 18, 18)
+                .add(sessionBeanCB)
+                .addContainerGap(145, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
     
@@ -287,49 +297,29 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
     }
     
     boolean valid(WizardDescriptor wizardDescriptor) {
-        //first check for JDK compliance (for non-JSR 109)
-        if(!checkNonJsr109Valid(wizardDescriptor)){
-            return false;
-        }
-        boolean noJsr109InWeb = wm != null && !jsr109Supported && !jsr109oldSupported;
-        boolean jaxWsInWeb14 = wm != null && jaxWsInJ2ee14Supported;
-        if (!Util.isJavaEE5orHigher(project) && !noJsr109InWeb && !jaxWsInWeb14 && WebServicesSupport.getWebServicesSupport(project.getProjectDirectory()) == null) {
-            // check if jaxrpc plugin installed
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(WebServiceFromWSDLPanel.class, "ERR_NoJaxrpcPluginFound")); // NOI18N
-            return false;
-        }
         
         if (getServiceType() == WizardProperties.ENCAPSULATE_SESSION_BEAN &&
             jTextFieldDelegate.getText().length() == 0) {
-            wizardDescriptor.putProperty("WizardPanel_errorMessage", NbBundle.getMessage(WebServiceTypePanel.class, "LBL_SelectOneEJB")); //NOI18N
+            wizardDescriptor.putProperty(WizardDescriptor.PROP_INFO_MESSAGE, NbBundle.getMessage(WebServiceTypePanel.class, "LBL_SelectOneEJB")); //NOI18N
             return false;        
         }
-        wizardDescriptor.putProperty("WizardPanel_errorMessage", ""); //NOI18N
-        
-        return true;
-    }
-    
-    /**
-     * If the project the web service is being created is not on a JSR 109 platform,
-     * its Java source level must be at least 1.5
-     */
-    private boolean checkNonJsr109Valid(WizardDescriptor wizardDescriptor){
-        if( (!jsr109Supported && !jsr109oldSupported) || jaxWsInJ2ee14Supported || 
-                (!jsr109Supported && jsr109oldSupported && jwsdpSupported )){
-            if (Util.isSourceLevel14orLower(project)) {
-                wizardDescriptor.putProperty("WizardPanel_errorMessage",
-                        NbBundle.getMessage(WebServiceTypePanel.class, "ERR_NeedProperSourceLevel")); // NOI18N
+
+        WSStackUtils.ErrorMessage message = stackUtils.getErrorMessage(WSStackUtils.WizardType.WS);
+        if (message != null) {
+            wizardDescriptor.putProperty(message.getWizardMessageProperty(), message.getText());
+            if (message.isSerious()) {
                 return false;
             }
         }
+
         return true;
-    }
-    
+    }  
     
     void store(WizardDescriptor d) {
         d.putProperty(WizardProperties.WEB_SERVICE_TYPE, Integer.valueOf(getServiceType()));
         if (getServiceType() == WizardProperties.ENCAPSULATE_SESSION_BEAN)
             d.putProperty(WizardProperties.DELEGATE_TO_SESSION_BEAN, sessionBeanNodes);
+        d.putProperty(WizardProperties.IS_STATELESS_BEAN, Boolean.valueOf(sessionBeanCB.isSelected()));
     }
     
     void read(WizardDescriptor wizardDescriptor) {
@@ -401,6 +391,7 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
     private javax.swing.JRadioButton jRadioButtonScratch;
     private javax.swing.JTextField jTextFieldConvert;
     private javax.swing.JTextField jTextFieldDelegate;
+    private javax.swing.JCheckBox sessionBeanCB;
     // End of variables declaration//GEN-END:variables
     
     private void disableDelegateToEJB(){
@@ -419,7 +410,7 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         
         boolean isCallerEJBModule = false;
         J2eeModuleProvider callerJ2eeModuleProvider = (J2eeModuleProvider) enterpriseProject.getLookup().lookup(J2eeModuleProvider.class);
-        if (callerJ2eeModuleProvider != null && callerJ2eeModuleProvider.getJ2eeModule().getModuleType().equals(J2eeModule.EJB)) {
+        if (callerJ2eeModuleProvider != null && callerJ2eeModuleProvider.getJ2eeModule().getType().equals(J2eeModule.Type.EJB)) {
             // TODO: HACK - this should be set by calling AntArtifactQuery.findArtifactsByType(p, EjbProjectConstants.ARTIFACT_TYPE_EJBJAR)
             // but now freeform doesn't implement this correctly
             isCallerEJBModule = true;
@@ -432,7 +423,7 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         for (int i = 0; i < allProjects.length; i++) {
             boolean isEJBModule = false;
             J2eeModuleProvider j2eeModuleProvider = allProjects[i].getLookup().lookup(J2eeModuleProvider.class);
-            if (j2eeModuleProvider != null && j2eeModuleProvider.getJ2eeModule().getModuleType().equals(J2eeModule.EJB)) {
+            if (j2eeModuleProvider != null && j2eeModuleProvider.getJ2eeModule().getType().equals(J2eeModule.Type.EJB)) {
                 isEJBModule = true;
             }
             if ((isEJBModule && !isCallerFreeform) ||
@@ -457,6 +448,24 @@ public class WebServiceTypePanel extends javax.swing.JPanel implements HelpCtx.P
         while (it.hasNext()) {
             it.next().stateChanged(e);
         }
+    }
+
+    private static boolean isEjbInWebSupported(Project prj) {
+        if (prj== null) {
+            throw new IllegalArgumentException("Passed null to Util.isEjbInWebSupported(Project prj)");
+        }
+        J2eeModuleProvider j2eeModuleProvider = prj.getLookup().lookup(J2eeModuleProvider.class);
+        if (j2eeModuleProvider != null) {
+            J2eeModule j2eeModule = j2eeModuleProvider.getJ2eeModule();
+            if (j2eeModule != null) {
+                J2eeModule.Type type = j2eeModule.getType();
+                double version = Double.parseDouble(j2eeModule.getModuleVersion());
+                if (J2eeModule.Type.WAR.equals(type) && (version >= 3.0)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
     
 }
