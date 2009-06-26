@@ -47,13 +47,13 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.project.Project;
-import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.libraries.Library;
 import org.netbeans.api.project.libraries.LibraryManager;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.j2ee.core.api.support.SourceGroups;
 import org.netbeans.modules.j2ee.dd.api.common.NameAlreadyUsedException;
 import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.web.Listener;
@@ -76,7 +76,6 @@ import org.netbeans.modules.websvc.api.jaxws.project.config.JaxWsModel;
 import org.netbeans.modules.websvc.api.jaxws.project.config.Service;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
 import org.netbeans.modules.websvc.jaxws.spi.ProjectJAXWSSupport;
-import org.netbeans.spi.java.project.classpath.ProjectClassPathExtender;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
@@ -342,23 +341,26 @@ public class WebProjectJAXWSSupport extends ProjectJAXWSSupport /*implements JAX
     protected void addJaxwsArtifacts(Project project, String wsName, String serviceImpl) throws Exception {
         
         // check if the wsimport class is already present - this means we don't need to add the library
-        SourceGroup[] sgs = ProjectUtils.getSources(project).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
-        ClassPath classPath = ClassPath.getClassPath(sgs[0].getRootFolder(),ClassPath.COMPILE);
-        FileObject wsimportFO = classPath.findResource("com/sun/tools/ws/ant/WsImport.class"); // NOI18N
-        
-        if (wsimportFO == null) {
-            //Add the jaxws21 library to the project to be packed with the archive
-            ProjectClassPathExtender pce = (ProjectClassPathExtender)project.getLookup().lookup(ProjectClassPathExtender.class);
-            Library jaxws21_ext = LibraryManager.getDefault().getLibrary("jaxws21"); //NOI18N
-            if ((pce!=null) && (jaxws21_ext != null)) {
-                try{
-                    pce.addLibrary(jaxws21_ext);
-                }catch(IOException e){
-                    throw new Exception("Unable to add JAXWS 2.1 library");
+        SourceGroup[] sgs = SourceGroups.getJavaSourceGroups(project);
+        if (sgs.length > 0) {
+            ClassPath classPath = ClassPath.getClassPath(sgs[0].getRootFolder(),ClassPath.COMPILE);
+            FileObject wsimportFO = classPath.findResource("com/sun/tools/ws/ant/WsImport.class"); // NOI18N
+
+            if (wsimportFO == null) {
+                //Add the Metro library to the project to be packed with the archive
+                Library metroLib = LibraryManager.getDefault().getLibrary("metro"); //NOI18N
+                if (metroLib != null) {
+                    try {
+                        ProjectClassPathModifier.addLibraries(
+                                new Library[] {metroLib},
+                                sgs[0].getRootFolder(),
+                                ClassPath.COMPILE);
+                    }catch(IOException e){
+                        throw new Exception("Unable to add Metro library", e);
+                    }
+                } else {
+                    throw new Exception("Unable to add Metro Library"); //NOI18N
                 }
-            } else {
-                throw new Exception("Unable to add JAXWS 2.1 Library. " +
-                        "ProjectClassPathExtender or library not found");
             }
         }
         
@@ -549,7 +551,8 @@ public class WebProjectJAXWSSupport extends ProjectJAXWSSupport /*implements JAX
         return changed;
     }
  
-    public String addService(String name, String serviceImpl, String wsdlUrl, String serviceName, String portName, String packageName, boolean isJsr109) {
+    public String addService(String name, String serviceImpl, String wsdlUrl, String serviceName, 
+            String portName, String packageName, boolean isJsr109, boolean useProvider) {
         // create jax-ws.xml if necessary
         FileObject fo = WSUtils.findJaxWsFileObject(project);
         if (fo==null) {
@@ -559,7 +562,7 @@ public class WebProjectJAXWSSupport extends ProjectJAXWSSupport /*implements JAX
                 Exceptions.printStackTrace(ex);
             }
         }
-        return super.addService(name, serviceImpl, wsdlUrl, serviceName, portName, packageName, isJsr109);
+        return super.addService(name, serviceImpl, wsdlUrl, serviceName, portName, packageName, isJsr109, useProvider);
     }
 
     public void addService(String serviceName, String serviceImpl, boolean isJsr109) {
