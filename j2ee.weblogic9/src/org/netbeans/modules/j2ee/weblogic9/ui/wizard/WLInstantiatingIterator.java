@@ -45,6 +45,7 @@ import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.Vector;
+import javax.swing.JComponent;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.deployment.plugins.api.InstanceProperties;
@@ -95,6 +96,22 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
      */
     public void initialize(WizardDescriptor wizardDescriptor) {
         this.wizardDescriptor = wizardDescriptor;
+
+        for (int i = 0; i < this.getPanels().length; i++)
+        {
+            Object c = panels[i].getComponent();
+
+            if (c instanceof JComponent)
+            {
+                JComponent jc = (JComponent) c;
+                // Step #.
+                jc.putClientProperty(
+                    WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i)); // NOI18N
+
+                // Step name (actually the whole list for reference).
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps); // NOI18N
+            }
+        }
     }
 
     /**
@@ -126,7 +143,6 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
         InstanceProperties ip = InstanceProperties.createInstanceProperties(url, username, password, displayName);
         ip.setProperty(WLPluginProperties.SERVER_ROOT_ATTR, serverRoot);
         ip.setProperty(WLPluginProperties.DOMAIN_ROOT_ATTR, domainRoot);
-        ip.setProperty(WLPluginProperties.IS_LOCAL_ATTR, isLocal);
         ip.setProperty(WLPluginProperties.DEBUGGER_PORT_ATTR, DEFAULT_DEBUGGER_PORT);
 
         // add the created instance properties to the result set
@@ -139,7 +155,7 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
     /**
      * Helper method for decorating error message as HTML. Workaround for line wrap.
      */
-    /*package*/ String decorateMessage(String message) {
+    /*package*/ static String decorateMessage(String message) {
         return message == null
             ? null
             : "<html>" + message.replaceAll("<",  "&lt;").replaceAll(">",  "&gt;") + "</html>"; // NIO18N
@@ -147,7 +163,6 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
     // the main and additional instance properties
     private String serverRoot;
     private String domainRoot;
-    private String isLocal;
     private String username;
     private String password;
     private String url;
@@ -170,7 +185,7 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
         this.serverRoot = serverRoot;
 
         // reinit the instances list
-        serverPropertiesPanel.updateInstancesList();
+        serverPropertiesPanel.getVisual().updateInstancesList();
     }
 
     /**
@@ -218,26 +233,17 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
         this.password = password;
     }
 
-    /**
-     * Setter for the isLocal property
-     *
-     * @param isLocal "true" if the server is local, "false" otherwise
-     */
-    public void setIsLocal(String isLocal) {
-        this.isLocal = isLocal;
-    }
-
     ////////////////////////////////////////////////////////////////////////////
     // Panels section
     ////////////////////////////////////////////////////////////////////////////
     /**
      * The steps names for the wizard: Server Location & Instance properties
      */
-    private Vector steps = new Vector();
+    private String[] steps = new String[]
     {
-        steps.add(NbBundle.getMessage(ServerPropertiesPanel.class, "SERVER_LOCATION_STEP")); // NOI18N
-        steps.add(NbBundle.getMessage(ServerPropertiesPanel.class, "SERVER_PROPERTIES_STEP")); // NOI18N
-    }
+        NbBundle.getMessage(ServerPropertiesPanel.class, "SERVER_LOCATION_STEP"),  // NOI18N
+        NbBundle.getMessage(ServerPropertiesPanel.class, "SERVER_PROPERTIES_STEP") // NOI18N
+    };
 
     /**
      * The wizard's panels
@@ -310,8 +316,8 @@ public class WLInstantiatingIterator  implements WizardDescriptor.InstantiatingI
 
     protected WizardDescriptor.Panel[] createPanels() {
 
-        serverLocationPanel = new ServerLocationPanel((String[]) steps.toArray(new String[steps.size()]), 0, new IteratorListener(), this);
-        serverPropertiesPanel = new ServerPropertiesPanel((String[]) steps.toArray(new String[steps.size()]), 1, new IteratorListener(), this);
+        serverLocationPanel = new ServerLocationPanel(this);
+        serverPropertiesPanel = new ServerPropertiesPanel( this);
 
         return new WizardDescriptor.Panel[] { serverLocationPanel, serverPropertiesPanel };
     }
