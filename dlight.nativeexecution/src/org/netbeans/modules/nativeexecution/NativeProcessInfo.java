@@ -42,13 +42,16 @@ import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
 import org.netbeans.modules.nativeexecution.api.util.MacroExpanderFactory;
 import org.netbeans.modules.nativeexecution.api.util.MacroExpanderFactory.MacroExpander;
+import org.netbeans.modules.nativeexecution.api.util.WindowsSupport;
+import org.netbeans.modules.nativeexecution.support.CaseInsensitiveMacroMap;
+import org.netbeans.modules.nativeexecution.support.MacroMap;
+import org.openide.util.Utilities;
 
 /**
  *
@@ -57,29 +60,35 @@ import org.netbeans.modules.nativeexecution.api.util.MacroExpanderFactory.MacroE
 // This class is always used in a thread-safe manner ...
 public final class NativeProcessInfo {
 
+    public final MacroExpander macroExpander;
     private final ExecutionEnvironment execEnv;
-    private final Map<String, String> envVariables = new HashMap<String, String>();
-    private final String command;
+    private final boolean isWindows;
+    private final MacroMap envVariables;
     private final List<String> arguments = new ArrayList<String>();
+    private String executable;
+    private String commandLine;
     private String workingDirectory;
-    protected final MacroExpander macroExpander;
+    private boolean unbuffer;
+    private boolean redirectError;
+    private boolean x11forwarding;
     private Collection<ChangeListener> listeners = null;
 
-    public NativeProcessInfo(NativeProcessInfo info) {
-        this(info.execEnv, info.command);
-        workingDirectory = info.workingDirectory;
-        envVariables.putAll(info.envVariables);
-        arguments.addAll(info.arguments);
-
-        if (info.listeners != null) {
-            listeners = new ArrayList<ChangeListener>(info.listeners);
-        }
-    }
-
-    public NativeProcessInfo(ExecutionEnvironment execEnv, String command) {
+    public NativeProcessInfo(ExecutionEnvironment execEnv) {
         this.execEnv = execEnv;
-        this.command = command;
-        macroExpander = MacroExpanderFactory.getExpander(execEnv);
+        this.executable = null;
+        this.unbuffer = false;
+        this.workingDirectory = null;
+        this.macroExpander = MacroExpanderFactory.getExpander(execEnv);
+
+        if (execEnv.isLocal() && Utilities.isWindows()) {
+            envVariables = new CaseInsensitiveMacroMap(macroExpander);
+            isWindows = true;
+        } else {
+            envVariables = new MacroMap(macroExpander);
+            isWindows = false;
+        }
+
+        redirectError = false;
     }
 
     public void addNativeProcessListener(ChangeListener listener) {
@@ -90,8 +99,36 @@ public final class NativeProcessInfo {
         listeners.add(listener);
     }
 
+    public void redirectError(boolean redirectError) {
+        this.redirectError = redirectError;
+    }
+
+    public void setExecutable(String executable) {
+        this.executable = executable;
+    }
+
+    public void setCommandLine(String commandLine) {
+        this.commandLine = commandLine;
+    }
+
     public void setWorkingDirectory(String workingDirectory) {
         this.workingDirectory = workingDirectory;
+    }
+
+    public void setUnbuffer(boolean unbuffer) {
+        this.unbuffer = unbuffer;
+    }
+
+    public boolean isUnbuffer() {
+        return unbuffer;
+    }
+
+    public void setX11Forwarding(boolean x11forwarding) {
+        this.x11forwarding = x11forwarding;
+    }
+
+    public boolean getX11Forwarding() {
+        return x11forwarding;
     }
 
     /**
@@ -100,11 +137,7 @@ public final class NativeProcessInfo {
      * @param value
      */
     public void addEnvironmentVariable(final String name, final String value) {
-        try {
-            envVariables.put(name, macroExpander.expandMacros(value, envVariables));
-        } catch (ParseException ex) {
-            envVariables.put(name, value);
-        }
+        envVariables.put(name, value);
     }
 
     public void addEnvironmentVariables(Map<String, String> envs) {
@@ -114,42 +147,101 @@ public final class NativeProcessInfo {
     }
 
     public void setArguments(String... arguments) {
+        if (commandLine != null) {
+            throw new IllegalStateException("commandLine is already defined. No additional parameters can be set"); // NOI18N
+        }
+
         this.arguments.clear();
         this.arguments.addAll(Arrays.asList(arguments));
     }
 
-    public String[] getCommand() {
+    public List<String> getCommand() {
         String cmd;
 
         try {
-            cmd = macroExpander.expandPredefinedMacros(command);
+            cmd = macroExpander.expandPredefinedMacros(executable);
         } catch (ParseException ex) {
-            cmd = command;
+            cmd = executable;
         }
 
         List<String> result = new ArrayList<String>();
         result.add(cmd);
+
         if (!arguments.isEmpty()) {
             result.addAll(arguments);
         }
-        return result.toArray(new String[0]);
+
+        return result;
     }
 
-    public String getCommandLine() {
-        String cmd;
+    public List<String> getCommandListForShell() {
+        List<String> result = new ArrayList<String>();
+        List<String> cmd = getCommand();
 
-        try {
-            cmd = macroExpander.expandPredefinedMacros(command);
-        } catch (ParseException ex) {
-            cmd = command;
+        if (isWindows) {
+            String exec = WindowsSupport.getInstance().convertToShellPath(cmd.get(0));
+            cmd.set(0, exec);
         }
 
-        StringBuilder sb = new StringBuilder(cmd);
+        boolean first = true;
 
-        if (!arguments.isEmpty()) {
-            for (String arg : arguments) {
-                sb.append(" '").append(arg).append('\'');
+        for (String s : cmd) {
+            if (first) {
+                result.add(quoteExecutable(s));
+                first = false;
+            } else {
+                result.add(quote(s));
             }
+        }
+
+        return result;
+    }
+
+    private String quoteExecutable(String orig) {
+        StringBuilder sb = new StringBuilder();
+        String escapeChars = (isWindows) ? " \"'()" : " \"'()!"; // NOI18N
+
+        for (char c : orig.toCharArray()) {
+            if (escapeChars.indexOf(c) >= 0) { // NOI18N
+                sb.append('\\');
+            }
+            sb.append(c);
+        }
+
+        return sb.toString();
+    }
+
+    private String quote(String orig) {
+        String quote = "'"; // NOI18N
+
+        if (isWindows) {
+            // On Windows when ExternalTerminal is used and we have "$" in
+            // parameters we get it expanded by shell (which is not the same
+            // behavior as we have in case of use of OutputWindow or when we
+            // are not on Windows)... So do the following replacement..
+            orig = orig.replaceAll("\\$", "\\\\\\$"); // NOI18N
+        }
+
+        if (orig.indexOf('\'') >= 0) {
+            quote = (isWindows) ? "\\\"" : "\""; // NOI18N
+        }
+
+        return quote + orig + quote;
+    }
+
+    public String getCommandLineForShell() {
+        if (commandLine != null) {
+            return commandLine;
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        for (String s : getCommandListForShell()) {
+            sb.append(s).append(' ');
+        }
+
+        if (redirectError) {
+            sb.append("2>&1"); // NOI18N
         }
 
         return sb.toString().trim();
@@ -164,37 +256,28 @@ public final class NativeProcessInfo {
     }
 
     public String getWorkingDirectory(boolean expandMacros) {
+        String result;
+
         if (expandMacros && macroExpander != null) {
             try {
-                return macroExpander.expandPredefinedMacros(workingDirectory);
+                result = macroExpander.expandPredefinedMacros(workingDirectory);
             } catch (ParseException ex) {
-                return workingDirectory;
+                result = workingDirectory;
             }
         }
 
-        return workingDirectory;
-    }
-
-    public Map<String, String> getEnvVariables() {
-        return getEnvVariables(new HashMap<String, String>());
-    }
-
-    public Map<String, String> getEnvVariables(Map<String, String> prependMap) {
-        Map<String, String> result = new HashMap<String, String>(prependMap);
-
-        for (String varName : envVariables.keySet()) {
-            String varValue = envVariables.get(varName);
-            try {
-                varValue = macroExpander.expandMacros(varValue, result);
-                varValue = macroExpander.expandPredefinedMacros(varValue);
-            } catch (ParseException ex) {
-            }
-
-            if (varValue != null) {
-                result.put(varName, varValue);
-            }
-        }
+        result = workingDirectory;
 
         return result;
+    }
+
+    public MacroMap getEnvVariables() {
+        return getEnvVariables(null);
+    }
+
+    public MacroMap getEnvVariables(Map<String, String> prependMap) {
+        // TODO: is there a need of prepending prependMap ?
+        // there was some implementation in one of previous version...
+        return envVariables;
     }
 }
