@@ -282,8 +282,8 @@ public class CommentsTest extends GeneratorTest {
                         Comment.Style.JAVADOC, 
                         NOPOS, 
                         NOPOS, 
-                        1, // to ensure indentation
-                        "/** Comentario \n*/"),
+                        NOPOS, // to ensure indentation
+                        "Comentario"),
                         true
                 );
                 workingCopy.rewrite(method, copy);
@@ -390,7 +390,7 @@ public class CommentsTest extends GeneratorTest {
         
         Task<WorkingCopy> task = new Task<WorkingCopy>() {
 
-            public void run(WorkingCopy wc) throws IOException {
+            public void run(WorkingCopy wc) throws IOException {                
                 wc.toPhase(Phase.RESOLVED);
                 CompilationUnitTree cut = wc.getCompilationUnit();
                 TreeMaker make = wc.getTreeMaker();
@@ -414,7 +414,7 @@ public class CommentsTest extends GeneratorTest {
     }
     
 
-    public void testAddStatementWithEmptyLine() throws Exception {
+    public void DISABLEDtestAddStatementWithEmptyLine() throws Exception {
         testFile = new File(getWorkDir(), "Test.java");
         TestUtilities.copyStringToFile(testFile, 
             "package hierbas.del.litoral;\n" +

@@ -309,7 +309,8 @@ public final class ListMatcher<E> {
     }
     
     /**
-     * Returns a list of differences computed by <tt>compute()</tt> method.
+     * Returns a list of di
+     * fferences computed by <tt>compute()</tt> method.
      * Moreover, it groups <b>remove</b> operation followed by <b>insert</b>
      * to one <b>modify</b> operation.
      * 
@@ -323,7 +324,7 @@ public final class ListMatcher<E> {
             // when operation is remove, ensure that there is not following 
             // insert - in such case, we can merge these two operation to
             // modify operation.
-            if (item.operation == Operation.DELETE && 
+            if (item.operation == Operation.DELETE &&
                 !copy.empty() && copy.peek().operation == Operation.INSERT) 
             {
                 // yes, it is modify operation.
