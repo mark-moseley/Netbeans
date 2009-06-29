@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -42,27 +42,31 @@
 package org.netbeans.modules.ruby.debugger;
 
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import javax.swing.JEditorPane;
-import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.StyledDocument;
-import org.openide.ErrorManager;
+import org.jrubyparser.ast.INameNode;
+import org.jrubyparser.ast.InstVarNode;
+import org.jrubyparser.ast.Node;
+import org.jrubyparser.ast.NodeType;
+import org.netbeans.modules.ruby.AstUtilities;
+import org.netbeans.spi.debugger.ui.EditorContextDispatcher;
 import org.openide.cookies.EditorCookie;
+import org.openide.filesystems.FileObject;
 import org.openide.loaders.DataObject;
-import org.openide.nodes.Node;
 import org.openide.text.Annotation;
 import org.openide.text.DataEditorSupport;
 import org.openide.text.Line;
 import org.openide.text.Line.Part;
 import org.openide.text.NbDocument;
 import org.openide.util.RequestProcessor;
-import org.openide.windows.TopComponent;
 import org.rubyforge.debugcommons.model.RubyValue;
 import org.rubyforge.debugcommons.model.RubyVariable;
 
 public final class ToolTipAnnotation extends Annotation implements Runnable {
+
+    private static final Boolean SKIP_BALLOON_EVAL = Boolean.getBoolean("ruby.debugger.skip.balloon.evaluation"); // NOI18N
     
     private Part lp;
     private EditorCookie ec;
@@ -70,20 +74,23 @@ public final class ToolTipAnnotation extends Annotation implements Runnable {
     public String getShortDescription() {
         RubySession session = Util.getCurrentSession();
         if (session == null) { return null; }
-        Part lp = (Part) getAttachedAnnotatable();
-        if (lp == null) { return null; }
-        Line line = lp.getLine();
+        Part _lp = (Part) getAttachedAnnotatable();
+        if (_lp == null) { return null; }
+        Line line = _lp.getLine();
         DataObject dob = DataEditorSupport.findDataObject(line);
         if (dob == null) { return null; }
-        EditorCookie ec = dob.getCookie(EditorCookie.class);
-        if (ec == null) { return null; }
-        this.lp = lp;
-        this.ec = ec;
+        EditorCookie _ec = dob.getCookie(EditorCookie.class);
+        if (_ec == null) { return null; }
+        this.lp = _lp;
+        this.ec = _ec;
         RequestProcessor.getDefault().post(this);
         return null;
     }
     
     public void run() {
+        if (SKIP_BALLOON_EVAL) {
+            return;
+        }
         if (lp == null || ec == null) { return; }
         StyledDocument doc;
         try {
@@ -91,7 +98,7 @@ public final class ToolTipAnnotation extends Annotation implements Runnable {
         } catch (IOException ex) {
             return;
         }
-        JEditorPane ep = getCurrentEditor();
+        JEditorPane ep = EditorContextDispatcher.getDefault().getCurrentEditor();
         if (ep == null) { return; }
         String expression = getIdentifier(doc, ep, NbDocument.findLineOffset(doc, lp.getLine().getLineNumber()) + lp.getColumn());
         if (expression == null) { return; }
@@ -113,80 +120,79 @@ public final class ToolTipAnnotation extends Annotation implements Runnable {
     
     /** TODO: based on the Java. Tune it up appropriately for Ruby. */
     private static String getIdentifier(final StyledDocument doc, final JEditorPane ep, final int offset) {
-        String t = null;
         if ((ep.getSelectionStart() <= offset) && (offset <= ep.getSelectionEnd())) {
-            t = ep.getSelectedText();
+            return ep.getSelectedText();
         }
-        if (t != null) { return t; }
         int line = NbDocument.findLineNumber(doc, offset);
         int col = NbDocument.findLineColumn(doc, offset);
         Element lineElem = NbDocument.findLineRootElement(doc).getElement(line);
-        try {
-            if (lineElem == null) { return null; }
-            int lineStartOffset = lineElem.getStartOffset();
-            int lineLen = lineElem.getEndOffset() - lineStartOffset;
-            if (col + 1 >= lineLen) {
-                // do not evaluate when mouse hover behind the end of line (112662)
-                return null;
-            }
-            t = doc.getText(lineStartOffset, lineLen);
-            int identStart = col;
-            while (identStart > 0 && (Character.isJavaIdentifierPart(t.charAt(identStart - 1)) || (t.charAt(identStart - 1) == '.'))) {
-                identStart--;
-            }
-            int identEnd = col;
-            while (identEnd < lineLen && Character.isJavaIdentifierPart(t.charAt(identEnd))) {
-                identEnd++;
-            }
-            if (identStart == identEnd) { return null; }
-            return t.substring(identStart, identEnd);
-        } catch (BadLocationException e) {
+        if (lineElem == null) {
             return null;
         }
-    }
-    
-    /** Returns current editor component instance. */
-    private static JEditorPane getCurrentEditor_() {
-        EditorCookie e = getCurrentEditorCookie();
-        if (e == null) { return null; }
-        JEditorPane[] op = e.getOpenedPanes();
-        if ((op == null) || (op.length < 1)) { return null; }
-        return op[0];
-    }
-    
-    private static JEditorPane getCurrentEditor() {
-        if (SwingUtilities.isEventDispatchThread()) {
-            return getCurrentEditor_();
-        } else {
-            final JEditorPane[] ce = new JEditorPane[1];
-            try {
-                SwingUtilities.invokeAndWait(new Runnable() {
-                    public void run() {
-                        ce[0] = getCurrentEditor_();
-                    }
-                });
-            } catch (InvocationTargetException ex) {
-                ErrorManager.getDefault().notify(ex.getTargetException());
-            } catch (InterruptedException ex) {
-                ErrorManager.getDefault().notify(ex);
-            }
-            return ce[0];
-        }
-    }
-    
-    /**
-     * Returns current editor component instance.
-     *
-     * @return current editor component instance
-     */
-    private static EditorCookie getCurrentEditorCookie() {
-        Node[] nodes = TopComponent.getRegistry().getActivatedNodes();
-        if ((nodes == null) || (nodes.length != 1)) {
+        int lineStartOffset = lineElem.getStartOffset();
+        int lineLen = lineElem.getEndOffset() - lineStartOffset;
+        if (col + 1 >= lineLen) {
+            // do not evaluate when mouse hover behind the end of line (112662)
             return null;
         }
-        Node n = nodes[0];
-        return n.getCookie(EditorCookie.class);
+        FileObject fo = EditorContextDispatcher.getDefault().getCurrentFile();
+        if (fo == null) {
+            // can this happen??
+            return null;
+        }
+        return getExpressionToEvaluate(fo, offset);
     }
-    
+
+    static String getExpressionToEvaluate(FileObject fo, int offset) {
+        Node root = AstUtilities.getRoot(fo);
+        if (root == null) {
+            return null;
+        }
+        Node node = AstUtilities.findNodeAtOffset(root, offset);
+        if (node == null) {
+            return null;
+        }
+        // handles the case when the caret is placed just before the
+        // expression to evaluate, e.g. "^var.foo"
+        if (node.getNodeType() == NodeType.NEWLINENODE) {
+            node = AstUtilities.findNodeAtOffset(root, offset + 1);
+        }
+        if (shouldEvaluate(node) && node instanceof INameNode) {
+            return AstUtilities.getName(node);
+        }
+        return null;
+
+    }
+
+    private static boolean shouldEvaluate(Node node) {
+        if (node.getNodeType() == null) {
+            return false;
+        }
+        // the types we want to evaluate without forcing the user
+        // to select anything. these should be safe to evaluate without 
+        // side effects (unlike evaluating e.g. method calls).
+        switch (node.getNodeType()) {
+            case ARGUMENTNODE:
+            case DVARNODE:
+            case DASGNNODE:
+            case SELFNODE:
+            case LOCALVARNODE:
+            case LOCALASGNNODE:
+            case INSTVARNODE:
+            case INSTASGNNODE:
+            case GLOBALVARNODE:
+            case GLOBALASGNNODE:
+            case CONSTNODE:
+            case CONSTDECLNODE:
+            case CLASSVARNODE:
+            case CLASSVARASGNNODE:
+            case NILNODE:
+            case TRUENODE:
+            case FALSENODE:
+                return true;
+            default:
+                return false;
+        }
+    }
 }
 
