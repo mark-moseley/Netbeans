@@ -48,12 +48,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
 import javax.swing.JMenuItem;
 import javax.swing.SwingUtilities;
+import org.netbeans.modules.favorites.api.Favorites;
 import org.openide.DialogDisplayer;
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
@@ -65,8 +68,8 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.loaders.DataShadow;
 import org.openide.nodes.Node;
-import org.openide.util.Exceptions;
 import org.openide.util.HelpCtx;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 import org.openide.util.actions.NodeAction;
@@ -81,7 +84,9 @@ public final class Actions extends Object {
     /** Used to keep current dir from JFileChooser for Add to Favorites action
      * on root node. */
     private static File currentDir = null;
-    
+
+    private static final Logger LOG = Logger.getLogger(Actions.class.getName());
+
     private Actions () {
         // noinstances
     }
@@ -104,7 +109,7 @@ public final class Actions extends Object {
         public View() {
             putValue(NAME, NbBundle.getMessage(Actions.class,
                     "ACT_View"));
-            Image image = Utilities.loadImage("org/netbeans/modules/favorites/resources/actionView.png"); // NOI18N
+            Image image = ImageUtilities.loadImage("org/netbeans/modules/favorites/resources/actionView.png"); // NOI18N
             putValue(SMALL_ICON, image != null ? new ImageIcon(image) : null);
         }
         
@@ -143,21 +148,19 @@ public final class Actions extends Object {
             Tab proj = Tab.findDefault();
             proj.open();
             proj.requestActive();
-            proj.doSelectNode((DataObject)activatedNodes[0].getCookie(DataObject.class));
+            proj.doSelectNode(activatedNodes[0].getCookie(DataObject.class));
         }
 
         protected boolean enable(Node[] activatedNodes) {
             if (activatedNodes.length != 1) {
                 return false;
             }
-            return true;
-            /*
-            DataObject dobj = (DataObject)activatedNodes[0].getCookie(DataObject.class);
+            DataObject dobj = activatedNodes[0].getCookie(DataObject.class);
             if (dobj == null) {
                 return false;
             }
-            return Tab.findDefault().containsNode(dobj);
-             */
+            return true;
+            /*return Tab.findDefault().containsNode(dobj);*/
           }
 
         public String getName() {
@@ -165,12 +168,14 @@ public final class Actions extends Object {
         }
 
         /** Overriden to have different title in popup menu, works but ugly a bit */
+        @Override
         public JMenuItem getPopupPresenter() {
             JMenuItem mi = super.getPopupPresenter();
             mi.setText(NbBundle.getMessage(Select.class, "ACT_Select")); // NOI18N
             return mi;
         }
 
+        @Override
         protected String iconResource() {
             return "org/netbeans/modules/favorites/resources/actionSelect.png"; // NOI18N
         }
@@ -179,6 +184,7 @@ public final class Actions extends Object {
             return null;
         }
 
+        @Override
         protected boolean asynchronous() {
             return false;
         }
@@ -205,9 +211,9 @@ public final class Actions extends Object {
             if ((arr == null) || (arr.length == 0)) return false;
 
             for (int i = 0; i < arr.length; i++) {
-                DataObject shad = (DataObject) arr[i].getCookie (DataObject.class);
+                DataObject shad = arr[i].getCookie(DataObject.class);
                 //Disable when node is not shadow in Favorites folder.
-                if (shad == null || shad.getFolder() != Favorites.getFolder()) {
+                if (shad == null || shad.getFolder() != FavoritesNode.getFolder()) {
                     return false;
                 }
             }
@@ -237,19 +243,19 @@ public final class Actions extends Object {
         */
         protected void performAction (Node[] arr) {
             for (int i = 0; i < arr.length; i++) {
-                DataObject shad = (DataObject) arr[i].getCookie(DataObject.class);
+                DataObject shad = arr[i].getCookie(DataObject.class);
 
-                if (shad != null && shad.getFolder() == Favorites.getFolder()) {
+                if (shad != null && shad.getFolder() == FavoritesNode.getFolder()) {
                     try {
                         shad.delete();
-                    }
-                    catch (IOException ex) {
-                        Exceptions.printStackTrace(ex);
+                    } catch (IOException ex) {
+                        LOG.log(Level.WARNING, null, ex);
                     }
                 }
             }
         }
 
+        @Override
         protected boolean asynchronous() {
             return false;
         }
@@ -279,12 +285,12 @@ public final class Actions extends Object {
         */
         public boolean enable (Node[] arr) {
             if ((arr == null) || (arr.length == 0)) return false;
-            if (arr.length == 1 && arr[0] instanceof Favorites) return true;
+            if (arr.length == 1 && arr[0] instanceof FavoritesNode) return true;
                 
             
 
             for (int i = 0; i < arr.length; i++) {
-                DataObject dataObject = (DataObject) arr[i].getCookie (DataObject.class);
+                DataObject dataObject = arr[i].getCookie(DataObject.class);
                 //Action is disabled for root folder eg:"/" on Linux or "C:" on Win
                 if (dataObject == null) {
                     return false;
@@ -296,7 +302,7 @@ public final class Actions extends Object {
                         return false;
                     }
                     //Allow to link only once
-                    if (isInFavorites(fo)) {
+                    if (Favorites.getDefault().isInFavorites(fo)) {
                         return false;
                     }
                     //Check if it is root.
@@ -321,23 +327,6 @@ public final class Actions extends Object {
             return true;
         }
         
-        /** Check if given fileobject is already linked in favorites
-         * @return true if given fileobject is already linked
-         */
-        private boolean isInFavorites (FileObject fo) {
-            DataFolder f = Favorites.getFolder();
-            
-            DataObject [] arr = f.getChildren();
-            for (int i = 0; i < arr.length; i++) {
-                if (arr[i] instanceof DataShadow) {
-                    if (fo.equals(((DataShadow) arr[i]).getOriginal().getPrimaryFile())) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-        
         /** Human presentable name of the action. This should be
         * presented as an item in a menu.
         * @return the name of the action
@@ -360,7 +349,7 @@ public final class Actions extends Object {
         * @param activatedNodes gives array of actually activated nodes.
         */
         protected void performAction (final Node[] activatedNodes) {
-            final DataFolder f = Favorites.getFolder();            
+            final DataFolder f = FavoritesNode.getFolder();
             final DataObject [] arr = f.getChildren();
             final List<DataObject> listAdd = new ArrayList<DataObject>();
             
@@ -368,21 +357,20 @@ public final class Actions extends Object {
             Node[] toShadows = activatedNodes; 
 
             try {
-                if (activatedNodes.length == 1 && activatedNodes[0] instanceof Favorites) {
+                if (activatedNodes.length == 1 && activatedNodes[0] instanceof FavoritesNode) {
                     // show JFileChooser
                     FileObject fo = chooseFileObject();
                     if (fo == null) return;
                     toShadows = new Node[] {DataObject.find(fo).getNodeDelegate()};                
                 } 
                 
-                
-                createdDO = createShadows(f, toShadows, listAdd);    
+                createdDO = createShadows(f, toShadows, listAdd);
                 
                 //This is done to set desired order of nodes in view                             
                 reorderAfterAddition(f, arr, listAdd);
                 selectAfterAddition(createdDO);               
             } catch (DataObjectNotFoundException e) {
-                Exceptions.printStackTrace(e);  
+                LOG.log(Level.WARNING, null, e);
             }
         }
         
@@ -413,7 +401,8 @@ public final class Actions extends Object {
                     }
                 }
                 //#50482: Check if selected file exists eg. user can enter any file name to text box.
-                if (!selectedFile.exists()) {
+                //#144985: Create new File because of inconsistence in File.exists (JDK bug 6751997)
+                if (!new File(selectedFile, "").exists()) {
                     String message = NbBundle.getMessage(Actions.class,"ERR_FileDoesNotExist",selectedFile.getPath());
                     String title = NbBundle.getMessage(Actions.class,"ERR_FileDoesNotExistDlgTitle");
                     DialogDisplayer.getDefault().notify
@@ -429,13 +418,12 @@ public final class Actions extends Object {
             return retVal;
         }
         
-        private void selectAfterAddition(final DataObject createdDO) {
+        public static void selectAfterAddition(final DataObject createdDO) {
             final Tab projectsTab = Tab.findDefault();
             projectsTab.open();
             projectsTab.requestActive();
             //Try to locate newly added node and select it
             if (createdDO != null) {
-                Node n = Favorites.getNode();
                 Node [] nodes = projectsTab.getExplorerManager().getRootContext().getChildren().getNodes(true);
                 final Node [] toSelect = new Node[1];
                 boolean setSelected = false;
@@ -460,10 +448,10 @@ public final class Actions extends Object {
             }
         }
 
-        private static DataObject createShadows(final DataFolder favourities, final Node[] activatedNodes, final List<DataObject> listAdd) {
+        static DataObject createShadows(final DataFolder favourities, final Node[] activatedNodes, final List<DataObject> listAdd) {
             DataObject createdDO = null;
             for (int i = 0; i < activatedNodes.length; i++) {
-                DataObject obj = (DataObject) activatedNodes[i].getCookie(DataObject.class);
+                DataObject obj = activatedNodes[i].getCookie(DataObject.class);
 
                 if (obj != null) {
                     try {
@@ -474,16 +462,15 @@ public final class Actions extends Object {
                         } else {
                             listAdd.add(obj.createShadow(favourities));
                         }
-                    }
-                    catch (IOException ex) {
-                        Exceptions.printStackTrace(ex);
+                    } catch (IOException ex) {
+                        LOG.log(Level.WARNING, null, ex);
                     }
                 }
             }
             return createdDO;
         }
 
-        private static void reorderAfterAddition(final DataFolder favourities, final DataObject[] children, final List<DataObject> listAdd) {
+        public static void reorderAfterAddition(final DataFolder favourities, final DataObject[] children, final List<? extends DataObject> listAdd) {
             List<DataObject> listDest = new ArrayList<DataObject>();
             if (listAdd.size() > 0) {
                 //Insert new nodes just before last (root) node
@@ -515,11 +502,12 @@ public final class Actions extends Object {
                 try {
                     favourities.setOrder(newOrder);
                 } catch (IOException ex) {
-                    Exceptions.printStackTrace(ex);
+                    LOG.log(Level.WARNING, null, ex);
                 }
             }
         }
 
+        @Override
         protected boolean asynchronous() {
             return false;
         }
@@ -543,6 +531,7 @@ public final class Actions extends Object {
         * presented as an item in a menu.
         * @return the name of the action
         */
+        @Override
         public String getName() {
             return NbBundle.getMessage (
                     Actions.class, "ACT_AddOnFavoritesNode"); // NOI18N

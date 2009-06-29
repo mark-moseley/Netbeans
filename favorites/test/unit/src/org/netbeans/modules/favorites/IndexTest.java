@@ -41,13 +41,9 @@
 
 package org.netbeans.modules.favorites;
 
-import java.io.File;
-import junit.textui.TestRunner;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
 import org.openide.loaders.DataFolder;
 import org.openide.loaders.DataObject;
 import org.openide.modules.ModuleInfo;
@@ -72,11 +68,11 @@ public class IndexTest extends NbTestCase {
     }
     
     /**
-     * Test basic functionality of Index on Favorites node.
+     * Test basic functionality of Index on FavoritesNode node.
      */
     public void testReorder () throws Exception {
         FileObject folder = FileUtil.createFolder (
-            Repository.getDefault().getDefaultFileSystem().getRoot(), 
+            FileUtil.getConfigRoot(),
             "FavoritesTest"
         );
         FileObject fo1 = FileUtil.createData(folder,"Test1");
@@ -85,12 +81,12 @@ public class IndexTest extends NbTestCase {
         DataObject dObj1 = DataObject.find(fo1);
         DataObject dObj2 = DataObject.find(fo2);
         
-        DataFolder favorites = Favorites.getFolder();
+        DataFolder favorites = FavoritesNode.getFolder();
         
         dObj1.createShadow(favorites);
         dObj2.createShadow(favorites);
         
-        Node n = Favorites.getNode();
+        Node n = FavoritesNode.getNode();
         
         Node n1 = n.getChildren().findChild("Test1");
         assertNotNull("Node must exist", n1);
