@@ -63,15 +63,14 @@ public class UIHandlerTest extends NbTestCase {
         super(testName);
     }
 
+    @Override
     protected void setUp() throws Exception {
         Installer o = Installer.findObject(Installer.class, true);
         System.setProperty("netbeans.user", getWorkDirPath());
+        UIHandler.flushImmediatelly();
         clearWorkDir();
         assertNotNull("Installer created", o);
         o.restored();
-    }
-
-    protected void tearDown() throws Exception {
     }
 
     public void testPublish() {
@@ -90,7 +89,7 @@ public class UIHandlerTest extends NbTestCase {
         );
         UILOG.log(rec);        
         
-        List<LogRecord> logs = Installer.getLogs();
+        List<LogRecord> logs = InstallerTest.getLogs();
         assertEquals("One log: " + logs, 1, logs.size());
         LogRecord first = logs.get(0);
         
