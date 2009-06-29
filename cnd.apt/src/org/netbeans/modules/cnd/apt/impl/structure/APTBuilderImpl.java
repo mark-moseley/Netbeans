@@ -41,16 +41,16 @@
 
 package org.netbeans.modules.cnd.apt.impl.structure;
 
-import antlr.Token;
 import antlr.TokenStream;
 import antlr.TokenStreamException;
 import antlr.TokenStreamRecognitionException;
-import java.util.Stack;
+import java.util.LinkedList;
 import java.util.logging.Level;
-import org.netbeans.modules.cnd.apt.debug.APTTraceFlags;
 import org.netbeans.modules.cnd.apt.support.APTTokenTypes;
 import org.netbeans.modules.cnd.apt.structure.APT;
 import org.netbeans.modules.cnd.apt.structure.APTFile;
+import org.netbeans.modules.cnd.apt.support.APTToken;
+import org.netbeans.modules.cnd.apt.utils.APTTraceUtils;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
 /**
@@ -59,17 +59,15 @@ import org.netbeans.modules.cnd.apt.utils.APTUtils;
  */
 public final class APTBuilderImpl {
     
-    private boolean fullAPT; // NOT YET SUPPORTED
     /** Creates a new instance of APTBuilder */
-    public APTBuilderImpl(boolean full) {
-        this.fullAPT = full;
+    public APTBuilderImpl() {
     }
 
-    public APTFile buildAPT(String path, TokenStream ts) {
+    public APTFile buildAPT(CharSequence path, TokenStream ts) {
         if (ts == null) {
             return null;
         }
-        APTFileNode aptFile = new APTFileNode(path);        
+        APTFileNode aptFile = new APTFileNode(path);
         try {
             buildFileAPT(aptFile, ts);
         } catch (TokenStreamRecognitionException ex) {
@@ -82,7 +80,7 @@ public final class APTBuilderImpl {
             // it's better for lexer not to fail at all
             // lexer should have special token for "everything else"
             // but for now we use reporting about problems to see, where lexer should be improved
-            APTUtils.LOG.log(Level.SEVERE, "error on converting token stream to text while building APT", ex); // NOI18N
+            APTUtils.LOG.log(Level.SEVERE, "error on converting token stream to text while building APT\n{0}", new Object[] { ex }); // NOI18N
             APTUtils.LOG.log(Level.SEVERE, "problem file is {0}", new Object[] { path }); // NOI18N
         }
         return aptFile;
@@ -121,146 +119,84 @@ public final class APTBuilderImpl {
     }
     
     private void buildFileAPT(APTFileNode aptFile, TokenStream ts) throws TokenStreamException {
-        Token lastToken;
-        if (APTTraceFlags.APT_RECURSIVE_BUILD) {
-            lastToken = addChildren(aptFile, ts.nextToken(), ts, false);
-        } else {
-            lastToken = build(aptFile, ts);
-        }
+        APTToken lastToken = nonRecursiveBuild(aptFile, ts);
         assert (APTUtils.isEOF(lastToken));
     }
-    
+
+    private static final class Pair {
+        final APTBaseNode active;
+        APTBaseNode lastChild;
+        Pair(APTBaseNode activeNode) {
+            active = activeNode;
+        }
+        void addChild(APTBaseNode newChild) {
+            if (lastChild == null) {
+                active.setFirstChild(newChild);
+            } else {
+                lastChild.setNextSibling(newChild);
+            }
+            lastChild = newChild;
+        }
+
+        @Override
+        public String toString() {
+            return "active:" + active + " lastChild:" + lastChild; // NOI18N
+        }
+    }
     //////Build APT without recursion (a little bit faster, can be tuned even more)
-    private Stack<APTBaseNode> nodeStack = new Stack<APTBaseNode>();
+    private LinkedList<Pair> nodeStack = new LinkedList<Pair>();
     
-    private Token build(APTBaseNode root, TokenStream stream) throws TokenStreamException {
+    private APTToken nonRecursiveBuild(APTFileNode aptFile, TokenStream stream) throws TokenStreamException {
         assert(stream != null);
-        APTBaseNode activeNode = null;
-        Token nextToken = stream.nextToken();
+        Pair root = new Pair(aptFile);
+        APTToken nextToken = (APTToken) stream.nextToken();
         while (!APTUtils.isEOF(nextToken)) {
-            if (activeNode == null) { // If we have no active node - create it
-                if (root.getType() != APT.Type.CONDITION_CONTAINER) {
-                    activeNode = createNode(nextToken);
+            APTBaseNode activeNode = createNode(nextToken);
+            nextToken = initNode(aptFile, activeNode, (APTToken) stream.nextToken(), stream);
+            if (APTUtils.isEndConditionNode(activeNode.getType())) {
+                if (!nodeStack.isEmpty()) {
+                    root = nodeStack.removeLast();
                 } else {
-                    activeNode = createConditionChildNode(nextToken);
-                }
-                
-                if (APTUtils.isEndCondition(nextToken)) {
-                    assert (!nodeStack.empty()) : nextToken.getText() + " found without corresponding if: " + nextToken;
-                    root = nodeStack.pop();
-                    root.addChild(activeNode);
-                    nextToken = stream.nextToken();
-                    continue;
-                }
-
-                // TODO: need optimization of last access
-                root.addChild(activeNode);
-
-                if (activeNode.getType() == APT.Type.CONDITION_CONTAINER) {
-                    assert(root.getType() != APT.Type.CONDITION_CONTAINER);
-                    nodeStack.push(root);
-                    root = activeNode;
-                    activeNode = createConditionChildNode(nextToken);
-                    root.addChild(activeNode);
-                } 
-                //We have created new node and can go to the next token
-                nextToken = stream.nextToken();
-            } else { //If active node is available - fill it with tokens
-                if (!activeNode.accept(nextToken)) {
-                    if (APTUtils.isEndDirectiveToken(nextToken.getType())) {
-                        nextToken = stream.nextToken();
-                    }
-                    if (activeNode.getType() == APT.Type.ENDIF) {
-                        assert (!nodeStack.empty()) : "endif found without corresponding if: " + nextToken;
-                        root = nodeStack.pop();
-                        activeNode = null;
-                    } else if (root.getType() == APT.Type.CONDITION_CONTAINER) {
-                        nodeStack.push(root);
-                        root = activeNode;
-                    } 
-                    activeNode = null;
-                } else {
-                    nextToken = stream.nextToken();
+                    APTUtils.LOG.log(Level.SEVERE, "{0}, line {1}: {2} without corresponding #if\n", new Object[] { APTTraceUtils.toFileString(aptFile), nextToken.getLine(), nextToken.getText() }); // NOI18N
                 }
             }
+            root.addChild(activeNode);
+            if (APTUtils.isStartOrSwitchConditionNode(activeNode.getType())) {
+                nodeStack.addLast(root);
+                root = new Pair(activeNode);
+            }
+        }
+        for (Pair pair : nodeStack) {
+            APTToken token = pair.active.getToken();
+            APTUtils.LOG.log(Level.SEVERE, "{0}, line {1}: {2} without closing #endif\n", new Object[]{APTTraceUtils.toFileString(aptFile), token.getLine(), token.getText()}); // NOI18N
         }
         return nextToken;
     }
     
-    private Token addChildren(APTBaseNode root, Token nextToken, TokenStream stream, boolean breakOnEndBlockToken) throws TokenStreamException {
-        assert(stream != null);
-        APTBaseNode lastChild = null;
-        while (!APTUtils.isEOF(nextToken)) {
-            APTBaseNode newNode = null;
-            if (breakOnEndBlockToken && APTUtils.isEndCondition(nextToken)) {
-                return nextToken;
-            } else {
-                newNode = createNode(nextToken);
-            }
-            // add new node to children on the root
-            if (lastChild == null) {
-                root.setFirstChild(newNode);
-            } else {
-                lastChild.setNextSibling(newNode);
-            }
-            // remember last node for fast appending children as next sibling
-            lastChild = newNode;  
-            if (newNode.getType() == APT.Type.CONDITION_CONTAINER) {
-                assert(root.getType() != APT.Type.CONDITION_CONTAINER);
-                nextToken = initPreprocBranch((APTConditionsBlockNode)newNode, nextToken, stream);
-            } else {
-                // allow new node to initialize from token stream
-                nextToken = initNode(newNode, stream.nextToken(), stream);
-            }
-        }
-        return nextToken;
-    }
-
-    private Token initPreprocBranch(APTConditionsBlockNode root, Token nextToken, TokenStream stream) throws TokenStreamException {
-        assert(stream != null);
-        APTBaseNode lastChild = null;
-        while (!APTUtils.isEOF(nextToken)) {
-            APTBaseNode newNode = null;
-            newNode = createConditionChildNode(nextToken);
-            // add new node to children on the root
-            if (lastChild == null) {
-                root.setFirstChild(newNode);
-            } else {
-                lastChild.setNextSibling(newNode);
-            }
-            // remember last node for fast appending children as next sibling
-            lastChild = newNode; 
-            nextToken = initNode(newNode, stream.nextToken(), stream);          
-            if (newNode.getType() == APT.Type.ENDIF) {
-                // #endif means end of condition container
-                return nextToken;                
-            } else {
-                nextToken = addChildren(newNode, nextToken, stream, true);
-            }
-        }
-        return nextToken;
-    }
-    
-    private Token initNode(APT node, Token nextToken, TokenStream stream) throws TokenStreamException {
-        while (!APTUtils.isEOF(nextToken) && node.accept(nextToken)) {
-            nextToken = stream.nextToken();
+    private APTToken initNode(APTFileNode aptFile, APT node, APTToken nextToken, TokenStream stream) throws TokenStreamException {
+        while (!APTUtils.isEOF(nextToken) && node.accept(aptFile, nextToken)) {
+            nextToken = (APTToken) stream.nextToken();
         }   
         if (APTUtils.isEndDirectiveToken(nextToken.getType())) {
             // eat it
-            nextToken = stream.nextToken();
+            nextToken = (APTToken) stream.nextToken();
         }
         return nextToken;
     }
     
-    private APTBaseNode createNode(Token token) {
+    private APTBaseNode createNode(APTToken token) {
         assert (!APTUtils.isEOF(token));
         int ttype = token.getType();
-        APTBaseNode newNode = null;
+        APTBaseNode newNode;
         switch (ttype) {
             case APTTokenTypes.IF:
+                newNode = new APTIfNode(token);
+                break;
             case APTTokenTypes.IFDEF:
+                newNode = new APTIfdefNode(token);
+                break;
             case APTTokenTypes.IFNDEF:
-                newNode = new APTConditionsBlockNode();
+                newNode = new APTIfndefNode(token);
                 break;
             case APTTokenTypes.INCLUDE:
                 newNode = new APTIncludeNode(token);
@@ -300,38 +236,7 @@ public final class APTBuilderImpl {
         return newNode;
     }    
 
-    private APTBaseNode createConditionChildNode(Token token) {
-        assert (!APTUtils.isEOF(token));
-        assert (APTUtils.isConditionsBlockToken(token)) : "Not conditional token found:" + token;
-        int ttype = token.getType();
-        APTBaseNode newNode = null;
-        switch (ttype) {
-            case APTTokenTypes.IF:
-                newNode = new APTIfNode(token);
-                break;
-            case APTTokenTypes.IFDEF:
-                newNode = new APTIfdefNode(token);
-                break;
-            case APTTokenTypes.IFNDEF:
-                newNode = new APTIfndefNode(token);
-                break; 
-            case APTTokenTypes.ELIF:
-                newNode = new APTElifNode(token);
-                break;
-            case APTTokenTypes.ELSE:
-                newNode = new APTElseNode(token);
-                break;
-            case APTTokenTypes.ENDIF:
-                newNode = new APTEndifNode(token);
-                break;
-            default:
-                assert(false) : "unexpected " + ttype; // NOI18N                
-        }
-        assert (newNode != null);        
-        return newNode;
-    }     
-
-    static private APT createLightCopy(APT apt) {
+    public static APT createLightCopy(APT apt) {
         assert (apt != null);
         assert (isRootNode(apt));        
         APT light = null;
@@ -343,9 +248,6 @@ public final class APTBuilderImpl {
                 break;
             case APT.Type.UNDEF:
                 light = new APTUndefineNode((APTUndefineNode)apt);
-                break;
-            case APT.Type.CONDITION_CONTAINER:
-                light = new APTConditionsBlockNode((APTConditionsBlockNode)apt);
                 break;
             case APT.Type.IFDEF:
                 light = new APTIfdefNode((APTIfdefNode)apt);
@@ -371,6 +273,9 @@ public final class APTBuilderImpl {
             case APT.Type.INCLUDE_NEXT:
                 light = new APTIncludeNextNode((APTIncludeNextNode)apt);
                 break;
+            case APT.Type.ERROR:
+                light = new APTErrorNode((APTErrorNode) apt);
+                break;
             case APT.Type.FILE:
                 light = new APTFileNode((APTFileNode)apt);
                 break;
@@ -382,7 +287,6 @@ public final class APTBuilderImpl {
     
     static private boolean isRootNode(APT apt) {
         switch (apt.getType()) {
-            case APT.Type.CONDITION_CONTAINER:
             case APT.Type.IFDEF:
             case APT.Type.IFNDEF:
             case APT.Type.IF:
@@ -394,6 +298,7 @@ public final class APTBuilderImpl {
             case APT.Type.FILE:
             case APT.Type.DEFINE:
             case APT.Type.UNDEF:
+            case APT.Type.ERROR:
                 return true;
         }
         return false;        
