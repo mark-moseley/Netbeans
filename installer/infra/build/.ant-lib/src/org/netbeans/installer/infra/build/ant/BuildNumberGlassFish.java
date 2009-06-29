@@ -104,8 +104,12 @@ public class BuildNumberGlassFish extends Task {
             
             in.close();
             
-            final Matcher matcher = PATTERN.matcher(contents);
-            
+            Matcher matcher = PATTERN.matcher(contents);
+            DateFormat dateFormatIn = FORMAT_IN;
+            if (!matcher.find()) {
+                matcher = PATTERN_V3.matcher(contents);
+                dateFormatIn = FORMAT_IN_V3;
+            }
             if (matcher.find()) {
                 final String buildType = 
                         matcher.group(1);                                   // NOMAGI
@@ -113,9 +117,16 @@ public class BuildNumberGlassFish extends Task {
                         matcher.group(2);                                   // NOMAGI
                 final String milestoneNumber = 
                         matcher.group(3);                                   // NOMAGI
-                final String buildNumber = FORMAT_OUT.format(FORMAT_IN.parse(
-                        matcher.group(4)));                                 // NOMAGI
-                
+
+                String buildNumber = "0"; 
+
+                if(matcher.groupCount() > 3) { 
+                   buildNumber = FORMAT_OUT.format(dateFormatIn.parse(matcher.group(4))) ; // NOMAGI
+                } else if(!milestoneNumberReal.equals(milestoneNumber)){
+                   buildNumber = "" + (milestoneNumberReal.substring(milestoneNumber.length()).codePointAt(0) - 'a' + 1);
+                }
+
+
                 getProject().setProperty(
                         prefix + BUILD_TYPE_SUFFIX, 
                         buildType.toLowerCase());
@@ -145,14 +156,18 @@ public class BuildNumberGlassFish extends Task {
      * Pattern for which to look in the input file.
      */
     private static final Pattern PATTERN = Pattern.compile(
-            "sjsas-9_1_01-([a-z0-9]+)-bin-" + // NOI18N
+            "sjsas-9_1_02-([a-z0-9]+)-bin-" + // NOI18N
             "b(([0-9]+)[a-z]?)-linux-([A-Za-z0-9_]+)\\.bin"); // NOI18N
+    private static final Pattern PATTERN_V3 = Pattern.compile(            
+            "glassfish-v3-web-([a-z0-9]+)-b(([0-9]+)[a-z]?)\\.zip"); // NOI18N
     
     /**
      * Date format used in the input file.
      */
     private static final DateFormat FORMAT_IN = 
             new SimpleDateFormat("dd_MMM_yyyy", Locale.US); // NOI18N
+    private static final DateFormat FORMAT_IN_V3 = 
+            new SimpleDateFormat("M_dd_yyyy", Locale.US); // NOI18N
     
     /**
      * Date format to use in the output properties.
