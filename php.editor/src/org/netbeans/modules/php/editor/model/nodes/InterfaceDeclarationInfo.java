@@ -37,45 +37,53 @@
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.php.editor.model;
+package org.netbeans.modules.php.editor.model.nodes;
 
-import java.util.Collection;
-import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
+import java.util.List;
+import org.netbeans.modules.csl.api.OffsetRange;
+import org.netbeans.modules.php.editor.model.QualifiedName;
+import org.netbeans.modules.php.editor.model.nodes.ASTNodeInfo.Kind;
+import org.netbeans.modules.php.editor.parser.astnodes.Expression;
+import org.netbeans.modules.php.editor.parser.astnodes.InterfaceDeclaration;
+import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
 
 /**
  * @author Radek Matous
  */
-/*
- * TODO:
- * Namespaces must be involved in:
- * TypeScope: Collection<? extends InterfaceScope> getSuperInterfaces();
- * ClassScope, TypeScope: Collection<? extends String> getSuperInterfaceNames();
- * ClassScope: Collection<? extends ClassScope> getSuperClasses();
- */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    /**
-     * @return declared methods only
-     */
-    Collection<? extends MethodScope> getDeclaredMethods();
-    /**
-     * @return inherited methods only
-     */
-    Collection<? extends MethodScope> getInheritedMethods();
-    /**
-     * @return declared+inherited methods
-     */
-    Collection<? extends MethodScope> getMethods();
+public class InterfaceDeclarationInfo extends ASTNodeInfo<InterfaceDeclaration> {
+    InterfaceDeclarationInfo(InterfaceDeclaration node) {
+        super(node);
+    }
 
-    Collection<? extends ClassConstantElement> getDeclaredConstants();
-    Collection<? extends ClassConstantElement> getInheritedConstants();
-    Collection<? extends InterfaceScope> getSuperInterfaces();
-    Collection<? extends String> getSuperInterfaceNames();
+    public static InterfaceDeclarationInfo create(InterfaceDeclaration classDeclaration) {
+        return new InterfaceDeclarationInfo(classDeclaration);
+    }
 
-    Collection<? extends ClassConstantElement> findInheritedConstants(String constName);
-    Collection<? extends MethodScope> findInheritedMethods(final String queryName);
-    Collection<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    Collection<? extends MethodScope> findDeclaredMethods(final QuerySupport.Kind nameKind, final String queryName, final int... modifiers);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final QuerySupport.Kind nameKind, final String... queryName);
+    @Override
+    public Kind getKind() {
+        return Kind.IFACE;
+    }
+
+    @Override
+    public String getName() {
+        InterfaceDeclaration ifaceDeclaration = getOriginalNode();
+        return ifaceDeclaration.getName().getName();
+    }
+
+    @Override
+    public QualifiedName getQualifiedName() {
+        return QualifiedName.create(getOriginalNode().getName());
+    }
+
+    @Override
+    public OffsetRange getRange() {
+        InterfaceDeclaration ifaceDeclaration = getOriginalNode();
+        Identifier name = ifaceDeclaration.getName();
+        return new OffsetRange(name.getStartOffset(), name.getEndOffset());
+    }
+
+    public List<? extends Expression> getInterfaces() {
+        return getOriginalNode().getInterfaes();
+    }
+
 }

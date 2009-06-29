@@ -39,63 +39,70 @@
 
 package org.netbeans.modules.php.editor.model.nodes;
 
-import java.util.ArrayList;
 import java.util.List;
 import org.netbeans.modules.csl.api.OffsetRange;
-import org.netbeans.modules.php.editor.CodeUtils;
-import org.netbeans.modules.php.editor.model.Parameter;
+import org.netbeans.modules.php.editor.model.PhpModifiers;
 import org.netbeans.modules.php.editor.model.QualifiedName;
-import org.netbeans.modules.php.editor.parser.astnodes.FormalParameter;
-import org.netbeans.modules.php.editor.parser.astnodes.FunctionDeclaration;
+import org.netbeans.modules.php.editor.model.nodes.ASTNodeInfo.Kind;
+import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration;
+import org.netbeans.modules.php.editor.parser.astnodes.ClassDeclaration.Modifier;
+import org.netbeans.modules.php.editor.parser.astnodes.Expression;
 import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
 
 /**
- *
  * @author Radek Matous
  */
-public class FunctionDeclarationInfo extends ASTNodeInfo<FunctionDeclaration> {
-    protected FunctionDeclarationInfo(FunctionDeclaration node) {
+public class ClassDeclarationInfo extends ASTNodeInfo<ClassDeclaration> {
+    ClassDeclarationInfo(ClassDeclaration node) {
         super(node);
     }
 
-    public static FunctionDeclarationInfo create(FunctionDeclaration functionDeclaration) {
-        return new FunctionDeclarationInfo(functionDeclaration);
+    public static ClassDeclarationInfo create(ClassDeclaration classDeclaration) {
+        return new ClassDeclarationInfo(classDeclaration);
     }
 
     @Override
     public Kind getKind() {
-        return Kind.FUNCTION;
+        return Kind.CLASS;
     }
 
     @Override
     public String getName() {
-        FunctionDeclaration functionDeclaration = getOriginalNode();
-        return functionDeclaration.getFunctionName().getName();
+        ClassDeclaration classDeclaration = getOriginalNode();
+        return classDeclaration.getName().getName();
     }
 
     @Override
     public QualifiedName getQualifiedName() {
-        return QualifiedName.createUnqualifiedName(getOriginalNode().getFunctionName());
+        return QualifiedName.create(getOriginalNode().getName());
     }
+
 
     @Override
     public OffsetRange getRange() {
-        FunctionDeclaration functionDeclaration = getOriginalNode();
-        Identifier name = functionDeclaration.getFunctionName();
+        ClassDeclaration classDeclaration = getOriginalNode();
+        Identifier name = classDeclaration.getName();
         return new OffsetRange(name.getStartOffset(), name.getEndOffset());
     }
 
-    public List<? extends Parameter> getParameters() {
-        List<Parameter> retval = new ArrayList<Parameter>();
-        List<FormalParameter> formalParameters = getOriginalNode().getFormalParameters();
-        for (FormalParameter formalParameter : formalParameters) {
-            String name = CodeUtils.getParamDisplayName(formalParameter);
-            String defVal = CodeUtils.getParamDefaultValue(formalParameter);
-            if (name != null) {
-                retval.add(new ParameterImpl(name, defVal));
-            }
+    public Expression getSuperClass() {
+        return (getOriginalNode().getSuperClass() != null) ?
+            getOriginalNode().getSuperClass() : null;
+    }
+
+    public List<? extends Expression> getInterfaces() {
+        return getOriginalNode().getInterfaes();
+    }
+
+    public PhpModifiers getAccessModifiers() {
+        Modifier modifier = getOriginalNode().getModifier();
+
+        if (modifier.equals(Modifier.ABSTRACT)) {
+            return new PhpModifiers(PhpModifiers.PUBLIC, PhpModifiers.ABSTRACT);
+        } else if (modifier.equals(Modifier.FINAL)) {
+            return new PhpModifiers(PhpModifiers.PUBLIC, PhpModifiers.FINAL);
         }
-        return retval;
+        return new PhpModifiers(PhpModifiers.PUBLIC);
     }
 
 }

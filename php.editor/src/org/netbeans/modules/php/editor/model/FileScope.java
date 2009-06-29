@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,48 +34,19 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
 package org.netbeans.modules.php.editor.model;
 
 import java.util.Collection;
-import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
 
 /**
+ *
  * @author Radek Matous
  */
-/*
- * TODO:
- * Namespaces must be involved in:
- * TypeScope: Collection<? extends InterfaceScope> getSuperInterfaces();
- * ClassScope, TypeScope: Collection<? extends String> getSuperInterfaceNames();
- * ClassScope: Collection<? extends ClassScope> getSuperClasses();
- */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    /**
-     * @return declared methods only
-     */
-    Collection<? extends MethodScope> getDeclaredMethods();
-    /**
-     * @return inherited methods only
-     */
-    Collection<? extends MethodScope> getInheritedMethods();
-    /**
-     * @return declared+inherited methods
-     */
-    Collection<? extends MethodScope> getMethods();
-
-    Collection<? extends ClassConstantElement> getDeclaredConstants();
-    Collection<? extends ClassConstantElement> getInheritedConstants();
-    Collection<? extends InterfaceScope> getSuperInterfaces();
-    Collection<? extends String> getSuperInterfaceNames();
-
-    Collection<? extends ClassConstantElement> findInheritedConstants(String constName);
-    Collection<? extends MethodScope> findInheritedMethods(final String queryName);
-    Collection<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    Collection<? extends MethodScope> findDeclaredMethods(final QuerySupport.Kind nameKind, final String queryName, final int... modifiers);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final QuerySupport.Kind nameKind, final String... queryName);
+public interface  FileScope extends Scope  {
+    Collection<? extends NamespaceScope> getDeclaredNamespaces();
+    NamespaceScope getDefaultDeclaredNamespace();
+    IndexScope getIndexScope();
 }

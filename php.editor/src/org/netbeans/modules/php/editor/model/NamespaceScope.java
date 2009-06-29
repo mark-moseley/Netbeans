@@ -40,42 +40,17 @@
 package org.netbeans.modules.php.editor.model;
 
 import java.util.Collection;
-import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
-
 /**
  * @author Radek Matous
  */
-/*
- * TODO:
- * Namespaces must be involved in:
- * TypeScope: Collection<? extends InterfaceScope> getSuperInterfaces();
- * ClassScope, TypeScope: Collection<? extends String> getSuperInterfaceNames();
- * ClassScope: Collection<? extends ClassScope> getSuperClasses();
- */
-public interface TypeScope extends Scope {
-    PhpModifiers getPhpModifiers();
-    /**
-     * @return declared methods only
-     */
-    Collection<? extends MethodScope> getDeclaredMethods();
-    /**
-     * @return inherited methods only
-     */
-    Collection<? extends MethodScope> getInheritedMethods();
-    /**
-     * @return declared+inherited methods
-     */
-    Collection<? extends MethodScope> getMethods();
-
-    Collection<? extends ClassConstantElement> getDeclaredConstants();
-    Collection<? extends ClassConstantElement> getInheritedConstants();
-    Collection<? extends InterfaceScope> getSuperInterfaces();
-    Collection<? extends String> getSuperInterfaceNames();
-
-    Collection<? extends ClassConstantElement> findInheritedConstants(String constName);
-    Collection<? extends MethodScope> findInheritedMethods(final String queryName);
-    Collection<? extends MethodScope> findDeclaredMethods(final String queryName, final int... modifiers);
-    Collection<? extends MethodScope> findDeclaredMethods(final QuerySupport.Kind nameKind, final String queryName, final int... modifiers);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final String... queryName);
-    Collection<? extends ClassConstantElement> findDeclaredConstants(final QuerySupport.Kind nameKind, final String... queryName);
+public interface NamespaceScope extends VariableScope {
+    QualifiedName getQualifiedName();
+    Collection<? extends TypeScope> getDeclaredTypes();
+    Collection<? extends ClassScope> getDeclaredClasses();
+    Collection<? extends InterfaceScope> getDeclaredInterfaces();
+    Collection<? extends ConstantElement> getDeclaredConstants();
+    Collection<? extends FunctionScope> getDeclaredFunctions();
+    Collection<? extends VariableName> getDeclaredVariables();
+    boolean isDefaultNamespace();
+    FileScope getFileScope();
 }
