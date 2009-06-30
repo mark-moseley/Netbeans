@@ -67,11 +67,12 @@ import javax.tools.Diagnostic.Kind;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.java.source.usages.Index;
+import org.netbeans.modules.java.source.indexing.JavaIndex;
 import org.netbeans.spi.tasklist.Task;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
+import org.openide.util.Mutex.ExceptionAction;
 
 /**
  *
@@ -99,7 +100,7 @@ public class TaskCache {
         }
         return theInstance;
     }
-    
+
     private String getTaskType( Kind k ) {
         switch( k ) {
             case ERROR:
@@ -112,14 +113,19 @@ public class TaskCache {
     }
     
     public List<Task> getErrors(FileObject file) {
-        return getErrors(file, false);
+        List<Task> result = new LinkedList<Task>();
+        
+        result.addAll(getErrors(file, true));
+        result.addAll(getErrors(file, false));
+
+        return result;
     }
     
-    private List<Task> getErrors(FileObject file, boolean onlyErrors) {
-        LOG.log(Level.FINE, "getErrors, file={0}", FileUtil.getFileDisplayName(file));
+    private List<Task> getErrors(FileObject file, boolean errors) {
+        LOG.log(Level.FINE, "getErrors, file={0}, errors={1}", new Object[] {FileUtil.getFileDisplayName(file), errors});
         
         try {
-            File input = computePersistentFile(file);
+            File input = computePersistentFile(file, errors ? ERR_EXT : WARN_EXT);
             
             LOG.log(Level.FINE, "getErrors, error file={0}", input == null ? "null" : input.getAbsolutePath());
             
@@ -128,7 +134,7 @@ public class TaskCache {
             
             input.getParentFile().mkdirs();
             
-            return loadErrors(input, file, onlyErrors);
+            return loadErrors(input, file);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -174,8 +180,34 @@ public class TaskCache {
             }
         }
     }
-    
-    public Set<URL> dumpErrors(URL root, URL file, File fileFile, List<? extends Diagnostic> errors) throws IOException {
+
+    private static File urlToFile(URL url) {
+        if ("file".equals(url.getProtocol())) {
+            try {
+                return new File(url.toURI().getPath());
+            } catch (URISyntaxException ex) {
+                if (LOG.isLoggable(Level.WARNING))
+                    LOG.log(Level.WARNING, "The caller module provide unencoded URL. Please report this issue against caller module.", ex);
+                return new File(url.getPath());
+            }
+        }
+        if (LOG.isLoggable(Level.SEVERE))
+            LOG.log(Level.SEVERE, "Url is not a file: " + url);
+        throw new IllegalStateException();
+    }
+
+    public void dumpErrors(final URL root, final URL file, final List<? extends Diagnostic> errors) throws IOException {
+        refreshTransaction(new ExceptionAction<Void>() {
+            public Void run() throws Exception {
+                dumpErrors(q.get(), root, file, errors);
+                return null;
+            }
+        });
+    }
+
+    private void dumpErrors(TransactionContext c, URL root, URL file, List<? extends Diagnostic> errors) throws IOException {
+        File fileFile = urlToFile(file);
+        
         if (!fileFile.canRead()) {
             //if the file is not readable anymore, ignore the errors:
             errors = Collections.emptyList();
@@ -192,13 +224,11 @@ public class TaskCache {
         
         dumpErrors(output[2], notErrors, false);
         
-        Set<URL> toRefresh = new HashSet<URL>();
-        
-        toRefresh.add(file);
+        c.toRefresh.add(file);
         
         File currentFile = fileFile.getParentFile();
         
-        toRefresh.add(currentFile.toURI().toURL());
+        c.toRefresh.add(currentFile.toURI().toURL());
 
         if (modified) {
             File current = output[1].getParentFile();
@@ -206,7 +236,7 @@ public class TaskCache {
             while (!output[0].equals(current)) {
                 current = current.getParentFile();
                 currentFile = currentFile.getParentFile();
-                toRefresh.add(currentFile.toURI().toURL());
+                c.toRefresh.add(currentFile.toURI().toURL());
             }
 
             FileObject rootFO = URLMapper.findFileObject(root);
@@ -221,20 +251,20 @@ public class TaskCache {
 
                     if (FileUtil.isParentOf(projectDirectory, rootFO)) {
                         while (currentFO != null && currentFO != projectDirectory) {
-                            toRefresh.add(currentFO.getURL());
+                            c.toRefresh.add(currentFO.getURL());
                             currentFO = currentFO.getParent();
                         }
                     }
 
-                    toRefresh.add(projectDirectory.getURL());
+                    c.toRefresh.add(projectDirectory.getURL());
                 }
             }
         }
-        
-        return toRefresh;
+
+        c.rootsToRefresh.add(root);
     }
 
-    private List<Task> loadErrors(File input, FileObject file, boolean onlyErrors) throws IOException {
+    private List<Task> loadErrors(File input, FileObject file) throws IOException {
         List<Task> result = new LinkedList<Task>();
         BufferedReader pw = new BufferedReader(new InputStreamReader(new FileInputStream(input), "UTF-8"));
         String line;
@@ -257,7 +287,7 @@ public class TaskCache {
 
             String severity = getTaskType(kind);
 
-            if (null != severity && (!onlyErrors || kind == Kind.ERROR)) {
+            if (null != severity) {
                 Task err = Task.create(file, severity, message, lineNumber);
                 result.add(err);
             }
@@ -289,13 +319,13 @@ public class TaskCache {
                 
                 if (f.isFile()) {
                     if (f.getName().endsWith(ERR_EXT)) {
-                        String relative = cacheRootURI.relativize(f.toURI()).getPath();
+                        String relative = cacheRootURI.relativize(f.toURI()).getRawPath();
                         
                         relative = relative.replaceAll(ERR_EXT + "$", "java");
                         result.add(rootURI.resolve(relative).toURL());
                     }
                     if (!onlyErrors && f.getName().endsWith(WARN_EXT)) {
-                        String relative = cacheRootURI.relativize(f.toURI()).getPath();
+                        String relative = cacheRootURI.relativize(f.toURI()).getRawPath();
                         
                         relative = relative.replaceAll(WARN_EXT + "$", "java");
                         result.add(rootURI.resolve(relative).toURL());
@@ -341,7 +371,7 @@ public class TaskCache {
                 }
                 
                 String resourceName = cp.getResourceName(file, File.separatorChar, false);
-                File cacheRoot = Index.getClassFolder(root.getURL(), true);
+                File cacheRoot = JavaIndex.getClassFolder(root.getURL(), true);
                 
                 if (cacheRoot == null) {
                     //index does not exist:
@@ -398,7 +428,7 @@ public class TaskCache {
             if (lastDot != (-1)) {
                 resourceName = resourceName.substring(0, lastDot);
             }
-            File cacheRoot = Index.getClassFolder(root);
+            File cacheRoot = JavaIndex.getClassFolder(root);
             File errorsRoot = new File(cacheRoot.getParentFile(), "errors");
             File errorCacheFile = new File(errorsRoot, resourceName + "." + ERR_EXT);
             File warningCacheFile = new File(errorsRoot, resourceName + "." + WARN_EXT);
@@ -409,7 +439,7 @@ public class TaskCache {
         }
     }
     
-    private File computePersistentFile(FileObject file) throws IOException {
+    private File computePersistentFile(FileObject file, String extension) throws IOException {
         ClassPath cp = ClassPath.getClassPath(file, ClassPath.SOURCE);
         
         if (cp == null)
@@ -423,10 +453,60 @@ public class TaskCache {
         }
         
         String resourceName = cp.getResourceName(file, File.separatorChar, false);
-        File cacheRoot = Index.getClassFolder(root.getURL());
-        File cacheFile = new File(new File(cacheRoot.getParentFile(), "errors"), resourceName + ".err");
+        File cacheRoot = JavaIndex.getClassFolder(root.getURL());
+        File cacheFile = new File(new File(cacheRoot.getParentFile(), "errors"), resourceName + "." + extension);
         
         return cacheFile;
     }
+
+    private ThreadLocal<TransactionContext> q = new ThreadLocal<TransactionContext>();
     
+    public <T> T refreshTransaction(ExceptionAction<T> a) throws IOException {
+        TransactionContext c = q.get();
+
+        if (c == null) {
+            q.set(c = new TransactionContext());
+        }
+
+        c.depth++;
+        
+        try {
+            return a.run();
+        } catch (IOException ioe) { //???
+            throw ioe;
+        } catch (Exception ex) {
+            throw (IOException) new IOException(ex.getMessage()).initCause(ex);
+        } finally {
+            if (--c.depth == 0) {
+                doRefresh(c);
+                q.set(null);
+            }
+        }
+    }
+
+    private static void doRefresh(TransactionContext c) {
+        if (TasklistSettings.isTasklistEnabled()) {
+            if (TasklistSettings.isBadgesEnabled() && !c.toRefresh.isEmpty()) {
+                ErrorAnnotator an = ErrorAnnotator.getAnnotator();
+
+                if (an != null) {
+                    an.updateInError(c.toRefresh);
+                }
+            }
+
+            for (URL root : c.rootsToRefresh) {
+                FileObject rootFO = URLMapper.findFileObject(root);
+
+                if (rootFO != null) {
+                    JavaTaskProvider.refresh(rootFO);
+                }
+            }
+        }
+    }
+    
+    private static final class TransactionContext {
+        private int depth;
+        private Set<URL> toRefresh = new HashSet<URL>();
+        private Set<URL> rootsToRefresh = new HashSet<URL>();
+    }
 }
