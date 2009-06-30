@@ -41,8 +41,8 @@
 package org.netbeans.jellytools.nodes;
 
 import java.awt.Toolkit;
+import java.io.IOException;
 import junit.framework.Test;
-import junit.framework.TestSuite;
 import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
 import org.netbeans.jellytools.JellyTestCase;
@@ -50,11 +50,10 @@ import org.netbeans.jellytools.SaveAsTemplateOperator;
 import org.netbeans.jellytools.TopComponentOperator;
 import org.netbeans.jellytools.actions.CopyAction;
 import org.netbeans.jellytools.actions.SaveAllAction;
-import org.netbeans.jellytools.properties.PropertySheetOperator;
 import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.jemmy.operators.JDialogOperator;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.jellytools.testutils.NodeUtils;
 
 /** Test of org.netbeans.jellytools.nodes.PropertiesNode
  *
@@ -73,6 +72,7 @@ public class PropertiesNodeTest extends JellyTestCase {
     /** method used for explicit testsuite definition
      */
     public static Test suite() {
+        /*
         TestSuite suite = new NbTestSuite();
         suite.addTest(new PropertiesNodeTest("testVerifyPopup"));
         suite.addTest(new PropertiesNodeTest("testOpen"));
@@ -86,6 +86,20 @@ public class PropertiesNodeTest extends JellyTestCase {
         suite.addTest(new PropertiesNodeTest("testSaveAsTemplate"));
         suite.addTest(new PropertiesNodeTest("testProperties"));
         return suite;
+         */
+        return createModuleTest(PropertiesNodeTest.class, 
+        "testVerifyPopup",
+        "testOpen",
+        "testEdit",
+        "testCut",
+        "testCopy",
+        //TODO: uncomment this when http://www.netbeans.org/issues/show_bug.cgi?id=167893 is resolved
+        //"testPaste",
+        "testDelete",
+        "testRename",
+        "testAddLocale",
+        "testSaveAsTemplate",
+        "testProperties");
     }
     
     /** Use for internal test execution inside IDE
@@ -98,16 +112,17 @@ public class PropertiesNodeTest extends JellyTestCase {
     protected static PropertiesNode propertiesNode = null;
     
     /** Finds node before each test case. */
-    protected void setUp() {
-        System.out.println("### "+getName()+" ###");
+    protected void setUp() throws IOException {
+        System.out.println("### "+getName()+" ###");        
         if(propertiesNode == null) {
+            openDataProjects("SampleProject");
             propertiesNode = new PropertiesNode(new SourcePackagesNode("SampleProject"), "sample1|properties.properties");  // NOI18N
         }
     }
     
     /** Test verifyPopup */
     public void testVerifyPopup() {
-        propertiesNode.verifyPopup();
+        propertiesNode.verifyPopup();      
     }
     
     /** Test open */
@@ -124,9 +139,10 @@ public class PropertiesNodeTest extends JellyTestCase {
     
     /** Test paste */
     public void testPaste() throws Exception {
-        // "default language"
-        String defaultLabel = Bundle.getString("org.netbeans.modules.properties.Bundle", "LAB_defaultLanguage");
-        new CopyAction().perform(new Node(propertiesNode, defaultLabel));
+        // test item in the properties file
+        String testItemName = "testitem";
+        Node testItemNode = new Node(propertiesNode, testItemName);
+        new CopyAction().perform(testItemNode);
         final int i = propertiesNode.getChildren().length;
         propertiesNode.paste();
         // waits for a new node
@@ -155,32 +171,32 @@ public class PropertiesNodeTest extends JellyTestCase {
     public void testCut() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         propertiesNode.cut();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test copy */
     public void testCopy() {
         Object clipboard1 = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         propertiesNode.copy();
-        Utils.testClipboard(clipboard1);
+        NodeUtils.testClipboard(clipboard1);
     }
     
     /** Test delete */
     public void testDelete() {
         propertiesNode.delete();
-        Utils.closeConfirmDialog();
+        NodeUtils.closeConfirmDeleteDialog();
     }
     
     /** Test rename */
     public void testRename() {
         propertiesNode.rename();
-        Utils.closeRenameDialog();
+        NodeUtils.closeRenameDialog();
     }
     
     /** Test properties */
     public void testProperties() {
         propertiesNode.properties();
-        Utils.closeProperties("properties");
+        NodeUtils.closeProperties("properties");
     }
     
     /** Test saveAsTemplate */

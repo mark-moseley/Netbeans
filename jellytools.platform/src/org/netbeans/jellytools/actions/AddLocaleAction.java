@@ -40,64 +40,23 @@
  */
 package org.netbeans.jellytools.actions;
 
-import junit.framework.Test;
-import junit.framework.TestSuite;
-import junit.textui.TestRunner;
 import org.netbeans.jellytools.Bundle;
-import org.netbeans.jellytools.JellyTestCase;
-import org.netbeans.jellytools.ProjectsTabOperator;
-import org.netbeans.junit.NbTestSuite;
 
-/** Test org.netbeans.jellytools.actions.ProjectViewAction
- *
- * @author <a href="mailto:adam.sotona@sun.com">Adam Sotona</a>
- * @author Jiri.Skrivanek@sun.com
- */
-public class ProjectViewActionTest extends JellyTestCase {
+/** Used to call "Add | Locale..." popup menu item on properties node.
+ * @see Action
+ * @see ActionNoBlock
+ * @see org.netbeans.jellytools.nodes.PropertiesNode
+ * @author <a href="mailto:vojtech.sigler@sun.com">Vojtech Sigler</a> */
+public class AddLocaleAction extends ActionNoBlock {
 
-    /** constructor required by JUnit
-     * @param testName method name to be used as testcase
-     */
-    public ProjectViewActionTest(String testName) {
-        super(testName);
-    }
-    
-    /** method used for explicit testsuite definition
-     */
-    public static Test suite() {
-        /*
-        TestSuite suite = new NbTestSuite();
-        suite.addTest(new ProjectViewActionTest("testPerformMenu"));
-        return suite;
-         */
-        return createModuleTest(ProjectViewActionTest.class, "testPerformMenu");
-    }
-    
-    /** Use for internal test execution inside IDE
-     * @param args command line arguments
-     */
-    public static void main(java.lang.String[] args) {
-        TestRunner.run(suite());
-    }
-    
-    /** Test performMenu */
-    public void testPerformMenu() throws InterruptedException {
+    //This bundle is most probably incorrect, but I am unable to find the correct one
+    private static final String addPopup = Bundle.getStringTrimmed("org.openide.actions.Bundle", "New");
 
-        //Make sure the menu has time to load (workaround for the case the menu
-        //is not fully loaded at the beginning of the test.
-        new Action(Bundle.getStringTrimmed(
-            "org.netbeans.core.ui.resources.Bundle", "Menu/Tools"), null).performMenu();
+    private static final String localePopup = Bundle.getStringTrimmed("org.netbeans.modules.properties.Bundle",
+            "LAB_NewLocaleAction");
 
-        Thread.sleep(1000);
-
-
-        new Action(Bundle.getStringTrimmed("org.netbeans.modules.project.ui.Bundle",
-                "Menu/BuildProject"), null).performMenu();
-
-        Thread.sleep(1000);
-
-        ProjectsTabOperator.invoke().close();
-        new ProjectViewAction().performMenu();
-        new ProjectsTabOperator();
+    /** creates new AddLocaleAction instance */
+    public AddLocaleAction() {
+        super(null, addPopup + "|" + localePopup);
     }
 }
