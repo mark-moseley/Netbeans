@@ -54,8 +54,6 @@ import org.netbeans.jemmy.Waitable;
 import org.netbeans.jemmy.Waiter;
 import org.netbeans.test.java.Utilities;
 
-//import org.netbeans.junit.ide.ProjectSupport;
-
 /**
  * Common utilities for GUI tests.
  * @author Roman Strobl
@@ -135,8 +133,8 @@ public class GuiUtilities {
         opc.next();
         
         // set project name, no main class, created in workdir
-        NewProjectNameLocationStepOperator npnlso = new
-                NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator npnlso = new
+                NewJavaProjectNameLocationStepOperator();
         npnlso.txtProjectName().setText(projectName);
         npnlso.cbCreateMainClass().setSelected(false);
         npnlso.txtProjectLocation().setText(workDir);
@@ -208,8 +206,8 @@ public class GuiUtilities {
         tfp.setText(packageName);
         
         // set package name
-        NewFileNameLocationStepOperator nfnlso =
-                new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso =
+                new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().setText(packageName);
         for (int i=0; i<10; i++) {
             if (nfnlso.btFinish().isEnabled()) break;
