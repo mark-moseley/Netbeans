@@ -54,6 +54,10 @@ import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.JavaSource;
+import org.netbeans.api.project.FileOwnerQuery;
+import org.netbeans.api.project.Project;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.netbeans.spi.editor.hints.HintsController;
 import org.openide.filesystems.FileObject;
@@ -96,13 +100,33 @@ public abstract class EJBProblemFinder {
             // the 'cancelled' flag must be reset as the instance of EJBProblemFinder is reused
             cancelled = false;
             problemsFound.clear();
-            EjbJar ejbModule = EjbJar.getEjbJar(file);
-            
-            if (ejbModule == null
-                    || !EjbProjectConstants.JAVA_EE_5_LEVEL.equals(ejbModule.getJ2eePlatformVersion())){
-                return; // File doesn't belong to EJB project or the EJB version is not supported
+
+            boolean isEjb = false;
+            Project prj = FileOwnerQuery.getOwner(file);
+            //#156889: Add check for null.
+            if (prj == null) {
+                return;
+            }
+            J2eeModuleProvider provider = (J2eeModuleProvider) prj.getLookup().lookup(J2eeModuleProvider.class);
+            if (provider != null) {
+                J2eeModule module = provider.getJ2eeModule();
+                if (module != null) {
+                    if (J2eeModule.Type.EJB.equals(module.getType())) {
+                        isEjb = true;
+                    }
+                }
             }
             
+            if (!isEjb) {
+                return; // File doesn't belong to EJB project
+            }
+
+            EjbJar ejbModule = EjbJar.getEjbJar(file);
+            if (ejbModule == null
+                    || !EjbProjectConstants.JAVA_EE_5_LEVEL.equals(ejbModule.getJ2eePlatformVersion())) {
+                return; // EJB version is not supported
+            }
+
             ejbModule.getMetadataModel().runReadAction(new MetadataModelAction<EjbJarMetadata, Void>() {
                 public Void run(EjbJarMetadata metadata) {
                     for (Tree tree : info.getCompilationUnit().getTypeDecls()){
@@ -152,26 +176,6 @@ public abstract class EJBProblemFinder {
     
     public List<? extends ErrorDescription> getProblemsFound(){
         return problemsFound;
-    }
-    
-    private abstract class RescanTrigger{
-        private FileObject file;
-        
-        RescanTrigger(FileObject file){
-            this.file = file;
-        }
-        
-        void rescan(){
-            JavaSource javaSrc = JavaSource.forFileObject(file);
-            
-            if (javaSrc != null){
-                try{
-                    javaSrc.runUserActionTask(new ProblemFinderCompControl(file), true);
-                } catch (IOException e){
-                    LOG.log(Level.WARNING, e.getMessage(), e);
-                }
-            }
-        }
     }
     
     public static class ProblemFinderCompInfo extends EJBProblemFinder implements CancellableTask<CompilationInfo>{
