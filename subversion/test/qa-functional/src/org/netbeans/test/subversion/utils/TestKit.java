@@ -16,22 +16,29 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.logging.Handler;
+import java.util.logging.Logger;
 import javax.swing.JCheckBoxMenuItem;
 import org.netbeans.jellytools.MainWindowOperator;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.NewFileNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaFileNameLocationStepOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.QueueTool;
+import org.netbeans.jemmy.EventTool;
+import org.netbeans.jemmy.JemmyProperties;
+import org.netbeans.jemmy.TimeoutExpiredException;
 import org.netbeans.jemmy.operators.JCheckBoxMenuItemOperator;
 import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JMenuBarOperator;
 import org.netbeans.jemmy.operators.JMenuItemOperator;
+import org.netbeans.jemmy.operators.JMenuOperator;
+import org.netbeans.jemmy.operators.JPopupMenuOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.junit.ide.ProjectSupport;
+import org.openide.util.Exceptions;
 
 /**
  *
@@ -48,6 +55,8 @@ public final class TestKit {
     public final static String CONFLICT_STATUS = "[Conflict ]";
     public final static String IGNORED_STATUS = "[Ignored ]";
     public final static String UPTODATE_STATUS = "";
+    public final static String LOGGER_NAME = "org.netbeans.modules.subversion.t9y";
+    public static int TIME_OUT = 15;
     
     public static File prepareProject(String category, String project, String project_name) throws Exception {
         //create temporary folder for test
@@ -61,7 +70,7 @@ public final class TestKit {
         npwo.selectCategory(category);
         npwo.selectProject(project);
         npwo.next();
-        NewProjectNameLocationStepOperator npnlso = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator npnlso = new NewJavaProjectNameLocationStepOperator();
         new JTextFieldOperator(npnlso, 1).setText(file.getAbsolutePath()); // NOI18N
         new JTextFieldOperator(npnlso, 0).setText(project_name); // NOI18N
         //new JTextFieldOperator(npnlso, 2).setText(folder); // NOI18N
@@ -113,30 +122,43 @@ public final class TestKit {
     }
     
     public static void closeProject(String projectName) {
+        long lTimeOut = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
-            Node rootNode = new ProjectsTabOperator().getProjectRootNode(projectName);
-            rootNode.performPopupActionNoBlock("Close");
+            lTimeOut = JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 10000);
             try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
+                Node rootNode = new ProjectsTabOperator().getProjectRootNode(projectName);
+                rootNode.performPopupActionNoBlock("Close");
+//                new EventTool().waitNoEvent(2000);
+            } catch (Exception e) {
             }
         } catch (Exception e) {
-            
         } finally {
-            new ProjectsTabOperator().tree().clearSelection();
+            try {
+                JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", lTimeOut);
+            } catch (Exception e) {
+            }
         }
+
+    }
+    
+    public static long changeTimeout(String name, long value) {
+        long timeOut = -1;
+        try {
+            timeOut = JemmyProperties.setCurrentTimeout(name, value);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+        return timeOut;
     }
     
     public static void waitForScanFinishedAndQueueEmpty() {
         ProjectSupport.waitScanFinished();
-        new QueueTool().waitEmpty(1000);
-        ProjectSupport.waitScanFinished();
+//        new QueueTool().waitEmpty(1000);
+//        ProjectSupport.waitScanFinished();
     }
     
     public static void finalRemove() throws Exception {
         closeProject("JavaApp");
-        closeProject("SVNApplication");
         RepositoryMaintenance.deleteFolder(new File("/tmp/work"));
         RepositoryMaintenance.deleteFolder(new File("/tmp/repo"));
     }
@@ -181,7 +203,7 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Package");
         nfwo.next();
-        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(packageName);
         nfnlso.finish();
@@ -191,7 +213,7 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Class");
         nfwo.next();
-        nfnlso = new NewFileNameLocationStepOperator();
+        nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(name);
         nfnlso.selectPackage(packageName);
@@ -204,7 +226,7 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Package");
         nfwo.next();
-        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(packageName);
         nfnlso.finish();
@@ -216,7 +238,7 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Class");
         nfwo.next();
-        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(name);
 //        nfnlso.selectPackage(packageName);
@@ -263,6 +285,42 @@ public final class TestKit {
         JMenuItemOperator mo = mbo.showMenuItem("View|Show Versioning Labels");
         JCheckBoxMenuItemOperator cbmio = new JCheckBoxMenuItemOperator((JCheckBoxMenuItem) mo.getSource());
         if (!cbmio.getState())
-            cbmio.push();
+            cbmio.doClick();
+    }
+
+    public static String getOsName() {
+        String osName = "uknown";
+        try {
+            osName = System.getProperty("os.name");
+        } catch (Throwable e) {
+
+        }
+        return osName;
+    }
+
+    public static boolean waitText(MessageHandler handler) {
+        int i = 0;
+
+        while (!handler.isFinished()) {
+            i++;
+            if (i > TIME_OUT) {
+                throw new TimeoutExpiredException("Text [" + handler.message + "] hasn't been found in reasonable time!");
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ex) {
+                ex.printStackTrace();
+            }
+        }
+        return true;
+    }
+
+    public static void removeHandlers(Logger log) {
+        if (log != null) {
+            Handler[] handlers = log.getHandlers();
+            for (int i = 0; i < handlers.length; i++) {
+                log.removeHandler(handlers[i]);
+            }
+        }
     }
 }
