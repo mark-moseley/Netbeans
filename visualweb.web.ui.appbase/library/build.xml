@@ -41,9 +41,9 @@ Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
 
-<project name="Application_Runtime_API_Library" default="default" basedir=".">
-    <description>Builds, tests, and runs the project Application Runtime API Library.</description>
+<project name="visualweb.web.ui.appbase/library" default="default" basedir=".">
     <import file="nbproject/build-impl.xml"/>
+    <import file="../../nbbuild/templates/projectized.xml"/>
     <!--
 
     There exist several targets which are by default empty and which can be 

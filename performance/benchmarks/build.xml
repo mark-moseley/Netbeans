@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="ISO-8859-1"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -26,7 +26,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -41,32 +41,66 @@ Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
 
+<project name="performance/benchmarks" default="jars" basedir=".">
 
-<project name="visualweb.jsfsupport.components/library" default="default" basedir=".">
-
-    <import file="nbproject/build-impl.xml"/>
     <import file="../../nbbuild/templates/projectized.xml"/>
+
+    <target name="compile">
+        <javac srcdir="src" destdir="src" deprecation="${build.compiler.deprecation}" debug="${build.compiler.debug}">
+            <classpath>
+                <pathelement location="../../xtest/lib/junit.jar"/>
+            </classpath>
+        </javac>
+    </target>
     
-    <target name="-post-compile" depends="copy-metadata"/>
-    
-    <target name="copy-metadata">
-        <copy todir="${build.classes.dir}/META-INF">
-            <fileset dir="conf">
-                <include name="*.dtd"/>
-                <include name="*.xml"/>
-                <include name="*.tld"/>
+    <target name="jar" />
+    <target name="release"/>
+    <target name="netbeans" />    
+
+    <target name="jars" depends="compile">
+        <mkdir dir="lib"/>
+        <jar jarfile="lib/performance-benchmarks.jar"
+        basedir="src"
+        excludes="**/*.java,**/*.jjt,**/*.jj"
+        compress="false"/>
+    </target>
+
+    <target name="clean">
+        <delete>
+            <fileset dir="src">
+                <include name="**/*.class"/>
             </fileset>
-        </copy>
+        </delete>
+        <delete dir="lib"/>
     </target>
-    
-    <!-- Zip the javadoc -->   
-    <target name="javadoc-zip" depends="compile,javadoc">
-        <zip basedir="${dist.javadoc.dir}" destfile="${dist.javadoc.zip}" />
-    </target> 
-    
-    <!-- Zip the src code -->
-    <target name="src-zip" depends="compile">
-        <zip basedir="${src.dir}" destfile="${src.zip}" excludes="**/CVS/**"/>
+  
+    <target name="perf" depends="jars">
+        <ant dir="test/perf" antfile="build.xml" />
     </target>
-    
+	  
+    <!-- <target name="grammar" if="${javacchome}"> -->
+    <target name="grammar" >
+        <mkdir dir="src/org/netbeans/performance/benchmarks/bde/generated"/>
+
+        <jjtree 
+        javacchome="${javacchome}" 
+        target="src/org/netbeans/performance/benchmarks/bde/BDEGrammar.jjt" 
+        outputdirectory="src/org/netbeans/performance/benchmarks/bde/generated"
+        />
+
+        <javacc 
+        javacchome="${javacchome}" 
+        target="src/org/netbeans/performance/benchmarks/bde/generated/BDEGrammar.jj" 
+        outputdirectory="src/org/netbeans/performance/benchmarks/bde/generated"
+        />
+
+        <copy file="src/org/netbeans/performance/benchmarks/bde/override/SimpleNode.xjava" tofile="src/org/netbeans/performance/bde/generated/SimpleNode.java" overwrite="true" />
+
+        <antcall target="jars"/>
+    </target>
+
+    <target name="clean_grammar">
+        <delete dir="src/org/netbeans/performance/benchmarks/bde/generated"/>
+    </target>
+	
 </project>
