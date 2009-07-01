@@ -104,6 +104,63 @@ is the proper place.
     <!-- ACTUAL CHANGES BEGIN HERE: -->
 
     <changes>
+        <change id="added-component-removed-property">
+            <summary>EditorRegistry.COMPONENT_REMOVED_PROPERTY added.</summary>
+            <version major="1" minor="13"/>
+            <date day="1" month="7" year="2009"/>
+            <author login="dbalek"/>
+            <compatibility binary="compatible" source="compatible" semantic="compatible" addition="yes"/>
+            <description>EditorRegistry.COMPONENT_REMOVED_PROPERTY is fired when a component is removed from
+            component hierarchy.
+            </description>
+        </change>
+
+        <change id="added-dialogbinding">
+            <summary>DialogBinding added</summary>
+            <version major="1" minor="11"/>
+            <date day="15" month="5" year="2009"/>
+            <author login="dbalek"/>
+            <compatibility binary="compatible" source="compatible" semantic="compatible" addition="yes"/>
+            <description>DialogBinding allows for content of some text component to be virtually placed
+                to the given offset inside of a file or document. This way, the necessary context is
+                provided for code completion and similar features to work in any text component.
+            </description>
+            <class package="org.netbeans.api.editor" name="DialogBinding"/>
+            <issue number="163769"/>
+        </change>
+
+        <change id="added-editoractionregistration">
+            <summary>EditorActionRegistration annotation added</summary>
+            <version major="1" minor="10"/>
+            <date day="7" month="4" year="2009"/>
+            <author login="mmetelka"/>
+            <compatibility binary="compatible" source="compatible" semantic="compatible" addition="yes"/>
+            <description>
+                EditorActionRegistration allows to easily register an editor action
+                into the list of actions of an editor kit. It also allows a lazy
+                action's class loading (more details in javadoc).
+            </description>
+            <class package="org.netbeans.api.editor" name="EditorActionRegistration"/>
+            <issue number="150875"/>
+        </change>
+
+        <change id="added-codegen-spi">
+            <summary>Code Generation SPI added</summary>
+            <version major="1" minor="8"/>
+            <date day="30" month="4" year="2008"/>
+            <author login="dbalek"/>
+            <compatibility binary="compatible" source="compatible" semantic="compatible" addition="yes"/>
+            <description>
+                The Code Generation SPI consists of two interfaces.
+                The <code>CodeGenerator</code> implementations registered for
+                various mime types serve for creating code snippets and inserting
+                them into documents on the Insert Code editor action invocation.
+                The <code>CodeGeneratorContextProvider</code> implementations
+                registered for the mime types could provide the respective
+                CodeGenerators with an additional context information.
+            </description>
+            <issue number="134239"/>
+        </change>
 
         <change id="added-HighlightAttributeValue">
             <summary>HighlightAttributeValue interface added</summary>
