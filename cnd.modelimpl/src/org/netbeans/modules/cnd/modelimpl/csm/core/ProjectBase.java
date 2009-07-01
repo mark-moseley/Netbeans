@@ -1792,10 +1792,13 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         return res;
     }
 
-    public Collection<CsmProject> getLibraries() {
+    public List<CsmProject> getLibraries() {
         List<CsmProject> res = new ArrayList<CsmProject>();
         if (platformProject instanceof NativeProject) {
-            for (NativeProject nativeLib : ((NativeProject) platformProject).getDependences()) {
+            List<NativeProject> dependences = ((NativeProject) platformProject).getDependences();
+            int size = dependences.size();
+            for (int i = 0; i < size; i++) {
+                NativeProject nativeLib = dependences.get(i);
                 CsmProject prj = model.findProject(nativeLib);
                 if (prj != null) {
                     res.add(prj);
@@ -1808,8 +1811,10 @@ public abstract class ProjectBase implements CsmProject, Persistent, SelfPersist
         //    res.add(lib);
         //}
         if (!isArtificial()) {
-            for (LibProjectImpl library : LibraryManager.getInstance().getLibraries((ProjectImpl) this)) {
-                res.add(library);
+            List<LibProjectImpl> libraries = LibraryManager.getInstance().getLibraries((ProjectImpl) this);
+            int size = libraries.size();
+            for (int i = 0; i < size; i++) {
+                res.add(libraries.get(i));
             }
         }
         return res;
