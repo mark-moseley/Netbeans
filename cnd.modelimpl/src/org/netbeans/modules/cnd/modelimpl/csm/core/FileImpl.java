@@ -121,7 +121,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
     public static final int SOURCE_C_FILE = 2;
     public static final int SOURCE_CPP_FILE = 3;
     public static final int HEADER_FILE = 4;
-    private static long parseCount = 1;
+    private static volatile long parseCount = 1;
 
     public static int getParseCount() {
         return (int) (parseCount & 0xFFFFFFFFL);
@@ -205,7 +205,8 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
     private volatile State state;
     private volatile ParsingState parsingState;
     private FileType fileType = FileType.UNDEFINED_FILE;
-    private final Object stateLock = new Object();
+    private static final class StateLock {}
+    private final Object stateLock = new StateLock();
     private final Collection<CsmUID<FunctionImplEx>> fakeRegistrationUIDs = new CopyOnWriteArrayList<CsmUID<FunctionImplEx>>();
     private long lastParsed = Long.MIN_VALUE;
     /** Cache the hash code */
@@ -589,7 +590,8 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
             return true;
         }
     }
-    private final Object changeStateLock = new Object();
+    private static final class ChangeStateLock {}
+    private final Object changeStateLock = new ChangeStateLock();
 
     public final void markReparseNeeded(boolean invalidateCache) {
         synchronized (changeStateLock) {
@@ -634,6 +636,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
      */
     private void render(AST tree) {
         new AstRenderer(this).render(tree);
+        parseCount++;
     }
 
     private APTFile getFullAPT() {
@@ -846,8 +849,9 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         // remember walk info
         setAPTCacheEntry(preprocHandler, cacheEntry, false);
         return true;
-    }    
-    private final Object tokStreamLock = new Object();
+    }
+    private static final class TokenStreamLock {}
+    private final Object tokStreamLock = new TokenStreamLock();
     private Reference<FileTokenStreamCache> tsRef = new SoftReference<FileTokenStreamCache>(null);
     /**
      *
@@ -1090,7 +1094,7 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
         if (aHook != null) {
             aHook.parsingFinished(this, preprocHandler);
         }
-        parseCount++;
+//        parseCount++;
         return ast;
     }
 
@@ -1919,11 +1923,11 @@ public class FileImpl implements CsmFile, MutableDeclarationsContainer,
     }
 
     private final FileStateCache stateCache = new FileStateCache(this);
-    /*package-local*/ void cacheVisitedState(APTPreprocHandler.State inputState, APTPreprocHandler outputHandler) {
-        stateCache.cacheVisitedState(inputState, outputHandler);
+    /*package-local*/ void cacheVisitedState(APTPreprocHandler.State inputState, APTPreprocHandler outputHandler, FilePreprocessorConditionState pcState) {
+        stateCache.cacheVisitedState(inputState, outputHandler, pcState);
     }
 
-    /*package-local*/ APTPreprocHandler.State getCachedVisitedState(APTPreprocHandler.State inputState) {
+    /*package-local*/ PreprocessorStatePair getCachedVisitedState(APTPreprocHandler.State inputState) {
         return stateCache.getCachedVisitedState(inputState);
     }
 

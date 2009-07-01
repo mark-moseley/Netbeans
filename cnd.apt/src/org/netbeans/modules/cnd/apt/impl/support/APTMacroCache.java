@@ -39,80 +39,58 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.utils.cache;
+package org.netbeans.modules.cnd.apt.impl.support;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.netbeans.modules.cnd.apt.support.APTMacro;
+import org.netbeans.modules.cnd.utils.cache.WeakSharedSet;
 
 
 /**
- * APT string table manager
+ * APT macro table manager
  * Responsibility:
- *  - only one instance per String object
- *  - based on weak references to allow GC of unused strings
- * 
+ *  - only one instance per macro object
+ *  - based on weak references to allow GC of unused macros
+ *
  * @author Vladimir Voskresensky
  */
-public abstract class APTStringManager  {
+public abstract class APTMacroCache  {
     public enum CacheKind {
         Single,
         Sliced
     }
-    
-    public abstract CharSequence getString(CharSequence text);
-    public abstract void dispose();
 
-    private static final Map<String, APTStringManager> instances = Collections.synchronizedMap(new HashMap<String, APTStringManager>());
-
-    private static final int STRING_MANAGER_DEFAULT_CAPACITY=1024;
-    private static final int STRING_MANAGER_DEFAULT_SLICED_NUMBER = 29;
-
-    /*package*/ static final String TEXT_MANAGER="Manager of sharable texts"; // NOI18N
-    /*package*/ static final int    TEXT_MANAGER_INITIAL_CAPACITY=STRING_MANAGER_DEFAULT_CAPACITY;
-    /*package*/ static final String FILE_PATH_MANAGER="Manager of sharable file paths"; // NOI18N
-    /*package*/ static final int    FILE_PATH_MANAGER_INITIAL_CAPACITY=STRING_MANAGER_DEFAULT_CAPACITY;
-    
-    public static APTStringManager instance(String name, CacheKind kind) {
-        switch (kind){
-            case Single:
-                return instance(name, STRING_MANAGER_DEFAULT_CAPACITY);
-            case Sliced:
-                return instance(name, STRING_MANAGER_DEFAULT_SLICED_NUMBER, STRING_MANAGER_DEFAULT_CAPACITY);
-        }
-        throw new java.lang.IllegalArgumentException();
+    private APTMacroCache() {
     }
 
-    private static APTStringManager instance(String name, int initialCapacity) {
-        APTStringManager instance = instances.get(name);
-        if (instance == null) {
-            instance = new APTSingleStringManager(name, initialCapacity);
-            instances.put(name, instance);
-        }
-        return instance;
-    }  
+    public abstract APTMacro getMacro(APTMacro macro);
+    public abstract void dispose();
 
-    private static APTStringManager instance(String name, int sliceNumber, int initialCapacity) {
-        APTStringManager instance = instances.get(name);
-        if (instance == null) {
-            instance = new APTCompoundStringManager(name, sliceNumber, initialCapacity);
-            instances.put(name, instance);
-        }
-        return instance;
-    }  
+    private static final int MACRO_MANAGER_DEFAULT_CAPACITY=1024;
+    private static final int MACRO_MANAGER_DEFAULT_SLICED_NUMBER = 29;
+    private static final APTMacroCache instance = create(false);
 
-    /*package*/ static final class APTSingleStringManager extends APTStringManager {
-        private final WeakSharedSet<CharSequence> storage;
+    private static APTMacroCache create(boolean single) {
+        if (single) {
+            return new APTSingleMacroManager(MACRO_MANAGER_DEFAULT_CAPACITY);
+        } else {
+            return new APTCompoundMacroManager(MACRO_MANAGER_DEFAULT_SLICED_NUMBER, MACRO_MANAGER_DEFAULT_CAPACITY);
+        }
+    }
+
+    public static APTMacroCache getManager() {
+        return instance;
+    }
+    
+    private static final class APTSingleMacroManager extends APTMacroCache {
+        private final WeakSharedSet<APTMacro> storage;
         private final int initialCapacity;
-        // To gebug
-        private final String name;
 
-        /** Creates a new instance of APTStringManager */
-        private APTSingleStringManager(String name, int initialCapacity) {
-            storage = new WeakSharedSet<CharSequence>(initialCapacity);
+        /** Creates a new instance of APTMacroCache */
+        private APTSingleMacroManager(int initialCapacity) {
+            storage = new WeakSharedSet<APTMacro>(initialCapacity);
             this.initialCapacity = initialCapacity;
-            // To gebug
-            this.name = name;
         }
 
         private static final class Lock {}
@@ -120,29 +98,29 @@ public abstract class APTStringManager  {
 
         /**
          * returns shared string instance equal to input text.
-         * 
-         * @param test - interested shared string 
+         *
+         * @param test - interested shared string
          * @return the shared instance of text
          * @exception NullPointerException If the <code>text</code> parameter
          *                                 is <code>null</code>.
          */
-        public final CharSequence getString(CharSequence text) {
-            if (text == null) {
+        public APTMacro getMacro(APTMacro macro) {
+            if (macro == null) {
                 throw new NullPointerException("null string is illegal to share"); // NOI18N
             }
-            CharSequence outText = null;
+            APTMacro outMacro = null;
 
             synchronized (lock) {
-                outText = storage.addOrGet(text);
+                outMacro = storage.addOrGet(macro);
             }
-            assert (outText != null);
-            assert (outText.equals(text));
-            return outText;
+            assert (outMacro != null);
+            assert (outMacro.equals(macro));
+            return outMacro;
         }
 
         public final void dispose() {
             if (false){
-                System.out.println("Dispose cache "+name+" "+getClass().getName()); // NOI18N
+                System.out.println("Dispose cache "+getClass().getName()); // NOI18N
                 Object[] arr = storage.toArray();
                 Map<Class, Integer> classes = new HashMap<Class,Integer>();
                 for(Object o : arr){
@@ -166,43 +144,40 @@ public abstract class APTStringManager  {
             }
         }
     }
-    
-    /*package*/ static final class APTCompoundStringManager extends APTStringManager {
-        private final APTStringManager[] instances;
+
+    private static final class APTCompoundMacroManager extends APTMacroCache {
+        private final APTMacroCache[] instances;
         private final int sliceNumber; // primary number for better distribution
-        // To gebug
-        private final String name;
-        /*package*/APTCompoundStringManager(String name, int sliceNumber) {
-            this(name, sliceNumber, APTStringManager.TEXT_MANAGER_INITIAL_CAPACITY);
+        private APTCompoundMacroManager(int sliceNumber) {
+            this(sliceNumber, APTMacroCache.MACRO_MANAGER_DEFAULT_CAPACITY);
         }
-        /*package*/APTCompoundStringManager(String name, int sliceNumber, int initialCapacity) {
+        private APTCompoundMacroManager(int sliceNumber, int initialCapacity) {
             this.sliceNumber = sliceNumber;
-            instances = new APTStringManager[sliceNumber];
+            instances = new APTMacroCache[sliceNumber];
             for (int i = 0; i < instances.length; i++) {
-                instances[i] = new APTSingleStringManager(name, initialCapacity);
+                instances[i] = new APTSingleMacroManager(initialCapacity);
             }
-            this.name = name;
         }
-        
-        private APTStringManager getDelegate(CharSequence text) {
-            if (text == null) {
-                throw new NullPointerException("null string is illegal to share"); // NOI18N
-            }            
-            int index = text.hashCode() % sliceNumber;
+
+        private APTMacroCache getDelegate(APTMacro macro) {
+            if (macro == null) {
+                throw new NullPointerException("null macro is illegal to share"); // NOI18N
+            }
+            int index = macro.hashCode() % sliceNumber;
             if (index < 0) {
                 index += sliceNumber;
             }
             return instances[index];
         }
-        
-        public final CharSequence getString(CharSequence text) {
-            return getDelegate(text).getString(text);
+
+        public APTMacro getMacro(APTMacro macro) {
+            return getDelegate(macro).getMacro(macro);
         }
 
         public final void dispose() {
             for (int i = 0; i < instances.length; i++) {
                 instances[i].dispose();
-            }            
-        }        
-    }    
+            }
+        }
+    }
 }
