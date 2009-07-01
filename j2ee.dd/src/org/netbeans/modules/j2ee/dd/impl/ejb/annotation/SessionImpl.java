@@ -90,7 +90,7 @@ import org.openide.util.Exceptions;
 
 public class SessionImpl extends PersistentObject implements Session {
     
-    protected enum Kind { STATELESS, STATEFUL }
+    protected enum Kind { STATELESS, STATEFUL, SINGLETON }
     
     private final Kind kind;
     
@@ -121,7 +121,21 @@ public class SessionImpl extends PersistentObject implements Session {
     
     boolean refresh(TypeElement typeElement) {
         Map<String, ? extends AnnotationMirror> annByType = getHelper().getAnnotationsByType(typeElement.getAnnotationMirrors());
-        AnnotationMirror annotationMirror = annByType.get(kind == Kind.STATELESS ? "javax.ejb.Stateless" : "javax.ejb.Stateful"); // NOI18N
+        AnnotationMirror annotationMirror = null;
+        switch(kind){
+            case STATELESS:
+                annotationMirror = annByType.get("javax.ejb.Stateless"); //NOI18N
+                sessionType = Session.SESSION_TYPE_STATELESS;
+                break;
+            case STATEFUL:
+                annotationMirror = annByType.get("javax.ejb.Stateful"); //NOI18N
+                sessionType = Session.SESSION_TYPE_STATEFUL;
+                break;
+            case SINGLETON: 
+                annotationMirror = annByType.get("javax.ejb.Singleton"); //NOI18N
+                sessionType = Session.SESSION_TYPE_SINGLETON;
+                break;
+        }
         if (annotationMirror == null) {
             return false;
         }
@@ -131,7 +145,6 @@ public class SessionImpl extends PersistentObject implements Session {
         ParseResult parseResult = parser.parse(annotationMirror);
         ejbName = parseResult.get("name", String.class); // NOI18N
         ejbClass = typeElement.getQualifiedName().toString();
-        sessionType = (kind == Kind.STATELESS) ? Session.SESSION_TYPE_STATELESS : Session.SESSION_TYPE_STATEFUL;
         return true;
     }
     
@@ -144,6 +157,14 @@ public class SessionImpl extends PersistentObject implements Session {
     
         // try to remember set of interfaces from last initialization
         // and if it is changed, reinitialize again
+        
+        /*
+        This optimization does not work properly
+        (see http://www.netbeans.org/issues/show_bug.cgi?id=124295).
+        If an interface is changed from Local to Remote (or vice versa)
+        then interfacesSet remains the same and variables
+        businessLocal and businessRemote are not refreshed which leads
+        to problems reported in the issue above...
         
         boolean reinit = false;
         
@@ -166,11 +187,17 @@ public class SessionImpl extends PersistentObject implements Session {
         if (!reinit) {
             return;
         }
+        */
+        TypeElement typeElement = getTypeElement();
 
         interfacesSet = new HashSet<String>();
         businessLocal = new String[] {};
         businessRemote = new String[] {};
         
+        if (typeElement == null) {
+            return;
+        }
+
         List<TypeElement> interfaces = new ArrayList<TypeElement>(); // all business interface candidates, EJB 3.0 Spec, Chapter 10.2
         for (TypeMirror typeMirror : typeElement.getInterfaces()) {
             if (TypeKind.DECLARED == typeMirror.getKind()) {
@@ -205,14 +232,16 @@ public class SessionImpl extends PersistentObject implements Session {
             }
         }
         
-        if (interfaces.size() == 1 && beanRemoteAnnotation == null &&
-                annotatedLocalInterfaces.size() == 0 && annotatedRemoteInterfaces.size() == 0) {
-            businessLocal = new String[] { interfaces.get(0).getQualifiedName().toString() };
-            businessRemote = new String[] {};
-        } else if (interfaces.size() == 1 && beanLocalAnnotation == null && beanRemoteAnnotation != null &&
-                annotatedLocalInterfaces.size() == 0 && annotatedRemoteInterfaces.size() == 0) {
-            businessLocal = new String[] {};
-            businessRemote = new String[] { interfaces.get(0).getQualifiedName().toString() };
+        if (interfaces.size() == 1) {
+            if (beanRemoteAnnotation == null && /*annotatedLocalInterfaces.size() == 0 &&*/
+                annotatedRemoteInterfaces.size() == 0)
+            {
+                businessLocal = new String[] { interfaces.get(0).getQualifiedName().toString() };
+            } else if (beanLocalAnnotation == null && /*beanRemoteAnnotation != null &&*/
+                annotatedLocalInterfaces.size() == 0 /*&& annotatedRemoteInterfaces.size() == 0*/)
+            {
+                businessRemote = new String[] { interfaces.get(0).getQualifiedName().toString() };
+            }
         } else {
             if (beanLocalAnnotation != null) {
                 List<String> annotationsValues = getClassesFromLocalOrRemote(beanLocalAnnotation);
@@ -469,6 +498,7 @@ public class SessionImpl extends PersistentObject implements Session {
 
     // <editor-fold defaultstate="collapsed" desc="Not implemented methods">
     
+    @Override
     public Object clone() {
         throw new UnsupportedOperationException("Not supported yet.");
     }
