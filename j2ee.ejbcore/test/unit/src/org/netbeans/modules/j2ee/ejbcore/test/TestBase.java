@@ -54,6 +54,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.api.project.Project;
 import org.netbeans.junit.NbTestCase;
@@ -62,7 +63,7 @@ import org.netbeans.modules.j2ee.api.ejbjar.EjbProjectConstants;
 import org.netbeans.modules.j2ee.common.method.MethodModel;
 import org.netbeans.modules.j2ee.common.method.MethodModelSupport;
 import org.netbeans.modules.java.source.usages.IndexUtil;
-import org.netbeans.modules.java.source.usages.RepositoryUpdater;
+import org.netbeans.modules.parsing.api.indexing.IndexingManager;
 import org.netbeans.spi.java.queries.SourceLevelQueryImplementation;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -164,19 +165,19 @@ public class TestBase extends NbTestCase {
         classPathProvider.setClassPath(sources);
         try {
             for (FileObject fileObject : testModule.sources) {
-                RepositoryUpdater.getDefault().scheduleCompilationAndWait(fileObject, fileObject).await();
+                IndexingManager.getDefault().refreshIndexAndWait(fileObject.getURL(), null);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private static String convertEjbVersionToJavaEEVersion(String ejbVersion) {
+    private static Profile convertEjbVersionToJavaEEVersion(String ejbVersion) {
         double version = Double.parseDouble(ejbVersion);
         if (version > 2.1) {
-            return EjbProjectConstants.JAVA_EE_5_LEVEL;
+            return Profile.JAVA_EE_5;
         } else {
-            return EjbProjectConstants.J2EE_14_LEVEL;
+            return Profile.J2EE_14;
         }
     }
     

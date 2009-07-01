@@ -42,6 +42,7 @@
 package org.netbeans.modules.j2ee.ejbcore.ejb.wizard.mdb;
 
 import java.io.IOException;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.modules.j2ee.ejbcore.api.codegeneration.MessageGenerator;
 import java.util.Collections;
 import java.util.NoSuchElementException;
@@ -98,7 +99,8 @@ public final class MessageEJBWizard implements WizardDescriptor.InstantiatingIte
         EjbJar ejbModule = EjbJar.getEjbJar(pkg);
         
         // TODO: UI - add checkbox for Java EE 5 to create also EJB 2.1 style EJBs
-        boolean isSimplified = ejbModule.getJ2eePlatformVersion().equals(J2eeModule.JAVA_EE_5);
+        Profile profile = ejbModule.getJ2eeProfile();
+        boolean isSimplified = profile.equals(Profile.JAVA_EE_5) || profile.equals(Profile.JAVA_EE_6_FULL);
         MessageGenerator generator = MessageGenerator.create(
                 Templates.getTargetName(wiz),
                 pkg,
@@ -152,7 +154,7 @@ public final class MessageEJBWizard implements WizardDescriptor.InstantiatingIte
 
         public boolean isValid() {
             if (!org.netbeans.modules.j2ee.common.Util.isValidServerInstance(getProject())) {
-                getWizardDescriptor().putProperty("WizardPanel_errorMessage",
+                getWizardDescriptor().putProperty(WizardDescriptor.PROP_ERROR_MESSAGE,
                         NbBundle.getMessage(MessageEJBWizard.class, "ERR_MissingServer")); // NOI18N
                 return false;
             }

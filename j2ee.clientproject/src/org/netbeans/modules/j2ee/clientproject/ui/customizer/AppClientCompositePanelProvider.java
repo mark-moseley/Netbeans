@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.ResourceBundle;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.modules.j2ee.clientproject.AppClientProject;
 import org.netbeans.modules.j2ee.clientproject.wsclient.CustomizerWSClientHost;
 import org.netbeans.modules.j2ee.clientproject.wsclient.NoWebServiceClientsPanel;
@@ -124,8 +125,8 @@ public class AppClientCompositePanelProvider implements ProjectCustomizer.Compos
             if (clientSupport != null) {
                 serviceClientsSettings = clientSupport.getServiceClients();
             }
-            if(AppClientProjectProperties.J2EE_1_4.equals(
-                    project.getCarModule().getJ2eePlatformVersion()) && 
+            if(Profile.J2EE_14.equals(
+                    project.getCarModule().getJ2eeProfile()) &&
                     serviceClientsSettings != null && serviceClientsSettings.size() > 0) {
                 ProjectCustomizer.Category clients = ProjectCustomizer.Category.create(WEBSERVICECLIENTS,
                         bundle.getString("LBL_Config_WebServiceClients"), // NOI18N

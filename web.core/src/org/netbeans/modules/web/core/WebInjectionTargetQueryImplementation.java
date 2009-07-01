@@ -42,6 +42,7 @@
 package org.netbeans.modules.web.core;
 
 import javax.lang.model.element.TypeElement;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.java.source.CompilationController;
 import org.netbeans.modules.j2ee.common.queries.spi.InjectionTargetQueryImplementation;
 import org.netbeans.modules.j2ee.core.api.support.java.SourceUtils;
@@ -51,6 +52,7 @@ import org.netbeans.modules.web.api.webmodule.WebModule;
  *
  * @author Martin Adamek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.j2ee.common.queries.spi.InjectionTargetQueryImplementation.class)
 public class WebInjectionTargetQueryImplementation implements InjectionTargetQueryImplementation {
     
     public WebInjectionTargetQueryImplementation() {
@@ -64,8 +66,8 @@ public class WebInjectionTargetQueryImplementation implements InjectionTargetQue
         boolean ret = false;
         WebModule webModule = WebModule.getWebModule(controller.getFileObject());
         if (webModule != null &&
-                !webModule.getJ2eePlatformVersion().equals("1.3") && // NOI18N
-                !webModule.getJ2eePlatformVersion().equals("1.4")) { // NOI18N
+                !Profile.J2EE_13.equals(webModule.getJ2eeProfile()) && // NOI18N
+                !Profile.J2EE_14.equals(webModule.getJ2eeProfile())) { // NOI18N
             
             ret = SourceUtils.isSubtype(controller, typeElement, "javax.servlet.Servlet"); // NOI18N
         }

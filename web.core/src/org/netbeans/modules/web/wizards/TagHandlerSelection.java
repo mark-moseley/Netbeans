@@ -47,12 +47,11 @@ import java.util.Iterator;
 import java.util.Set;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.project.ProjectUtils;
-
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
 import org.openide.loaders.TemplateWizard;
-
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.SourceGroup;
@@ -73,7 +72,7 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
      */
     private transient TagHandlerPanel component;
     private transient TemplateWizard wizard;
-    private transient String j2eeVersion;
+    private transient Profile j2eeVersion;
     
     /** Create the wizard panel descriptor. */
     public TagHandlerSelection(TemplateWizard wizard) {
@@ -89,12 +88,12 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
         Sources sources = ProjectUtils.getSources(project);
         SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
         WebModule wm=null;
-        j2eeVersion = WebModule.J2EE_14_LEVEL;
+        j2eeVersion = Profile.J2EE_14;
         if (groups!=null && groups.length>0) {
-            wm = WebModule.getWebModule(groups[0].getRootFolder());;
+            wm = WebModule.getWebModule(groups[0].getRootFolder());
         }
         if (wm!=null) {
-            j2eeVersion=wm.getJ2eePlatformVersion();
+            j2eeVersion=wm.getJ2eeProfile();
         }
         if (component == null) {
             component = new TagHandlerPanel(this,j2eeVersion);
@@ -109,11 +108,11 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
     
     public boolean isValid() {
         // If it is always OK to press Next or Finish, then:
-        if (!isBodyTagSupport() && WebModule.J2EE_13_LEVEL.equals(j2eeVersion)) {
-            wizard.putProperty("WizardPanel_errorMessage", // NOI18N
+        if (!isBodyTagSupport() && Profile.J2EE_13.equals(j2eeVersion)) {
+            wizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, // NOI18N
                 org.openide.util.NbBundle.getMessage(TagHandlerSelection.class, "NOTE_simpleTag"));
         } else {
-            wizard.putProperty("WizardPanel_errorMessage", ""); // NOI18N
+            wizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, ""); // NOI18N
         }
         return true;
         // If it depends on some condition (form filled out...), then:
@@ -123,10 +122,9 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
         // and uncomment the complicated stuff below.
     }
  
-    //public final void addChangeListener(ChangeListener l) {}
-    //public final void removeChangeListener(ChangeListener l) {}
+    // FIXME: use org.openide.util.ChangeSupport for ChangeListeners
+    private final Set<ChangeListener> listeners = new HashSet<ChangeListener>(1);
 
-    private final Set listeners = new HashSet (1); // Set<ChangeListener>
     public final void addChangeListener (ChangeListener l) {
         synchronized (listeners) {
             listeners.add (l);
@@ -138,13 +136,13 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
         }
     }
     protected final void fireChangeEvent () {
-        Iterator it;
+        Iterator<ChangeListener> it;
         synchronized (listeners) {
-            it = new HashSet (listeners).iterator ();
+            it = new HashSet<ChangeListener>(listeners).iterator();
         }
         ChangeEvent ev = new ChangeEvent (this);
-        while (it.hasNext ()) {
-            ((ChangeListener) it.next ()).stateChanged (ev);
+        while (it.hasNext()) {
+            it.next().stateChanged(ev);
         }
     }
 
@@ -163,6 +161,8 @@ public class TagHandlerSelection implements WizardDescriptor.Panel {
             w.putProperty("BODY_SUPPORT",Boolean.FALSE);//NOI18N
     }
     
-    boolean isBodyTagSupport() {return component.isBodyTagSupport();}
+    boolean isBodyTagSupport() {
+        return component.isBodyTagSupport();
+    }
     
 }

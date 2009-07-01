@@ -42,13 +42,16 @@
 package org.netbeans.modules.web.project;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Collections;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
+import org.netbeans.api.java.project.classpath.ProjectClassPathModifier;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationController;
@@ -75,10 +78,6 @@ import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.netbeans.modules.j2ee.metadata.model.api.MetadataModelAction;
 import org.netbeans.modules.web.project.classpath.ClassPathProviderImpl;
-import org.netbeans.modules.web.project.classpath.WebProjectClassPathExtender;
-import org.netbeans.modules.web.project.ui.customizer.AntArtifactChooser;
-import org.netbeans.modules.web.project.ui.customizer.WebProjectProperties;
-import org.netbeans.modules.web.spi.webmodule.WebModuleImplementation;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.netbeans.spi.project.support.ant.ReferenceHelper;
@@ -160,18 +159,13 @@ class WebContainerImpl implements EnterpriseReferenceContainer {
             } catch (ClassNotFoundException ex){}
         }
         
-        WebProjectClassPathExtender cpExtender = (WebProjectClassPathExtender) webProject.getLookup().lookup(WebProjectClassPathExtender.class);
-        if (cpExtender != null) {
+        if (moduleJarTarget != null) {
             try {
-                AntArtifactChooser.ArtifactItem artifactItems[] = new AntArtifactChooser.ArtifactItem [1];
-                artifactItems[0] = new AntArtifactChooser.ArtifactItem(moduleJarTarget, moduleJarTarget.getArtifactLocations()[0]);
-                cpExtender.addAntArtifacts(WebProjectProperties.JAVAC_CLASSPATH, artifactItems, WebProjectProperties.TAG_WEB_MODULE_LIBRARIES);
+                ProjectClassPathModifier.addAntArtifacts(new AntArtifact[]{moduleJarTarget},
+                        new URI[]{moduleJarTarget.getArtifactLocations()[0]}, webProject.getSourceRoots().getRoots()[0], ClassPath.COMPILE);
             } catch (IOException ioe) {
                 Exceptions.printStackTrace(ioe);
             }
-        } else {
-            Logger.getLogger("global").log(Level.INFO,
-                    "WebProjectClassPathExtender not found in the project lookup of project: " + webProject.getProjectDirectory().getPath());    //NOI18N
         }
         
         writeDD(referencingFile, referencingClass);
@@ -194,7 +188,7 @@ class WebContainerImpl implements EnterpriseReferenceContainer {
     
     private WebApp getWebApp() throws IOException {
         if (webApp==null) {
-            WebModuleImplementation jp = (WebModuleImplementation) webProject.getLookup().lookup(WebModuleImplementation.class);
+            ProjectWebModule jp = webProject.getLookup().lookup(ProjectWebModule.class);
             FileObject fo = jp.getDeploymentDescriptor();
             webApp = DDProvider.getDefault().getDDRoot(fo);
         }
@@ -209,11 +203,11 @@ class WebContainerImpl implements EnterpriseReferenceContainer {
             cppImpl.getProjectSourcesClassPath(ClassPath.SOURCE) 
         );
         JavaSource javaSource = JavaSource.create(classpathInfo, Collections.<FileObject>emptyList());
-        WebModuleImplementation jp = (WebModuleImplementation) webProject.getLookup().lookup(WebModuleImplementation.class);
+        ProjectWebModule jp = webProject.getLookup().lookup(ProjectWebModule.class);
         
         // test if referencing class is injection target
         final boolean[] isInjectionTarget = {false};
-        CancellableTask task = new CancellableTask<CompilationController>() {
+        CancellableTask<CompilationController> task = new CancellableTask<CompilationController>() {
                 public void run(CompilationController controller) throws IOException {
                     Elements elements = controller.getElements();
                     TypeElement thisElement = elements.getTypeElement(referencingClass);
@@ -227,7 +221,7 @@ class WebContainerImpl implements EnterpriseReferenceContainer {
             refFile.runUserActionTask(task, true);
         }
         
-        boolean shouldWrite = isDescriptorMandatory(jp.getJ2eePlatformVersion()) || !isInjectionTarget[0];
+        boolean shouldWrite = isDescriptorMandatory(jp.getJ2eeProfile()) || !isInjectionTarget[0];
         if (shouldWrite) {
             FileObject fo = jp.getDeploymentDescriptor();
             getWebApp().write(fo);
@@ -316,8 +310,8 @@ class WebContainerImpl implements EnterpriseReferenceContainer {
         return proposedValue;
     }
     
-    private static boolean isDescriptorMandatory(String j2eeVersion) {
-        if ("1.3".equals(j2eeVersion) || "1.4".equals(j2eeVersion)) {
+    private static boolean isDescriptorMandatory(Profile j2eeVersion) {
+        if (Profile.J2EE_13.equals(j2eeVersion) || Profile.J2EE_14.equals(j2eeVersion)) {
             return true;
         }
         return false;

@@ -42,6 +42,7 @@
 package org.netbeans.modules.web.wizards;
 
 import java.awt.Dimension;
+import org.netbeans.api.j2ee.core.Profile;
 import org.openide.util.NbBundle;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 
@@ -56,15 +57,15 @@ public class TagHandlerPanel extends javax.swing.JPanel {
      * use this handle to do so.
      */
     private TagHandlerSelection wizardPanel;
-    private String j2eeVersion;
+    private Profile j2eeVersion;
     /** Create the wizard panel and set up some basic properties. */
-    public TagHandlerPanel(TagHandlerSelection wizardPanel, String j2eeVersion) {
+    public TagHandlerPanel(TagHandlerSelection wizardPanel, Profile j2eeVersion) {
         this.wizardPanel=wizardPanel;
         this.j2eeVersion=j2eeVersion;
         initComponents();
         // Provide a name in the title bar.
         setName(NbBundle.getMessage(TagHandlerPanel.class, "TITLE_tagHandlerPanel"));
-        if (WebModule.J2EE_13_LEVEL.equals(j2eeVersion)) {
+        if (Profile.J2EE_13.equals(j2eeVersion)) {
             simpleTagButton.setEnabled(false);
             bodyTagButton.setSelected(true);
         } else {
@@ -75,7 +76,7 @@ public class TagHandlerPanel extends javax.swing.JPanel {
         // You must have turned on WizardDescriptor.WizardPanel_helpDisplayed
         // (see descriptor in standard iterator template for an example of this).
         try {
-            putClientProperty ("WizardPanel_helpURL", // NOI18N
+            putClientProperty (WizardDescriptor.PROP_HELP_URL, // NOI18N
                 new URL ("nbresloc:/org/netbeans/modules/web/wizards/TagHandlerHelp.html")); // NOI18N
         } catch (MalformedURLException mfue) {
             throw new IllegalStateException (mfue.toString ());
@@ -185,7 +186,6 @@ public class TagHandlerPanel extends javax.swing.JPanel {
     }// </editor-fold>//GEN-END:initComponents
     
     private void itemStateChanged(java.awt.event.ItemEvent evt) {//GEN-FIRST:event_itemStateChanged
-        // TODO add your handling code here:
         if (simpleTagButton.isSelected())
             descriptionArea.setText(org.openide.util.NbBundle.getMessage(TagHandlerPanel.class, "DESC_SimpleTag"));
         else

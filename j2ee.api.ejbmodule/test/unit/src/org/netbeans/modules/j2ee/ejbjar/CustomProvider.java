@@ -43,6 +43,7 @@ package org.netbeans.modules.j2ee.ejbjar;
 
 import java.util.Collections;
 import java.util.HashMap;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.modules.j2ee.api.ejbjar.*;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
@@ -56,6 +57,7 @@ import org.openide.filesystems.FileObject;
  *
  * @author  Pavel Buzek
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.j2ee.spi.ejbjar.EjbJarProvider.class)
 public class CustomProvider implements EjbJarProvider {
 
     private HashMap cache = new HashMap ();
@@ -67,7 +69,7 @@ public class CustomProvider implements EjbJarProvider {
         if (file.getExt ().equals ("foo")) {
             EjbJar em  = (EjbJar) cache.get (file.getParent ());
             if (em == null) {
-                em = EjbJarFactory.createEjbJar (new EM (file.getParent (), EjbProjectConstants.J2EE_14_LEVEL));
+                em = EjbJarFactory.createEjbJar (new EM (file.getParent (), Profile.J2EE_14));
                 cache.put (file.getParent (), em);
             }
             return em;
@@ -75,16 +77,16 @@ public class CustomProvider implements EjbJarProvider {
         return null;
     }
     
-    private class EM implements EjbJarImplementation {
+    private class EM implements EjbJarImplementation2 {
         FileObject root;
-        String ver;
+        Profile ver;
         
-        public EM (FileObject root, String ver) {
+        public EM (FileObject root, Profile ver) {
             this.root = root;
             this.ver = ver;
         }
-        
-        public String getJ2eePlatformVersion () {
+
+        public Profile getJ2eeProfile() {
             return ver;
         }
         

@@ -40,10 +40,19 @@
  */
 package org.netbeans.modules.j2ee.earproject.util;
 
+import java.util.ResourceBundle;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationProvider;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.earproject.EarProject;
 import org.netbeans.modules.j2ee.spi.ejbjar.EarImplementation;
+import org.openide.util.NbBundle;
+import org.openide.util.Parameters;
 
 /**
  * Common utilities for Enterprise project.
@@ -51,6 +60,9 @@ import org.netbeans.modules.j2ee.spi.ejbjar.EarImplementation;
  * @author Tomas Mysik
  */
 public final class EarProjectUtil {
+    
+    private static final Logger UI_LOGGER = Logger.getLogger("org.netbeans.ui.j2ee.earproject"); // NOI18N
+    private static final Logger USG_LOGGER = Logger.getLogger("org.netbeans.ui.metrics.j2ee.earproject"); // NOI18N    
 
     private EarProjectUtil() {}
 
@@ -65,9 +77,9 @@ public final class EarProjectUtil {
         //#118047 avoid using the EarProject instance directly to allow for alternate implementations.
         EarImplementation impl = earProject.getLookup().lookup(EarImplementation.class);
         if (impl != null) {
-            return isDDCompulsory(impl.getJ2eePlatformVersion());
+            return isDDCompulsory(Profile.fromPropertiesString(impl.getJ2eePlatformVersion()));
         }
-        return isDDCompulsory(J2eeModule.J2EE_14);
+        return isDDCompulsory(Profile.J2EE_14);
     }
 
     /**
@@ -79,20 +91,17 @@ public final class EarProjectUtil {
      * @return <code>true</code> if deployment descriptor is compulsory.
      * @see J2eeModule
      */
-    public static boolean isDDCompulsory(String j2eeVersion) {
+    public static boolean isDDCompulsory(Profile j2eeVersion) {
         // #103298
         if (j2eeVersion == null) {
             // what should we return?
             return false;
         }
-        if (J2eeModule.J2EE_13.equals(j2eeVersion)
-                || J2eeModule.J2EE_14.equals(j2eeVersion)) {
+        if (Profile.J2EE_13.equals(j2eeVersion)
+                || Profile.J2EE_14.equals(j2eeVersion)) {
             return true;
-        } else if (J2eeModule.JAVA_EE_5.equals(j2eeVersion)) {
-            return false;
         }
-        assert false : "Unknown j2eeVersion: " + j2eeVersion;
-        return true;
+        return false;
     }
     
     /**
@@ -114,5 +123,59 @@ public final class EarProjectUtil {
      */
     public static boolean hasLength(String str) {
         return str != null && str.length() > 0;
+    }
+    
+    /**
+     * Logs the UI gesture.
+     *
+     * @param bundle resource bundle to use for message
+     * @param message message key
+     * @param params message parameters, may be <code>null</code>
+     */
+    public static void logUI(ResourceBundle bundle,String message, Object[] params) {
+        Parameters.notNull("message", message);
+        Parameters.notNull("bundle", bundle);
+
+        LogRecord logRecord = new LogRecord(Level.INFO, message);
+        logRecord.setLoggerName(UI_LOGGER.getName());
+        logRecord.setResourceBundle(bundle);
+        if (params != null) {
+            logRecord.setParameters(params);
+        }
+        UI_LOGGER.log(logRecord);
+    }    
+    
+    /**
+     * Logs feature usage.
+     *
+     * @param srcClass source class
+     * @param message message key
+     * @param params message parameters, may be <code>null</code>
+     */
+    public static void logUsage(Class srcClass, String message, Object[] params) {
+        Parameters.notNull("message", message);
+
+        LogRecord logRecord = new LogRecord(Level.INFO, message);
+        logRecord.setLoggerName(USG_LOGGER.getName());
+        logRecord.setResourceBundle(NbBundle.getBundle(srcClass));
+        logRecord.setResourceBundleName(srcClass.getPackage().getName() + ".Bundle"); // NOI18N
+        if (params != null) {
+            logRecord.setParameters(params);
+        }
+        USG_LOGGER.log(logRecord);
+    }        
+    
+    /**
+     * Check whether the project is Java EE module (e.g. EJB but not EAR).
+     * @param project project to check, can be <code>null</code>.
+     * @return <code>true</code> if the project is Java EE module, <code>false</code> otherwise.
+     */
+    public static boolean isJavaEEModule(Project project) {
+        if (project != null
+                && project.getLookup().lookup(J2eeModuleProvider.class) != null
+                && project.getLookup().lookup(J2eeApplicationProvider.class) == null) {
+            return true;
+        }
+        return false;
     }
 }

@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.project.Project;
@@ -57,11 +58,11 @@ import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.Sources;
 import org.netbeans.api.project.ui.OpenProjects;
+import org.netbeans.modules.java.api.common.classpath.ClassPathProviderImpl;
 import org.netbeans.modules.j2ee.dd.api.ejb.DDProvider;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
 import org.netbeans.modules.j2ee.dd.api.webservices.WebservicesMetadata;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleFactory;
-import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementation;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJar;
 import org.netbeans.modules.j2ee.dd.spi.MetadataUnit;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
@@ -71,7 +72,6 @@ import org.netbeans.spi.project.support.ant.AntProjectHelper;
 import org.openide.filesystems.FileObject;
 import org.netbeans.modules.j2ee.ejbjarproject.ui.customizer.EjbJarProjectProperties;
 import org.netbeans.spi.java.classpath.ClassPathProvider;
-import org.netbeans.modules.j2ee.spi.ejbjar.EjbJarImplementation;
 import org.openide.filesystems.FileUtil;
 import org.openide.NotifyDescriptor;
 import org.openide.DialogDisplayer;
@@ -82,7 +82,9 @@ import org.netbeans.modules.j2ee.dd.spi.webservices.WebservicesMetadataModelFact
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter;
-import org.netbeans.modules.j2ee.ejbjarproject.classpath.ClassPathProviderImpl;
+import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleImplementation2;
+import org.netbeans.modules.j2ee.spi.ejbjar.EjbJarImplementation2;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
 
 
@@ -91,7 +93,7 @@ import org.netbeans.modules.websvc.spi.webservices.WebServicesConstants;
  * @author  Pavel Buzek
  */
 public final class EjbJarProvider extends J2eeModuleProvider
-        implements EjbJarImplementation, J2eeModuleImplementation, ModuleChangeReporter, EjbChangeDescriptor, PropertyChangeListener {
+        implements J2eeModuleImplementation2, ModuleChangeReporter, EjbChangeDescriptor, PropertyChangeListener {
     
     public static final String FILE_DD = "ejb-jar.xml";//NOI18N
     
@@ -119,7 +121,7 @@ public final class EjbJarProvider extends J2eeModuleProvider
         if (metaInfFo != null) {
             ddFO = metaInfFo.getFileObject(FILE_DD);
         }
-        if (ddFO == null && !EjbJarProjectProperties.JAVA_EE_5.equals(getJ2eePlatformVersion())) {
+        if (ddFO == null && !Profile.JAVA_EE_5.equals(getJ2eeProfile())) {
             // ...generate the DD from template...
         }
         return ddFO;
@@ -139,22 +141,27 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public FileObject getMetaInf() {
-        FileObject metaInf = getFileObject(EjbJarProjectProperties.META_INF);
+        String value = helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.META_INF);
+
+        return resolveMetaInf(value);
+    }
+
+    FileObject resolveMetaInf(String value) {
+        FileObject metaInf = value != null ? helper.resolveFileObject(value) : null;
         if (metaInf == null) {
-            String version = project.getAPIEjbJar().getJ2eePlatformVersion();
+            Profile version = project.getAPIEjbJar().getJ2eeProfile();
             if (needConfigurationFolder(version)) {
-                String relativePath = helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.META_INF);
-                String path = (relativePath != null ? helper.resolvePath(relativePath) : "");
+                String path = (value != null ? helper.resolvePath(value) : "");
                 showErrorMessage(NbBundle.getMessage(EjbJarProvider.class,"MSG_MetaInfCorrupted", project.getName(), path));
             }
         }
         return metaInf;
     }
-    
+
     /** Package-private for unit test only. */
-    static boolean needConfigurationFolder(final String version) {
-        return EjbJarProjectProperties.J2EE_1_3.equals(version) ||
-                EjbJarProjectProperties.J2EE_1_4.equals(version);
+    static boolean needConfigurationFolder(final Profile version) {
+        return Profile.J2EE_13.equals(version) ||
+                Profile.J2EE_14.equals(version);
     }
     
     public File getMetaInfAsFile() {
@@ -211,10 +218,10 @@ public final class EjbJarProvider extends J2eeModuleProvider
     public org.netbeans.modules.j2ee.deployment.devmodules.api.ModuleChangeReporter getModuleChangeReporter() {
         return this;
     }
-    
+
     @Override
-    public boolean useDefaultServer() {
-        return false;
+    public DeployOnSaveSupport getDeployOnSaveSupport() {
+        return project.getDeployOnSaveSupport();
     }
     
     @Override
@@ -233,11 +240,13 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public Iterator getArchiveContents() throws java.io.IOException {
-        return new IT(getContentDirectory());
+        FileObject content = getContentDirectory();
+        content.refresh();
+        return new IT(content);
     }
     
     public FileObject getContentDirectory() {
-        return getFileObject(EjbJarProjectProperties.BUILD_CLASSES_DIR);
+        return getFileObject(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
     public FileObject getBuildDirectory() {
@@ -245,7 +254,7 @@ public final class EjbJarProvider extends J2eeModuleProvider
     }
     
     public File getContentDirectoryAsFile() {
-        return getFile(EjbJarProjectProperties.BUILD_CLASSES_DIR);
+        return getFile(ProjectProperties.BUILD_CLASSES_DIR);
     }
     
     public <T> MetadataModel<T> getMetadataModel(Class<T> type) {
@@ -273,8 +282,8 @@ public final class EjbJarProvider extends J2eeModuleProvider
         return this;
     }
     
-    public Object getModuleType() {
-        return J2eeModule.EJB;
+    public J2eeModule.Type getModuleType() {
+        return J2eeModule.Type.EJB;
     }
     
     public String getModuleVersion() {
@@ -337,9 +346,9 @@ public final class EjbJarProvider extends J2eeModuleProvider
     public String[] getChangedEjbs() {
         return new String[] {};
     }
-    
-    public String getJ2eePlatformVersion() {
-        return helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.J2EE_PLATFORM);
+
+    public Profile getJ2eeProfile() {
+        return Profile.fromPropertiesString(helper.getStandardPropertyEvaluator().getProperty(EjbJarProjectProperties.J2EE_PLATFORM));
     }
 
     public synchronized MetadataModel<EjbJarMetadata> getMetadataModel() {
