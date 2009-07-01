@@ -43,13 +43,12 @@ package org.netbeans.modules.websvc.rest.nodes;
 import java.awt.Image;
 import javax.swing.Action;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.j2ee.metadata.model.api.MetadataModel;
 import org.openide.nodes.AbstractNode;
 import org.netbeans.modules.websvc.rest.model.api.RestServiceDescription;
-import org.netbeans.modules.websvc.rest.model.api.RestServicesMetadata;
 import org.netbeans.modules.websvc.rest.model.api.RestServicesModel;
 import org.openide.actions.OpenAction;
 import org.openide.actions.PropertiesAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.lookup.AbstractLookup;
 import org.openide.util.lookup.InstanceContent;
@@ -76,9 +75,12 @@ public class RestServiceNode extends AbstractNode{
         this.className = desc.getClassName();
         
         content.add(this);
+        content.add(desc);
+        content.add(project);
         content.add(OpenCookieFactory.create(project, className));
     }
-    
+
+    @Override
     public String getDisplayName() {
         if (uriTemplate.length() > 0) {
             return serviceName + " [" + uriTemplate + "]";      //NOI18N
@@ -86,7 +88,8 @@ public class RestServiceNode extends AbstractNode{
             return serviceName;
         }
     }
-    
+
+    @Override
     public String getShortDescription() {
         return "";
     }
@@ -96,8 +99,9 @@ public class RestServiceNode extends AbstractNode{
     }
     
     private static final java.awt.Image SERVICE_BADGE =
-            org.openide.util.Utilities.loadImage( "org/netbeans/modules/websvc/rest/nodes/resources/restservice.png" ); //NOI18N
-    
+            ImageUtilities.loadImage( "org/netbeans/modules/websvc/rest/nodes/resources/restservice.png" ); //NOI18N
+
+    @Override
     public java.awt.Image getIcon(int type) {
         return SERVICE_BADGE;
     }
@@ -105,19 +109,23 @@ public class RestServiceNode extends AbstractNode{
     void changeIcon() {
         fireIconChange();
     }
-    
+
+    @Override
     public Image getOpenedIcon(int type){
         return getIcon( type);
     }
     
+    @Override
     public Action getPreferredAction() {
         return SystemAction.get(OpenAction.class);
     }
     
     // Create the popup menu:
+    @Override
     public Action[] getActions(boolean context) {
         return new SystemAction[] {
             SystemAction.get(OpenAction.class),
+            SystemAction.get(TestResourceUriAction.class),
             null,
             //SystemAction.get(DeleteAction.class),
             //null,
