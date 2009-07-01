@@ -58,16 +58,15 @@ import java.io.FileOutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
 import org.netbeans.jellytools.NbDialogOperator;
-import org.netbeans.jellytools.NewFileNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaFileNameLocationStepOperator;
 import org.netbeans.jellytools.NewFileWizardOperator;
-import org.netbeans.jellytools.NewProjectNameLocationStepOperator;
+import org.netbeans.jellytools.NewJavaProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.nodes.Node;
-import org.netbeans.jemmy.QueueTool;
+import org.netbeans.jemmy.JemmyProperties;
 import org.netbeans.jemmy.operators.JCheckBoxOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
-import org.netbeans.junit.ide.ProjectSupport;
 
 /**
  *
@@ -77,6 +76,9 @@ public final class TestKit {
         
     public static File prepareProject(String category, String project, String project_name) throws Exception {
         //create temporary folder for test
+        if (getOsName().indexOf("Mac") > -1) {
+            new NewProjectWizardOperator().invoke().close();
+        }
         String folder = "work" + File.separator + "w" + System.currentTimeMillis();
         File file = new File("/tmp", folder); // NOI18N
         file.mkdirs();
@@ -86,7 +88,7 @@ public final class TestKit {
         npwo.selectCategory(category);
         npwo.selectProject(project);
         npwo.next();
-        NewProjectNameLocationStepOperator npnlso = new NewProjectNameLocationStepOperator();
+        NewJavaProjectNameLocationStepOperator npnlso = new NewJavaProjectNameLocationStepOperator();
         new JTextFieldOperator(npnlso, 1).setText(file.getAbsolutePath()); // NOI18N
         new JTextFieldOperator(npnlso, 0).setText(project_name); // NOI18N
         //new JTextFieldOperator(npnlso, 2).setText(folder); // NOI18N
@@ -94,7 +96,7 @@ public final class TestKit {
         Node rootNode = new ProjectsTabOperator().getProjectRootNode(project_name);
         
         // wait classpath scanning finished
-        ProjectSupport.waitScanFinished();
+//        ProjectSupport.waitScanFinished();
         //new QueueTool().waitEmpty(1000);
         //ProjectSupport.waitScanFinished();
         
@@ -114,18 +116,22 @@ public final class TestKit {
     }
     
     public static void closeProject(String projectName) {
+        long lTimeOut = JemmyProperties.getCurrentTimeout("ComponentOperator.WaitComponentTimeout");
         try {
-            Node rootNode = new ProjectsTabOperator().getProjectRootNode(projectName);
-            rootNode.performPopupActionNoBlock("Close");
+            lTimeOut = JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", 5000);
             try {
-                Thread.sleep(2000);
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
+                Node rootNode = new ProjectsTabOperator().getProjectRootNode(projectName);
+                rootNode.performPopupActionNoBlock("Close");
+//                new EventTool().waitNoEvent(2000);
+            } catch (Exception e) {
+            }
+        } catch (Exception e) {
+        } finally {
+            try {
+                JemmyProperties.setCurrentTimeout("ComponentOperator.WaitComponentTimeout", lTimeOut);
+            } catch (Exception e) {
             }
         }
-        catch (Exception e) {
-            
-        }    
     }
     
     public static int compareThem(Object[] expected, Object[] actual, boolean sorted) {
@@ -168,11 +174,21 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Package");
         nfwo.next();
-        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(packageName);
         nfnlso.finish();
-    }    
+    }
+
+    public static String getOsName() {
+        String osName = "uknown";
+        try {
+            osName = System.getProperty("os.name");
+        } catch (Throwable e) {
+
+        }
+        return osName;
+    }
     
     public static void createNewElement(String projectName, String packageName, String name) {
         NewFileWizardOperator nfwo = NewFileWizardOperator.invoke();
@@ -180,7 +196,7 @@ public final class TestKit {
         nfwo.selectCategory("Java");
         nfwo.selectFileType("Java Class");
         nfwo.next();
-        NewFileNameLocationStepOperator nfnlso = new NewFileNameLocationStepOperator();
+        NewJavaFileNameLocationStepOperator nfnlso = new NewJavaFileNameLocationStepOperator();
         nfnlso.txtObjectName().clearText();
         nfnlso.txtObjectName().typeText(name);
         nfnlso.selectPackage(packageName);
