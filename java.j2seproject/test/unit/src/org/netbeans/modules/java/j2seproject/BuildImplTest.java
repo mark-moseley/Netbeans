@@ -55,8 +55,9 @@ import org.apache.tools.ant.module.api.support.ActionUtils;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.api.project.ant.AntArtifact;
-import org.netbeans.junit.MockServices;
 import org.netbeans.junit.NbTestCase;
+import org.netbeans.junit.RandomlyFails;
+import org.netbeans.modules.java.api.common.project.ProjectProperties;
 import org.netbeans.modules.java.j2seproject.ui.customizer.J2SEProjectProperties;
 import org.netbeans.spi.project.ant.AntArtifactProvider;
 import org.netbeans.spi.project.support.ant.AntProjectHelper;
@@ -68,6 +69,7 @@ import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.test.TestFileUtils;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.modules.SpecificationVersion;
+import org.openide.util.test.MockLookup;
 import org.openide.windows.IOProvider;
 import org.openide.windows.InputOutput;
 import org.openide.windows.OutputListener;
@@ -96,7 +98,7 @@ public final class BuildImplTest extends NbTestCase {
         assertNotNull("must set test.junit.jar", junitJarProp);
         junitJar = new File(junitJarProp);
         assertTrue("file " + junitJar + " exists", junitJar.isFile());
-        MockServices.setServices(IOP.class, IFL.class);
+        MockLookup.setLayersAndInstances(new IOP(), new IFL());
     }
 
     private AntProjectHelper setupProject(String subFolder, int numberOfSourceFiles, boolean generateTests) throws Exception {
@@ -105,7 +107,7 @@ public final class BuildImplTest extends NbTestCase {
             proj = new File(getWorkDir(), subFolder);
         }
         J2SEProjectGenerator.setDefaultSourceLevel(new SpecificationVersion ("1.4"));   //NOI18N
-        AntProjectHelper aph = J2SEProjectGenerator.createProject(proj, subFolder != null ? subFolder + getName() : getName(), (String)null, (String)null, null);
+        AntProjectHelper aph = J2SEProjectGenerator.createProject(proj, subFolder != null ? subFolder : getName(), (String)null, (String)null, null);
         EditableProperties ep = aph.getProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH);
         ep.put(J2SEProjectProperties.DO_DEPEND, "true"); // to avoid too many changes in tests from issue #118079
         aph.putProperties(AntProjectHelper.PRIVATE_PROPERTIES_PATH, ep);
@@ -122,7 +124,6 @@ public final class BuildImplTest extends NbTestCase {
     }
 
     private AntProjectHelper setupProject(int numberOfSourceFiles, boolean generateTests) throws Exception {
-        clearWorkDir();
         return setupProject(null, numberOfSourceFiles, generateTests);
     }
 
@@ -292,8 +293,8 @@ public final class BuildImplTest extends NbTestCase {
     public void testIncludesExcludes() throws Exception {
         AntProjectHelper aph = setupProject(12, true);
         EditableProperties ep = aph.getProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH);
-        ep.setProperty(J2SEProjectProperties.INCLUDES, "**/*1*");
-        ep.setProperty(J2SEProjectProperties.EXCLUDES, "**/*0*");
+        ep.setProperty(ProjectProperties.INCLUDES, "**/*1*");
+        ep.setProperty(ProjectProperties.EXCLUDES, "**/*0*");
         aph.putProperties(AntProjectHelper.PROJECT_PROPERTIES_PATH, ep);
         ProjectManager.getDefault().saveAllProjects();
         FileObject dir = aph.getProjectDirectory();
@@ -353,6 +354,15 @@ public final class BuildImplTest extends NbTestCase {
     }
 
     /** @see "issue #36033" */
+    @RandomlyFails // assertNotNull failed in NB-Core-Build #2418:
+                   // java.lang.IllegalStateException: WARNING(please REPORT):  Externally created file: <workdir>/build/classes/p/Y.class  (For additional information see: http://wiki.netbeans.org/wiki/view/FileSystems)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory.printWarning(FileObjectFactory.java:243)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory.checkCacheState(FileObjectFactory.java:226)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory.issueIfExist(FileObjectFactory.java:328)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory.getFileObject(FileObjectFactory.java:193)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FileObjectFactory.getValidFileObject(FileObjectFactory.java:630)
+                   //         at org.netbeans.modules.masterfs.filebasedfs.fileobjects.FolderObj.getFileObject(FolderObj.java:110)
+                   //         at org.netbeans.modules.java.j2seproject.BuildImplTest.testCompileWithDependencyAnalysis(BuildImplTest.java:376)
     public void testCompileWithDependencyAnalysis() throws Exception {
         AntProjectHelper aph = setupProject(0, false);
         FileObject buildXml = aph.getProjectDirectory().getFileObject("build.xml");
@@ -518,7 +528,7 @@ public final class BuildImplTest extends NbTestCase {
         AntProjectHelper aph = setupProject(0, false);
         TestFileUtils.writeFile(aph.getProjectDirectory(), "src/pkg1/A.java", "package pkg1; public class A {}");
         assertBuildSuccess(ActionUtils.runTarget(aph.getProjectDirectory().getFileObject("build.xml"), new String[] {"javadoc"}, getProperties()));
-        String text = TestFileUtils.readFile(aph.resolveFileObject("dist/javadoc/allclasses-frame.html"));
+        String text = aph.resolveFileObject("dist/javadoc/allclasses-frame.html").asText();
         assertTrue(text.matches("(?s).*pkg1/A\\.html.*"));
         assertFalse(text.matches("(?s).*pkg1/A\\.html.*pkg1/A\\.html.*"));
     }
@@ -600,7 +610,6 @@ public final class BuildImplTest extends NbTestCase {
     }
 
     public void testSubprojects() throws Exception {
-        clearWorkDir();
         AntProjectHelper aph1 = setupProject("p1", 1, false);
         AntProjectHelper aph2 = setupProject("p2", 1, false);
         Project proj1 = ProjectManager.getDefault().findProject(aph1.getProjectDirectory());
@@ -627,6 +636,7 @@ public final class BuildImplTest extends NbTestCase {
         output.remove("jar:");
         assertFalse("subproject's jar should not be executed", output.contains("jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
@@ -637,11 +647,13 @@ public final class BuildImplTest extends NbTestCase {
         assertBuildSuccess(ActionUtils.runTarget(buildXml, new String[]{"jar"}, p));
         assertTrue("jar target was not executed", output.contains("jar:"));
         output.remove("jar:");
-        assertTrue("subproject's jar target was not executed", output.contains("jar:"));
+        assertTrue("subproject's jar target was not executed", output.contains("p2.jar:"));
         fo = aph1.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
         fo = aph2.getProjectDirectory();
+        fo.refresh();
         assertNotNull("build folder must exist", fo.getFileObject("build"));
         assertNotNull("dist folder must exist", fo.getFileObject("dist"));
 
@@ -649,7 +661,7 @@ public final class BuildImplTest extends NbTestCase {
         assertBuildSuccess(ActionUtils.runTarget(buildXml, new String[]{"clean"}, p));
         assertTrue("clean target was not executed", output.contains("clean:"));
         output.remove("clean:");
-        assertFalse("subproject's clean should not be executed", output.contains("clean:"));
+        assertFalse("subproject's clean should not be executed", output.contains("p2.clean:"));
         fo = aph1.getProjectDirectory();
         fo.refresh();
         assertNull("build folder cannot exist", fo.getFileObject("build"));
@@ -663,7 +675,7 @@ public final class BuildImplTest extends NbTestCase {
         assertBuildSuccess(ActionUtils.runTarget(buildXml, new String[]{"clean"}, p));
         assertTrue("clean target was not executed", output.contains("clean:"));
         output.remove("clean:");
-        assertTrue("subproject's clean target was not executed", output.contains("clean:"));
+        assertTrue("subproject's clean target was not executed", output.contains("p2.clean:"));
         fo = aph1.getProjectDirectory();
         fo.refresh();
         assertNull("build folder must be removed", fo.getFileObject("build"));
@@ -672,6 +684,75 @@ public final class BuildImplTest extends NbTestCase {
         fo.refresh();
         assertNull("build folder must be removed", fo.getFileObject("build"));
         assertNull("dist folder must be removed", fo.getFileObject("dist"));
+    }
+
+    public void testDiamondBuilds() throws Exception { // #42683
+        // A -> B -> C
+        // v \  v \  v
+        // D -> E -> F
+        // v \  v \  v
+        // G -> H -> I
+        J2SEProject a = mkprj("a");
+        J2SEProject b = mkprj("b");
+        J2SEProject c = mkprj("c");
+        J2SEProject d = mkprj("d");
+        J2SEProject e = mkprj("e");
+        J2SEProject f = mkprj("f");
+        J2SEProject g = mkprj("g");
+        J2SEProject h = mkprj("h");
+        J2SEProject i = mkprj("i");
+        addDep(a, b);
+        addDep(b, c);
+        addDep(d, e);
+        addDep(e, f);
+        addDep(g, h);
+        addDep(h, i);
+        addDep(a, d);
+        addDep(d, g);
+        addDep(b, e);
+        addDep(e, h);
+        addDep(c, f);
+        addDep(f, i);
+        addDep(a, e);
+        addDep(b, f);
+        addDep(d, h);
+        addDep(e, i);
+        ProjectManager.getDefault().saveAllProjects();
+        File dir = getWorkDir();
+        assertBuildSuccess(ActionUtils.runTarget(a.getProjectDirectory().getFileObject("build.xml"), new String[] {"jar"}, null));
+        assertTrue(new File(dir, "a/dist/a.jar").isFile());
+        assertTrue(new File(dir, "i/dist/i.jar").isFile());
+        assertEquals(9, countOfOutput("jar:"));
+        output.clear();
+        assertBuildSuccess(ActionUtils.runTarget(a.getProjectDirectory().getFileObject("build.xml"), new String[] {"jar"}, null));
+        assertEquals(9, countOfOutput("jar:"));
+        output.clear();
+        assertBuildSuccess(ActionUtils.runTarget(a.getProjectDirectory().getFileObject("build.xml"), new String[] {"clean"}, null));
+        assertFalse(new File(dir, "a/dist/a.jar").isFile());
+        assertFalse(new File(dir, "i/dist/i.jar").isFile());
+        assertEquals(9, countOfOutput("clean:"));
+        output.clear();
+        assertBuildSuccess(ActionUtils.runTarget(a.getProjectDirectory().getFileObject("build.xml"), new String[] {"clean", "jar"}, null));
+        assertTrue(new File(dir, "a/dist/a.jar").isFile());
+        assertTrue(new File(dir, "i/dist/i.jar").isFile());
+        assertEquals(9, countOfOutput("clean:"));
+        assertEquals(9, countOfOutput("jar:"));
+    }
+    private J2SEProject mkprj(String name) throws Exception {
+        return (J2SEProject) ProjectManager.getDefault().findProject(setupProject(name, 1, false).getProjectDirectory());
+    }
+    private void addDep(J2SEProject p1, J2SEProject p2) {
+        AntArtifact[] aa = p2.getLookup().lookup(AntArtifactProvider.class).getBuildArtifacts();
+        p1.getReferenceHelper().addReference(aa[0], aa[0].getArtifactLocations()[0]);
+    }
+    private int countOfOutput(String expectedLine) {
+        int cnt = 0;
+        for (String line : output) {
+            if (line.replaceFirst("^.+[.](?=.+:$)", "").equals(expectedLine)) {
+                cnt++;
+            }
+        }
+        return cnt;
     }
 
     /* XXX: impossible to test currently, because J2SEActionProvider.invokeAction must be called, but that is nonblocking.
