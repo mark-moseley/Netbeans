@@ -51,10 +51,11 @@ import java.util.logging.Logger;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import org.netbeans.modules.j2ee.common.dd.DDHelper;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.Profile;
+import org.netbeans.api.j2ee.core.Profile;
 import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.openide.WizardDescriptor;
 import org.openide.filesystems.FileObject;
+import org.openide.loaders.DataObject;
 
 /**
  * @author Petr Slechta
@@ -108,7 +109,10 @@ public final class WebXmlWizardIterator implements WizardDescriptor.Instantiatin
             try {
                 FileObject dd = DDHelper.createWebXml(Profile.fromPropertiesString(wm.getJ2eePlatformVersion()),
                         true, dir);
-                return Collections.singleton(dd);
+                if (dd != null) {
+                    DataObject dObj = DataObject.find(dd);
+                    return Collections.singleton(dObj);
+                }
             } catch (IOException ioe) {
                 Logger.getLogger("global").log(Level.INFO, "Creation of web.xml failed", ioe); // NOI18N
             }
