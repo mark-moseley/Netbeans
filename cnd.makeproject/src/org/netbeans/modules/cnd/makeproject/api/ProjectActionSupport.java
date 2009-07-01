@@ -43,6 +43,7 @@ package org.netbeans.modules.cnd.makeproject.api;
 import java.awt.event.ActionEvent;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.AbstractAction;
@@ -55,6 +56,8 @@ import org.netbeans.modules.cnd.api.execution.ExecutionListener;
 import org.netbeans.modules.cnd.api.remote.CommandProvider;
 import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
 import org.netbeans.modules.cnd.api.remote.PathMap;
+import org.netbeans.modules.cnd.api.remote.RemoteSyncWorker;
+import org.netbeans.modules.cnd.api.remote.ServerList;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.makeproject.MakeOptions;
 import org.netbeans.modules.cnd.makeproject.api.BuildActionsProvider.BuildAction;
@@ -117,13 +120,13 @@ public class ProjectActionSupport {
             DebuggerChooserConfiguration chooser = conf.getDebuggerChooserConfiguration();
             CustomizerNode node = chooser.getNode();
             if (node instanceof ProjectActionHandlerFactory) {
-                if (((ProjectActionHandlerFactory) node).canHandle(type)) {
+                if (((ProjectActionHandlerFactory) node).canHandle(type, conf)) {
                     return true;
                 }
             }
         }
         for (ProjectActionHandlerFactory factory : handlerFactories) {
-            if (factory.canHandle(type)) {
+            if (factory.canHandle(type, conf)) {
                 return true;
             }
         }
@@ -217,9 +220,9 @@ public class ProjectActionSupport {
             }
             name.append(")"); // NOI18N
             if (paes.length > 0) {
-                MakeConfiguration conf = (MakeConfiguration) paes[0].getConfiguration();
+                MakeConfiguration conf = paes[0].getConfiguration();
                 if (!conf.getDevelopmentHost().isLocalhost()) {
-                    String hkey = conf.getDevelopmentHost().getName();
+                    String hkey = conf.getDevelopmentHost().getHostKey();
                     name.append(" - ").append(hkey); //NOI18N
                 }
             }
@@ -281,7 +284,7 @@ public class ProjectActionSupport {
             return tab;
         }
 
-        public void reRun() {
+        private void reRun() {
             currentAction = 0;
             getTab().closeInputOutput();
             synchronized (lock) {
@@ -296,7 +299,7 @@ public class ProjectActionSupport {
             go();
         }
 
-        public void go() {
+        private void go() {
             currentHandler = null;
             sa.setEnabled(false);
             ra.setEnabled(false);
@@ -321,14 +324,17 @@ public class ProjectActionSupport {
             }
 
             if (pae.getType() == ProjectActionEvent.Type.CUSTOM_ACTION && customHandler != null) {
-                initHandler(customHandler, pae);
+                initHandler(customHandler, pae, paes);
                 customHandler.execute(ioTab);
             } else {
-
+                if (currentAction == 0 && !checkRemotePath(pae)) {
+                    progressHandle.finish();
+                    return;
+                }
                 for (ProjectActionHandlerFactory factory : handlerFactories) {
-                    if (factory.canHandle(pae.getType())) {
+                    if (factory.canHandle(pae.getType(), pae.getConfiguration())) {
                         ProjectActionHandler handler = currentHandler = factory.createHandler();
-                        initHandler(handler, pae);
+                        initHandler(handler, pae, paes);
                         handler.execute(ioTab);
                         break;
                     }
@@ -338,8 +344,40 @@ public class ProjectActionSupport {
 
         }
 
-        private void initHandler(ProjectActionHandler handler, ProjectActionEvent pae) {
-            handler.init(pae);
+        // moved from DefaultProjectActionHandler.execute
+        private boolean checkRemotePath(ProjectActionEvent pae) {
+            boolean success = true;
+            MakeConfiguration conf = pae.getConfiguration();
+            if (!conf.getDevelopmentHost().isLocalhost()) {
+                // Make sure the project and 1st level subprojects are visible remotely
+                String baseDir = pae.getProfile().getBaseDir();
+                ExecutionEnvironment env = conf.getDevelopmentHost().getExecutionEnvironment();
+                for (String subprojectDir : conf.getSubProjectLocations()) {
+                    subprojectDir = IpeUtils.toAbsolutePath(baseDir, subprojectDir);
+                    RemoteSyncWorker syncWorker = ServerList.get(env).getSyncFactory().createNew(new File(subprojectDir), env, null, null);
+                    success &= syncWorker.synchronize();
+                    if (!success) {
+                        break;
+                    }
+                }
+                if (success) {
+                    PrintWriter err = null;
+                    PrintWriter out = null;
+                    InputOutput tab = getTab();
+                    if (tab != null) {
+                        out = this.ioTab.getOut();
+                        err = this.ioTab.getErr();
+                    }
+                    RemoteSyncWorker syncWorker = ServerList.get(env).getSyncFactory().createNew(
+                            new File(baseDir), env, out, err);
+                    success &= syncWorker.synchronize();
+                }
+            }
+            return success;
+        }
+
+        private void initHandler(ProjectActionHandler handler, ProjectActionEvent pae, ProjectActionEvent[] paes) {
+            handler.init(pae, paes);
             progressHandle.finish();
             progressHandle = handler.canCancel()? createProgressHandle() : createProgressHandleNoCancel();
             progressHandle.start();
@@ -407,50 +445,49 @@ public class ProjectActionSupport {
             // Check if something is specified
             String executable = pae.getExecutable();
             if (executable.length() == 0) {
-                String errormsg;
-                if (((MakeConfiguration) pae.getConfiguration()).isMakefileConfiguration()) {
-                    SelectExecutablePanel panel = new SelectExecutablePanel((MakeConfiguration) pae.getConfiguration());
-                    DialogDescriptor descriptor = new DialogDescriptor(panel, getString("SELECT_EXECUTABLE"));
-                    panel.setDialogDescriptor(descriptor);
-                    DialogDisplayer.getDefault().notify(descriptor);
-                    if (descriptor.getValue() == DialogDescriptor.OK_OPTION) {
-                        // Set executable in configuration
-                        MakeConfiguration makeConfiguration = (MakeConfiguration) pae.getConfiguration();
-                        executable = panel.getExecutable();
+                SelectExecutablePanel panel = new SelectExecutablePanel(pae.getConfiguration());
+                DialogDescriptor descriptor = new DialogDescriptor(panel, getString("SELECT_EXECUTABLE"));
+                panel.setDialogDescriptor(descriptor);
+                DialogDisplayer.getDefault().notify(descriptor);
+                if (descriptor.getValue() == DialogDescriptor.OK_OPTION) {
+                    // Set executable in configuration
+                    MakeConfiguration makeConfiguration = pae.getConfiguration();
+                    executable = panel.getExecutable();
+                    executable = FilePathAdaptor.naturalize(executable);
+                    executable = IpeUtils.toRelativePath(makeConfiguration.getBaseDir(), executable);
+                    executable = FilePathAdaptor.normalize(executable);
+                    makeConfiguration.getMakefileConfiguration().getOutput().setValue(executable);
+                    // Mark the project 'modified'
+                    ConfigurationDescriptorProvider pdp = pae.getProject().getLookup().lookup(ConfigurationDescriptorProvider.class);
+                    if (pdp != null) {
+                        pdp.getConfigurationDescriptor().setModified();
+                    }
+                    // Set executable in pae
+                    if (pae.getType() == ProjectActionEvent.Type.RUN) {
+                        // Next block is commented out due to IZ120794
+                        /*CompilerSet compilerSet = CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getName()).getCompilerSet(makeConfiguration.getCompilerSet().getValue());
+                        if (compilerSet != null && compilerSet.getCompilerFlavor() != CompilerFlavor.MinGW) {
+                        // IZ 120352
                         executable = FilePathAdaptor.naturalize(executable);
-                        executable = IpeUtils.toRelativePath(makeConfiguration.getBaseDir(), executable);
-                        executable = FilePathAdaptor.normalize(executable);
-                        makeConfiguration.getMakefileConfiguration().getOutput().setValue(executable);
-                        // Mark the project 'modified'
-                        ConfigurationDescriptorProvider pdp = pae.getProject().getLookup().lookup(ConfigurationDescriptorProvider.class);
-                        if (pdp != null) {
-                            pdp.getConfigurationDescriptor().setModified();
-                        }
-                        // Set executable in pae
-                        if (pae.getType() == ProjectActionEvent.Type.RUN) {
-                            // Next block is commented out due to IZ120794
-                            /*CompilerSet compilerSet = CompilerSetManager.getDefault(makeConfiguration.getDevelopmentHost().getName()).getCompilerSet(makeConfiguration.getCompilerSet().getValue());
-                            if (compilerSet != null && compilerSet.getCompilerFlavor() != CompilerFlavor.MinGW) {
-                            // IZ 120352
-                            executable = FilePathAdaptor.naturalize(executable);
-                            }*/
-                            pae.setExecutable(executable);
-                        } else {
-                            pae.setExecutable(makeConfiguration.getMakefileConfiguration().getAbsOutput());
-                        }
+                        }*/
+                        pae.setExecutable(executable);
                     } else {
-                        return false;
+                        pae.setExecutable(makeConfiguration.getMakefileConfiguration().getAbsOutput());
                     }
                 } else {
-                    errormsg = getString("NO_BUILD_RESULT"); // NOI18N
-                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errormsg, NotifyDescriptor.ERROR_MESSAGE));
                     return false;
                 }
             }
             // Check existence of executable
             if (!IpeUtils.isPathAbsolute(executable) && (executable.startsWith(".") || executable.indexOf(File.separatorChar) > 0)) { // NOI18N
-                //executable is relative to project root - convert to absolute and check. Should be safe (?).
-                executable = IpeUtils.toAbsolutePath(pae.getConfiguration().getBaseDir(), executable);
+                //executable is relative to run directory - convert to absolute and check. Should be safe (?).
+                String runDir = pae.getProfile().getRunDir();
+                if (runDir == null || runDir.length() == 0) {
+                    executable = IpeUtils.toAbsolutePath(pae.getConfiguration().getBaseDir(), executable);
+                } else {
+                    runDir = IpeUtils.toAbsolutePath(pae.getConfiguration().getBaseDir(), runDir);
+                    executable = IpeUtils.toAbsolutePath(runDir, executable);
+                }
                 executable = FilePathAdaptor.normalize(executable);
             }
             if (IpeUtils.isPathAbsolute(executable)) {
@@ -458,7 +495,13 @@ public class ProjectActionSupport {
                 boolean ok = true;
 
                 if (conf instanceof MakeConfiguration && !((MakeConfiguration) conf).getDevelopmentHost().isLocalhost()) {
-                    ok = verifyRemoteExecutable(((MakeConfiguration) conf).getDevelopmentHost().getExecutionEnvironment(), executable);
+                    final ExecutionEnvironment execEnv = ((MakeConfiguration) conf).getDevelopmentHost().getExecutionEnvironment();
+                    PathMap mapper = HostInfoProvider.getMapper(execEnv);
+                    executable = mapper.getRemotePath(executable,true);
+                    CommandProvider cmd = Lookup.getDefault().lookup(CommandProvider.class);
+                    if (cmd != null) {
+                        ok = cmd.run(execEnv, "test", null, "-x", executable, "-a", "-f", executable) == 0; // NOI18N
+                    }
                 } else {
                     // FIXUP: getExecutable should really return fully qualified name to executable including .exe
                     // but it is too late to change now. For now try both with and without.
@@ -471,32 +514,40 @@ public class ProjectActionSupport {
                     }
                 }
                 if (!ok) {
-                    String errormsg = getString("EXECUTABLE_DOESNT_EXISTS", pae.getExecutable()); // NOI18N
+                    String errormsg = getString("EXECUTABLE_DOESNT_EXISTS", executable); // NOI18N
                     DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errormsg, NotifyDescriptor.ERROR_MESSAGE));
                     return false;
                 }
             }
+
+            // Finally set pae.executable to a real, verified file with an absolute
+            // path that reflects file location on a target host (local or remote)
+
+            pae.setExecutable(executable);
+            
             return true;
         }
 
     }
 
-    /**
-     * Verify a remote executable exists, is executable, and is not a directory.
-     *
-     * @param execEnv The remote host
-     * @param executable The file to remotely check
-     * @return true if executable exists and is an executable, otherwise false
-     */
-    private static boolean verifyRemoteExecutable(ExecutionEnvironment execEnv, String executable) {
-        PathMap mapper = HostInfoProvider.getDefault().getMapper(execEnv);
-        String remoteExecutable = mapper.getRemotePath(executable);
-        CommandProvider cmd = Lookup.getDefault().lookup(CommandProvider.class);
-        if (cmd != null) {
-            return cmd.run(execEnv, "test -x " + remoteExecutable + " -a -f " + remoteExecutable, null) == 0; // NOI18N
-        }
-        return false;
-    }
+// VK: inlined since it's used once; and caller should know not only return status,
+// but mapped name as well => it's easier to inline
+//    /**
+//     * Verify a remote executable exists, is executable, and is not a directory.
+//     *
+//     * @param execEnv The remote host
+//     * @param executable The file to remotely check
+//     * @return true if executable exists and is an executable, otherwise false
+//     */
+//    private static boolean verifyRemoteExecutable(ExecutionEnvironment execEnv, String executable) {
+//        PathMap mapper = HostInfoProvider.getMapper(execEnv);
+//        String remoteExecutable = mapper.getRemotePath(executable);
+//        CommandProvider cmd = Lookup.getDefault().lookup(CommandProvider.class);
+//        if (cmd != null) {
+//            return cmd.run(execEnv, "test -x " + remoteExecutable + " -a -f " + remoteExecutable, null) == 0; // NOI18N
+//        }
+//        return false;
+//    }
 
     private static final class StopAction extends AbstractAction {
 
