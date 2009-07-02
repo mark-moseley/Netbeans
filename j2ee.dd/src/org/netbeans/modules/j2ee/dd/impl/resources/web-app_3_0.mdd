@@ -70,18 +70,6 @@
                         if (values==null || values.length==0) return null;
                         else return values[0];
                     }
-                    public void setName(String[] value) throws org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException {
-                        throw new org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException(WebApp.VERSION_2_5);
-                    }
-                    public String[] getName() throws org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException {
-                        throw new org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException(WebApp.VERSION_2_5);
-                    }
-                    public void setAbsoluteOrdering(org.netbeans.modules.j2ee.dd.api.web.AbsoluteOrdering[] value) throws org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException {
-                        throw new org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException(WebApp.VERSION_2_5);
-                    }
-                    public org.netbeans.modules.j2ee.dd.api.web.AbsoluteOrdering[] getAbsoluteOrdering() throws org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException {
-                        throw new org.netbeans.modules.j2ee.dd.api.common.VersionNotSupportedException(WebApp.VERSION_2_5);
-                    }
             </user-code>
         </meta-element>
         <meta-element>
@@ -803,5 +791,13 @@ public void setUrlPattern(String value) {
             <namespace>http://java.sun.com/xml/ns/javaee</namespace>
             <bean-name>DispatcherType</bean-name>
             <wrapper-class>java.lang.String</wrapper-class>
+        </meta-element>
+        <meta-element>
+            <dtd-name>absoluteOrderingType</dtd-name>
+            <namespace>http://java.sun.com/xml/ns/javaee</namespace>
+            <bean-name>AbsoluteOrdering</bean-name>
+            <implements>
+                org.netbeans.modules.j2ee.dd.api.web.AbsoluteOrdering
+            </implements>
         </meta-element>
 </metaDD>

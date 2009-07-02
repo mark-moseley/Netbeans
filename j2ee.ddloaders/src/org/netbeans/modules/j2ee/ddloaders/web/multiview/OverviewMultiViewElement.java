@@ -41,15 +41,13 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
+import java.math.BigDecimal;
 import org.netbeans.core.api.multiview.MultiViewPerspective;
-import org.netbeans.core.spi.multiview.*;
 import org.openide.nodes.*;
 import org.netbeans.modules.j2ee.dd.api.web.*;
 import org.netbeans.modules.j2ee.ddloaders.web.*;
 import org.netbeans.modules.xml.multiview.ui.*;
 import org.netbeans.modules.xml.multiview.ToolBarMultiViewElement;
-import org.netbeans.modules.xml.multiview.Error;
-import org.openide.util.NbBundle;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.HelpCtx;
@@ -92,6 +90,7 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
         return view;
     }
     
+    @Override
     public void componentShowing() {
         super.componentShowing();
         dObj.setLastOpenView(index);
@@ -115,11 +114,13 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
         dObj.checkParseable();
     }
 
+    @Override
     public void componentOpened() {
         super.componentOpened();
         dObj.getWebApp().addPropertyChangeListener(this);
     }
     
+    @Override
     public void componentClosed() {
         super.componentClosed();
         dObj.getWebApp().removePropertyChangeListener(this);
@@ -130,6 +131,7 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
             String name = evt.getPropertyName();
             if ( name.indexOf("/WebApp/DisplayName")>=0 || //NOI18N
                  name.indexOf("/WebApp/Description")>=0 || //NOI18N
+                 name.indexOf("/WebApp/Name") >=0 || //NOI18N
                  name.indexOf("Distributable")>0 || //NOI18N
                  name.indexOf("ContextParam")>0 || //NOI18N
                  name.indexOf("Listener")>0 || //NOI18N
@@ -146,12 +148,19 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
     }
 
     class OverView extends SectionView {
-        private Node overviewNode, contextParamsNode, listenersNode;
+        private Node overviewNode, absoluteOrderingNode, contextParamsNode, listenersNode;
         OverView(WebApp webApp) {
             super(factory);
             overviewNode = new OverviewNode();
             addSection(new SectionPanel(this,overviewNode,"overview")); //NOI18N
-            
+
+            BigDecimal ver = new BigDecimal(webApp.getVersion());
+            boolean jee6 = ver.compareTo(new BigDecimal(3.0)) >= 0;
+            if (jee6) {
+                absoluteOrderingNode = new AbsoluteOrderingNode();
+                addSection(new SectionPanel(this, absoluteOrderingNode, "absoluteOrdering")); //NOI18N
+            }
+
             contextParamsNode = new ContextParamsNode();
             addSection(new SectionPanel(this,contextParamsNode,"context_params")); //NOI18N
 
@@ -159,21 +168,12 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
             addSection(new SectionPanel(this,listenersNode,"listeners")); //NOI18N
 
             Children rootChildren = new Children.Array();
-            rootChildren.add(new Node[]{overviewNode,contextParamsNode,listenersNode}); 
+            if (jee6)
+                rootChildren.add(new Node[]{overviewNode,absoluteOrderingNode,contextParamsNode,listenersNode});
+            else
+                rootChildren.add(new Node[]{overviewNode,contextParamsNode,listenersNode});
             AbstractNode root = new AbstractNode(rootChildren);
             setRoot(root);
-        }
-        
-        Node getOverviewNode() {
-            return overviewNode;
-        }
-        
-        Node getContextParamsNode() {
-            return contextParamsNode;
-        }
-        
-        Node getListenersNode(){
-            return listenersNode;
         }
     }
     
@@ -183,8 +183,21 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
             setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_Overview"));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/class.gif"); //NOI18N
         }    
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"overviewNode"); //NOI18N
+        }
+    }
+
+    private class AbsoluteOrderingNode extends org.openide.nodes.AbstractNode {
+        AbsoluteOrderingNode() {
+            super(org.openide.nodes.Children.LEAF);
+            setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_Ordering"));
+            setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/paramsNode.gif"); //NOI18N
+        }
+        @Override
+        public HelpCtx getHelpCtx() {
+            return new HelpCtx(HELP_ID_PREFIX+"absoluteOrderingNode"); //NOI18N
         }
     }
     
@@ -194,6 +207,7 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
             setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_ContextParams"));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/paramsNode.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"contextParamsNode"); //NOI18N
         }
@@ -205,6 +219,7 @@ public class OverviewMultiViewElement extends ToolBarMultiViewElement implements
             setDisplayName(NbBundle.getMessage(PagesMultiViewElement.class,"TTL_Listeners"));
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/class.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"listenersNode"); //NOI18N
         }

@@ -38,31 +38,21 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
-package org.netbeans.modules.j2ee.ddloaders.web.multiview;
-
-import org.netbeans.modules.xml.multiview.ui.SectionView;
-import org.netbeans.modules.xml.multiview.ui.ToolBarDesignEditor;
-import org.netbeans.modules.xml.multiview.ui.SectionInnerPanel;
-import org.netbeans.modules.j2ee.ddloaders.web.DDDataObject;
+package org.netbeans.modules.j2ee.dd.api.web;
 
 /**
- * @author mkuchtiak
+ * Interface for WebFragment element.<br>
+ * The WebFragment object is the root of bean graph generated<br>
+ * for deployment descriptor(web-fragment.xml) file.<br>
+ * For getting the root (WebFragment object) use the {@link WebFragmentProvider#getDDRoot} method.
+ *
+ *<p><b><font color="red"><em>Important note: Do not provide an implementation of this interface unless you are a DD API provider!</em></font></b>
+ *</p>
  */
-public class OverviewFactory implements org.netbeans.modules.xml.multiview.ui.InnerPanelFactory {
-    private DDDataObject dObj;
-    ToolBarDesignEditor editor;
-    
-    /** Creates a new instance of ServletPanelFactory */
-    OverviewFactory(ToolBarDesignEditor editor, DDDataObject dObj) {
-        this.dObj=dObj;
-        this.editor=editor;
-    }
-    
-    public SectionInnerPanel createInnerPanel(Object key) {
-        if ("listeners".equals(key)) return new ListenersPanel((SectionView)editor.getContentView(), dObj);
-        else if ("context_params".equals(key)) return new ContextParamsPanel((SectionView)editor.getContentView(), dObj);
-        else if ("absoluteOrdering".equals(key)) return new AbsoluteOrderingPanel((SectionView)editor.getContentView(), dObj);
-        else return new OverviewPanel((SectionView)editor.getContentView(), dObj);
-    }
+public interface WebFragment extends org.netbeans.modules.j2ee.dd.api.common.RootInterface, WebApp {
+
+    // For now, the interface is the same as WebApp
+    // Later, it can be changed to separate interface
+    // (It will require rewriting of a lot of code -- all GUI editors, etc.)
+
 }
