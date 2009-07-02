@@ -44,11 +44,11 @@ package org.netbeans.spi.project.support.ant;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Iterator;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectManager;
 import org.netbeans.modules.project.ant.AntBasedProjectFactorySingleton;
 import org.netbeans.modules.project.ant.ProjectLibraryProvider;
+import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -113,8 +113,15 @@ public class ProjectGenerator {
         try {
             return ProjectManager.mutex().writeAccess(new Mutex.ExceptionAction<AntProjectHelper>() {
                 public AntProjectHelper run() throws IOException {
-                    if (ProjectManager.getDefault().findProject(directory) != null) {
-                        throw new IllegalArgumentException("Already a project in " + directory); // NOI18N
+                    Project prj = ProjectManager.getDefault().findProject(directory);
+                    if (prj != null) {
+                        // #139769: try harder to get rid of it...
+                        DefaultProjectOperations.performDefaultDeleteOperation(prj);
+                        System.gc();
+                    }
+                    prj = ProjectManager.getDefault().findProject(directory);
+                    if (prj != null) {
+                        throw new IllegalArgumentException("Already a " + prj.getClass().getName() + " in " + directory); // NOI18N
                     }
                     FileObject projectXml = directory.getFileObject(AntProjectHelper.PROJECT_XML_PATH);
                     if (projectXml != null) {
@@ -164,7 +171,8 @@ public class ProjectGenerator {
                         for (AntBasedProjectType abpt : Lookup.getDefault().lookupAll(AntBasedProjectType.class)) {
                             if (abpt.getType().equals(type)) {
                                 // Well, the factory was there.
-                                throw new IllegalArgumentException("For some reason the folder " + directory + " with a new project of type " + type + " is still not recognized"); // NOI18N
+                                throw new IllegalArgumentException("For some reason the folder " + directory +
+                                        " with a new project of type " + type + " is still not recognized"); // NOI18N
                             }
                         }
                         throw new IllegalArgumentException("No Ant-based project factory for type " + type); // NOI18N
