@@ -75,7 +75,7 @@ public class KeyValueQueue<K, V> extends BaseQueue {
     protected boolean active = true;
 	    
     public KeyValueQueue() {
-	queue = new BaseQueue.Queue();
+        super(new BaseQueue.Queue());
     }
     
     public void addLast(K key, V value) {
@@ -94,7 +94,7 @@ public class KeyValueQueue<K, V> extends BaseQueue {
 	}
     }
     
-    protected Entry doAddLast(K key, V value) {
+    private Entry doAddLast(K key, V value) {
 	Entry entry = createEntry(key, value);
 	map.put(key, entry);
 	queue.addLast(entry);
@@ -125,7 +125,7 @@ public class KeyValueQueue<K, V> extends BaseQueue {
         return new Entry(key, value);
     }
     
-    protected Entry doAddFirst(K key, V value) {
+    private Entry doAddFirst(K key, V value) {
 	Entry entry = createEntry(key, value);
 	map.put(key, entry);
 	queue.addFirst(entry);
