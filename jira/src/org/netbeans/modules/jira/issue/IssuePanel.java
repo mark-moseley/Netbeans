@@ -130,6 +130,22 @@ public class IssuePanel extends javax.swing.JPanel {
         initAttachmentsPanel();
     }
 
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (issue != null) {
+            issue.opened();
+        }
+    }
+
+    @Override
+    public void removeNotify() {
+        super.removeNotify();
+        if(issue != null) {
+            issue.closed();
+        }
+    }
+
     void setIssue(NbJiraIssue issue) {
         if (this.issue == null) {
             attachIssueListener(issue);
@@ -1341,6 +1357,8 @@ public class IssuePanel extends javax.swing.JPanel {
                             componentModel.addElement(component);
                         }
                         componentList.setModel(componentModel);
+                        List<String> componentIds = issue.getFieldValues(NbJiraIssue.IssueField.COMPONENT);
+                        reloadField(componentList, componentsByIds(project.getId(), componentIds), NbJiraIssue.IssueField.COMPONENT);
 
                         // Reload versions
                         DefaultListModel versionModel = new DefaultListModel();
@@ -1349,6 +1367,10 @@ public class IssuePanel extends javax.swing.JPanel {
                         }
                         affectsVersionList.setModel(versionModel);
                         fixVersionList.setModel(versionModel);
+                        List<String> affectsVersionIds = issue.getFieldValues(NbJiraIssue.IssueField.AFFECTSVERSIONS);
+                        reloadField(affectsVersionList, versionsByIds(project.getId(), affectsVersionIds),NbJiraIssue.IssueField.AFFECTSVERSIONS);
+                        List<String> fixVersionIds = issue.getFieldValues(NbJiraIssue.IssueField.FIXVERSIONS);
+                        reloadField(fixVersionList, versionsByIds(project.getId(), fixVersionIds), NbJiraIssue.IssueField.FIXVERSIONS);
 
                         TaskData data = issue.getTaskData();
                         if (data.isNew()) {
