@@ -39,15 +39,15 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.web.project;
+package org.netbeans.modules.maven.j2ee;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
+import org.netbeans.api.project.Project;
 import org.netbeans.modules.j2ee.common.J2eeProjectCapabilities;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.Deployment;
-import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eeModule;
+import org.netbeans.modules.j2ee.deployment.devmodules.api.InstanceRemovedException;
 import org.netbeans.modules.j2ee.deployment.devmodules.api.J2eePlatform;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
 import org.netbeans.modules.j2ee.persistence.provider.Provider;
@@ -56,37 +56,40 @@ import org.netbeans.modules.j2ee.persistence.spi.provider.PersistenceProviderSup
 
 /**
  * An implementation of PersistenceProviderSupplier for web project.
- *
+ * hard copy from web projects..
+ * 
  * @author Erno Mononen
+ * @author Milos Kleint
  */
-public class WebPersistenceProviderSupplier implements PersistenceProviderSupplier{
+public class MavenPersistenceProviderSupplier implements PersistenceProviderSupplier{
     
-    private final WebProject project;
+    private final Project project;
     
     /** Creates a new instance of WebPersistenceProviderSupplier */
-    public WebPersistenceProviderSupplier(WebProject project) {
+    public MavenPersistenceProviderSupplier(Project project) {
         this.project = project;
     }
     
     public List<Provider> getSupportedProviders() {
-        // TODO: the implementation of the this method (and whole PersistenceProviderSupplier)
-        // is pretty much identical with the EJB implementation,
-        // should be refactored to some common class.
-        J2eeModuleProvider j2eeModuleProvider = (J2eeModuleProvider) project.getLookup().lookup(J2eeModuleProvider.class);
-        J2eePlatform platform  = Deployment.getDefault().getJ2eePlatform(j2eeModuleProvider.getServerInstanceID());
-        
-        if (platform == null){
+        J2eePlatform platform = null;
+        try {
+            // TODO: the implementation of the this method (and whole PersistenceProviderSupplier)
+            // is pretty much identical with the EJB implementation,
+            // should be refactored to some common class.
+            J2eeModuleProvider j2eeModuleProvider = (J2eeModuleProvider) project.getLookup().lookup(J2eeModuleProvider.class);
+            platform = Deployment.getDefault().getServerInstance(j2eeModuleProvider.getServerInstanceID()).getJ2eePlatform();
+            if (platform == null) {
+                return Collections.<Provider>emptyList();
+            }
+        } catch (InstanceRemovedException ex) {
             return Collections.<Provider>emptyList();
         }
         List<Provider> result = new ArrayList<Provider>();
-        
         addPersistenceProvider(ProviderUtil.HIBERNATE_PROVIDER, "hibernatePersistenceProviderIsDefault", platform, result); // NOI18N
-        addPersistenceProvider(ProviderUtil.TOPLINK_PROVIDER, "toplinkPersistenceProviderIsDefault", platform, result);// NOI18N
+        addPersistenceProvider(ProviderUtil.TOPLINK_PROVIDER, "toplinkPersistenceProviderIsDefault", platform, result); // NOI18N
         addPersistenceProvider(ProviderUtil.KODO_PROVIDER, "kodoPersistenceProviderIsDefault", platform, result); // NOI18N
-        addPersistenceProvider(ProviderUtil.DATANUCLEUS_PROVIDER, "dataNucleusPersistenceProviderIsDefault", platform, result); // NOI18N
         addPersistenceProvider(ProviderUtil.OPENJPA_PROVIDER, "openJpaPersistenceProviderIsDefault", platform, result); // NOI18N
         addPersistenceProvider(ProviderUtil.ECLIPSELINK_PROVIDER, "eclipseLinkPersistenceProviderIsDefault", platform, result); // NOI18N
-        
         return result;
     }
     
@@ -102,8 +105,7 @@ public class WebPersistenceProviderSupplier implements PersistenceProviderSuppli
     }
     
     public boolean supportsDefaultProvider() {
-        J2eeProjectCapabilities capabilities = J2eeProjectCapabilities.forProject(project);
-        return capabilities != null && capabilities.hasDefaultPersistenceProvider();
+        return J2eeProjectCapabilities.forProject(project).hasDefaultPersistenceProvider();
     }
     
 
