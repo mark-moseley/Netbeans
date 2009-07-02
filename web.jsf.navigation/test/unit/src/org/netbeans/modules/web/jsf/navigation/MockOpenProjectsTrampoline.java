@@ -31,15 +31,18 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.Future;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.netbeans.modules.project.uiapi.OpenProjectsTrampoline;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
  *
  * @author joelle
  */
+@ServiceProvider(service=OpenProjectsTrampoline.class)
 public class MockOpenProjectsTrampoline implements OpenProjectsTrampoline {
     /** Property change listeners registered through API */
     private PropertyChangeSupport pchSupport;
@@ -56,7 +59,7 @@ public class MockOpenProjectsTrampoline implements OpenProjectsTrampoline {
         return projects;
     }
 
-    public void openAPI(Project[] projects, boolean openRequiredProjects) {
+    public void openAPI(Project[] projects, boolean openRequiredProjects, boolean showProgress) {
         Project[] oldProjects = getOpenProjectsAPI();
         for (Project project : projects) {
             openProjects.add(project);
@@ -104,5 +107,9 @@ public class MockOpenProjectsTrampoline implements OpenProjectsTrampoline {
             throw new IllegalArgumentException("Project " + ProjectUtils.getInformation(project).getDisplayName() + " is not open and cannot be set as main.");
         }
         this.mainProject = project;
+    }
+
+    public Future<Project[]> openProjectsAPI() {
+        return null;
     }
 }
