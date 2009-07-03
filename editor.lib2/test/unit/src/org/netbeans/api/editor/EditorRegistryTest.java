@@ -44,6 +44,7 @@ package org.netbeans.api.editor;
 import java.awt.BorderLayout;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.lang.ref.WeakReference;
 import java.util.List;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -160,7 +161,8 @@ public class EditorRegistryTest extends NbTestCase {
         EditorRegistry.notifyClose(tab2);
         jtcList = EditorRegistry.componentList();
         assertSame(4, jtcList.size());
-        assertSame(0, EditorRegistryListener.INSTANCE.firedCount); // Nothing was fired
+        assertSame(1, EditorRegistryListener.INSTANCE.firedCount); // EditroRegistry.COMPONENT_REMOVED_PROPERTY
+        assertEquals(EditorRegistry.COMPONENT_REMOVED_PROPERTY, EditorRegistryListener.INSTANCE.propertyName);
         EditorRegistryListener.INSTANCE.reset(); // Reset firedCount to 0
         assertSame(iac1, EditorRegistry.lastFocusedComponent());
 
@@ -170,8 +172,8 @@ public class EditorRegistryTest extends NbTestCase {
         jtcList = EditorRegistry.componentList();
         assertSame(3, jtcList.size());
         // Since iac1 was the first in the component list then focusLost() would be fired
-        // followed by LAST_FOCUSED_REMOVED_PROPERTY
-        assertSame(2, EditorRegistryListener.INSTANCE.firedCount);
+        // followed by COMPONENT_REMOVED_PROPERTY and LAST_FOCUSED_REMOVED_PROPERTY
+        assertSame(3, EditorRegistryListener.INSTANCE.firedCount);
         assertEquals(EditorRegistry.LAST_FOCUSED_REMOVED_PROPERTY, EditorRegistryListener.INSTANCE.propertyName);
         assertEquals(EditorRegistry.lastFocusedComponent(), EditorRegistryListener.INSTANCE.newValue);
         assertEquals(iac1, EditorRegistryListener.INSTANCE.oldValue);
@@ -187,11 +189,11 @@ public class EditorRegistryTest extends NbTestCase {
         // Partial GC: c3
         frame.getContentPane().remove(c3);
         frame.pack();
+        WeakReference<JTextComponent> c3ref = new WeakReference<JTextComponent>(c3);
         c3 = null;
         jtcList = null;
         EditorRegistryListener.INSTANCE.reset();
-        System.gc();
-        System.gc();
+        assertGC("Can't GC c3", c3ref);
         assertSame(2, EditorRegistry.componentList().size());
         
         // Test full GC
@@ -199,15 +201,15 @@ public class EditorRegistryTest extends NbTestCase {
         frame.getContentPane().remove(c1);
         frame.getContentPane().remove(c2);
         frame.pack();
+        WeakReference<JTextComponent> c1ref = new WeakReference<JTextComponent>(c1);
         c1 = null;
+        WeakReference<JTextComponent> c2ref = new WeakReference<JTextComponent>(c2);
         c2 = null;
         jtcList = null;
         EditorRegistryListener.INSTANCE.reset();
-        System.gc();
-        System.gc();
+        assertGC("Can't GC c1", c1ref);
+        assertGC("Can't GC c2", c2ref);
         assertSame(0, EditorRegistry.componentList().size());
-
-        
     }
     
     private static final class EditorRegistryListener implements PropertyChangeListener {
