@@ -38,10 +38,12 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.uid;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.netbeans.modules.cnd.api.model.CsmUID;
+import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.utils.cache.WeakSharedSet;
 
 /**
@@ -49,25 +51,33 @@ import org.netbeans.modules.cnd.utils.cache.WeakSharedSet;
  * @author Vladimir Voskresensky
  */
 public class UIDManager {
-    private final UIDStorage storage;
-    private static final int UID_MANAGER_DEFAULT_CAPACITY=1024;
-    private static final int UID_MANAGER_DEFAULT_SLICED_NUMBER = 29;
 
-    
+    private final UIDStorage storage;
+    private static final int UID_MANAGER_DEFAULT_CAPACITY;
+    private static final int UID_MANAGER_DEFAULT_SLICED_NUMBER;
+    static {
+        int nrProc = Runtime.getRuntime().availableProcessors();
+        if (nrProc <= 4) {
+            UID_MANAGER_DEFAULT_SLICED_NUMBER = 32;
+            UID_MANAGER_DEFAULT_CAPACITY = 512;
+        } else {
+            UID_MANAGER_DEFAULT_SLICED_NUMBER = 128;
+            UID_MANAGER_DEFAULT_CAPACITY = 128;
+        }
+    }
     private static final UIDManager instance = new UIDManager();
-    
+
     /** Creates a new instance of UIDManager */
     private UIDManager() {
         storage = new UIDStorage(UID_MANAGER_DEFAULT_SLICED_NUMBER, UID_MANAGER_DEFAULT_CAPACITY);
     }
-    
+
     public static UIDManager instance() {
         return instance;
     }
-    
-    // we need exclusive copy of string => use "new String(String)" constructor
-    private final String lock = new String("lock in UIDManager"); // NOI18N
-    
+    private static final class Lock {}
+    private final Object lock = new Lock();
+
     /**
      * returns shared uid instance equal to input one.
      *
@@ -76,11 +86,11 @@ public class UIDManager {
      * @exception NullPointerException If the <code>uid</code> parameter
      *                                 is <code>null</code>.
      */
-    public final CsmUID getSharedUID(CsmUID uid) {
+    public final <T> CsmUID<T> getSharedUID(CsmUID<T> uid) {
         if (uid == null) {
             throw new NullPointerException("null string is illegal to share"); // NOI18N
         }
-        CsmUID outUID = null;
+        CsmUID<T> outUID = null;
         synchronized (lock) {
             outUID = storage.getSharedUID(uid);
         }
@@ -88,43 +98,82 @@ public class UIDManager {
         assert (outUID.equals(uid));
         return outUID;
     }
-    
+
     public final void dispose() {
         storage.dispose();
     }
-    
+
     private static final class UIDStorage {
-        private final WeakSharedSet<CsmUID>[] instances;
-        private final int sliceNumber; // primary number for better distribution
+
+        private final WeakSharedSet<CsmUID<?>>[] instances;
+        private final int segmentMask; // mask
         private final int initialCapacity;
+
         private UIDStorage(int sliceNumber, int initialCapacity) {
-            this.sliceNumber = sliceNumber;
+            // Find power-of-two sizes best matching arguments
+            int ssize = 1;
+            while (ssize < sliceNumber) {
+                ssize <<= 1;
+            }
+            segmentMask = ssize - 1;
             this.initialCapacity = initialCapacity;
-            instances = new WeakSharedSet[sliceNumber];
-            for (int i = 0; i < instances.length; i++) {
-                instances[i] = new WeakSharedSet<CsmUID>(initialCapacity);
+            @SuppressWarnings("unchecked")
+            WeakSharedSet<CsmUID<?>>[] ar = new WeakSharedSet[ssize];
+            for (int i = 0; i < ar.length; i++) {
+                ar[i] = new WeakSharedSet<CsmUID<?>>(initialCapacity);
             }
+            instances = ar;
         }
-        
-        private WeakSharedSet<CsmUID> getDelegate(CsmUID uid) {
-            int index = uid.hashCode() % sliceNumber;
-            if (index < 0) {
-                index += sliceNumber;
-            }
+
+        private WeakSharedSet<CsmUID<?>> getDelegate(CsmUID<?> uid) {
+            int index = uid.hashCode() & segmentMask;
             return instances[index];
         }
-        
-        public final CsmUID getSharedUID(CsmUID uid) {
-            return getDelegate(uid).addOrGet(uid);
+
+        @SuppressWarnings("unchecked")
+        public final <T> CsmUID<T> getSharedUID(CsmUID<T> uid) {
+            return (CsmUID<T>) getDelegate(uid).addOrGet(uid);
         }
 
         public final void dispose() {
             for (int i = 0; i < instances.length; i++) {
-                if (instances[i].size()>0) {
+                if (instances[i].size() > 0) {
+                    if (true) {
+                        Object[] arr = instances[i].toArray();
+                        System.out.println("Dispose UID cache " + instances[i].size()); // NOI18N
+                        Map<Class, Integer> uidClasses = new HashMap<Class, Integer>();
+                        Map<Class, Integer> keyClasses = new HashMap<Class, Integer>();
+                        for (Object o : arr) {
+                            if (o != null) {
+                                incCounter( uidClasses, o);
+                                if (o instanceof KeyBasedUID<?>) {
+                                    Key k = ((KeyBasedUID<?>)o).getKey();
+                                    incCounter( keyClasses, k);
+                                }
+                            }
+                        }
+                        for (Map.Entry<Class, Integer> e : uidClasses.entrySet()) {
+                            System.out.println("   " + e.getValue() + " of " + e.getKey().getName()); // NOI18N
+                        }
+                        System.out.println("-----------");
+                        for (Map.Entry<Class, Integer> e : keyClasses.entrySet()) {
+                            System.out.println("   " + e.getValue() + " of " + e.getKey().getName()); // NOI18N
+                        }
+                    }
                     instances[i].clear();
                     instances[i].resize(initialCapacity);
                 }
-            }            
-        }        
-    }    
+            }
+        }
+
+        private void incCounter(Map<Class, Integer> uidClasses, Object o) {
+            Integer num = uidClasses.get(o.getClass());
+            if (num != null) {
+                num = new Integer(num.intValue() + 1);
+            } else {
+                num = new Integer(1);
+            }
+            uidClasses.put(o.getClass(), num);
+        }
+    }
 }
