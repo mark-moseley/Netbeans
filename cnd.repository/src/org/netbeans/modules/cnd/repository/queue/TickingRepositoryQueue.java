@@ -65,7 +65,8 @@ public class TickingRepositoryQueue extends RepositoryQueue {
         this(queueTickShift);
     }
     
-    protected void doReplaceAddLast(Key key, Persistent value, Entry existent) {
+    @Override
+    protected void doReplaceAddLast(Key key, Persistent value, Entry<Key, Persistent> existent) {
         if (existent instanceof TickingEntry) {
             super.doReplaceAddLast(key, value, existent);
             queue.remove(existent);
@@ -74,17 +75,20 @@ public class TickingRepositoryQueue extends RepositoryQueue {
         }
     }
     
-    protected void doPostPoll(Entry polled) {
+    @Override
+    protected void doPostPoll(Entry<Key, Persistent> polled) {
         super.doPostPoll(polled);
         if (queue.isEmpty()) {
             currentTick = 0;
         }
     }
     
-    protected KeyValueQueue.Entry createEntry(Key key, Persistent value) {
+    @Override
+    protected TickingEntry createEntry(Key key, Persistent value) {
         return new TickingEntry(key, value, currentTick);
     }
 
+    @Override
     public boolean isReady() {
         synchronized ( lock ) {
             if (queue.isEmpty()) {
@@ -103,11 +107,12 @@ public class TickingRepositoryQueue extends RepositoryQueue {
 //            Thread.sleep(insomniaDelay);
 //    }
     
+    @Override
     public void onIdle() {
         currentTick++; // we don't need serialization here
     }
 
-    public class TickingEntry extends Entry {
+    public class TickingEntry extends Entry<Key, Persistent> {
         
         private int tick;
         
