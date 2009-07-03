@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,133 +31,147 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.cnd.modelimpl.uid;
 
+package org.netbeans.modules.cnd.apt.support;
+
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
-import org.netbeans.modules.cnd.api.model.CsmUID;
+import java.util.WeakHashMap;
 import org.netbeans.modules.cnd.debug.CndTraceFlags;
-import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.utils.CndUtils;
-import org.netbeans.modules.cnd.utils.cache.WeakSharedSet;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
+import org.netbeans.modules.cnd.utils.cache.FilePathCache;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
-public class UIDManager {
-
-    private final UIDStorage storage;
-    private static final int UID_MANAGER_DEFAULT_CAPACITY;
-    private static final int UID_MANAGER_DEFAULT_SLICED_NUMBER;
+public final class IncludeDirEntry {
+    private static final int MANAGER_DEFAULT_CAPACITY;
+    private static final int MANAGER_DEFAULT_SLICED_NUMBER;
     static {
         int nrProc = CndUtils.getConcurrencyLevel();
         if (nrProc <= 4) {
-            UID_MANAGER_DEFAULT_SLICED_NUMBER = 32;
-            UID_MANAGER_DEFAULT_CAPACITY = 512;
+            MANAGER_DEFAULT_SLICED_NUMBER = 32;
+            MANAGER_DEFAULT_CAPACITY = 512;
         } else {
-            UID_MANAGER_DEFAULT_SLICED_NUMBER = 128;
-            UID_MANAGER_DEFAULT_CAPACITY = 128;
+            MANAGER_DEFAULT_SLICED_NUMBER = 128;
+            MANAGER_DEFAULT_CAPACITY = 128;
         }
     }
-    private static final UIDManager instance = new UIDManager();
+    private static final IncludeDirStorage storage = new IncludeDirStorage(MANAGER_DEFAULT_SLICED_NUMBER, MANAGER_DEFAULT_CAPACITY);
 
-    /** Creates a new instance of UIDManager */
-    private UIDManager() {
-        storage = new UIDStorage(UID_MANAGER_DEFAULT_SLICED_NUMBER, UID_MANAGER_DEFAULT_CAPACITY);
+    private final File file;
+    private final boolean exists;
+    private final boolean isFramework;
+    private final CharSequence asCharSeq;
+
+    public IncludeDirEntry(File file, boolean exists, boolean framework, CharSequence asCharSeq) {
+        this.file = file;
+        this.exists = exists;
+        this.isFramework = framework;
+        this.asCharSeq = asCharSeq;
     }
 
-    public static UIDManager instance() {
-        return instance;
-    }
-    private static final class Lock {}
-    private final Object lock = new Lock();
-
-    /**
-     * returns shared uid instance equal to input one.
-     *
-     * @param uid - interested shared uid
-     * @return the shared instance of uid
-     * @exception NullPointerException If the <code>uid</code> parameter
-     *                                 is <code>null</code>.
-     */
-    public final <T> CsmUID<T> getSharedUID(CsmUID<T> uid) {
-        if (uid == null) {
-            throw new NullPointerException("null string is illegal to share"); // NOI18N
+    public static IncludeDirEntry get(String dir) {
+        CharSequence key = FilePathCache.getManager().getString(dir);
+        Map<CharSequence, IncludeDirEntry> delegate = storage.getDelegate(key);
+        synchronized (delegate) {
+            IncludeDirEntry out = delegate.get(key);
+            if (out == null) {
+                File file = new File(dir);
+                String asString = file.getAbsolutePath();
+                boolean framework = asString.endsWith("/Frameworks"); // NOI18N
+                CharSequence asCharSeq = FilePathCache.getManager().getString(asString);
+                boolean exists = CndFileUtils.isExistingDirectory(file, asString);
+                out = new IncludeDirEntry(file, exists, framework, asCharSeq);
+                delegate.put(key, out);
+            }
+            return out;
         }
-        CsmUID<T> outUID = null;
-        synchronized (lock) {
-            outUID = storage.getSharedUID(uid);
-        }
-        assert (outUID != null);
-        assert (outUID.equals(uid));
-        return outUID;
     }
 
-    public final void dispose() {
+    public CharSequence getAsSharedCharSequence() {
+        return asCharSeq;
+    }
+
+    public boolean isFramework() {
+        return isFramework;
+    }
+
+    public boolean isExistingDirectory() {
+        return exists;
+    }
+
+    public File getFile() {
+        return file;
+    }
+
+    @Override
+    public String toString() {
+        return (exists ? "" : "NOT EXISTING ") + asCharSeq; // NOI18N
+    }
+
+    public String getAsString() {
+        return file.getPath();
+    }
+
+    /*package*/static void disposeCache() {
         storage.dispose();
     }
 
-    private static final class UIDStorage {
+    private static final class IncludeDirStorage {
 
-        private final WeakSharedSet<CsmUID<?>>[] instances;
+        private final WeakHashMap<CharSequence, IncludeDirEntry>[] instances;
         private final int segmentMask; // mask
-        private final int initialCapacity;
 
-        private UIDStorage(int sliceNumber, int initialCapacity) {
+        private IncludeDirStorage(int sliceNumber, int initialCapacity) {
             // Find power-of-two sizes best matching arguments
             int ssize = 1;
             while (ssize < sliceNumber) {
                 ssize <<= 1;
             }
             segmentMask = ssize - 1;
-            this.initialCapacity = initialCapacity;
             @SuppressWarnings("unchecked")
-            WeakSharedSet<CsmUID<?>>[] ar = new WeakSharedSet[ssize];
+            WeakHashMap<CharSequence, IncludeDirEntry>[] ar = new WeakHashMap[ssize];
             for (int i = 0; i < ar.length; i++) {
-                ar[i] = new WeakSharedSet<CsmUID<?>>(initialCapacity);
+                ar[i] = new WeakHashMap<CharSequence, IncludeDirEntry>(initialCapacity);
             }
             instances = ar;
         }
 
-        private WeakSharedSet<CsmUID<?>> getDelegate(CsmUID<?> uid) {
-            int index = uid.hashCode() & segmentMask;
+        private Map<CharSequence, IncludeDirEntry> getDelegate(CharSequence key) {
+            int index = key.hashCode() & segmentMask;
             return instances[index];
         }
 
         @SuppressWarnings("unchecked")
-        public final <T> CsmUID<T> getSharedUID(CsmUID<T> uid) {
-            return (CsmUID<T>) getDelegate(uid).addOrGet(uid);
+        public final IncludeDirEntry getSharedUID(CharSequence key) {
+            return getDelegate(key).get(key);
         }
 
         public final void dispose() {
             for (int i = 0; i < instances.length; i++) {
                 if (instances[i].size() > 0) {
                     if (CndTraceFlags.TRACE_SLICE_DISTIBUTIONS) {
-                        Object[] arr = instances[i].toArray();
-                        System.out.println("Dispose UID cache " + instances[i].size()); // NOI18N
-                        Map<Class, Integer> uidClasses = new HashMap<Class, Integer>();
+                        System.out.println("Include Dir Cache " + instances[i].size()); // NOI18N
                         Map<Class, Integer> keyClasses = new HashMap<Class, Integer>();
-                        for (Object o : arr) {
+                        for (Object o : instances[i].keySet()) {
                             if (o != null) {
-                                incCounter( uidClasses, o);
-                                if (o instanceof KeyBasedUID<?>) {
-                                    Key k = ((KeyBasedUID<?>)o).getKey();
-                                    incCounter( keyClasses, k);
-                                }
+                                incCounter( keyClasses, o);
                             }
                         }
-                        for (Map.Entry<Class, Integer> e : uidClasses.entrySet()) {
-                            System.out.println("   " + e.getValue() + " of " + e.getKey().getName()); // NOI18N
-                        }
-                        System.out.println("-----------");
                         for (Map.Entry<Class, Integer> e : keyClasses.entrySet()) {
                             System.out.println("   " + e.getValue() + " of " + e.getKey().getName()); // NOI18N
                         }
                     }
                     instances[i].clear();
-                    instances[i].resize(initialCapacity);
                 }
             }
         }
