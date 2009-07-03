@@ -39,38 +39,43 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.apt.debug;
-
-import org.netbeans.modules.cnd.debug.DebugUtils;
+package org.netbeans.modules.cnd.debug;
 
 /**
  * A common place for APT tracing flags that are used by several classes
  * @author Vladimir Voskresensky
  */
-public interface APTTraceFlags {
-    public static final boolean APT_SHARE_MACROS = DebugUtils.getBoolean("apt.share.macros", true); // NOI18N
+public class DebugUtils {
 
-    public static final boolean APT_SHARE_TEXT = DebugUtils.getBoolean("apt.share.text", true); // NOI18N
-    //public static final boolean APT_USE_STORAGE_SET = DebugUtils.getBoolean("apt.share.storage", true); // NOI18N
-    public static final boolean APT_NON_RECURSE_VISIT = DebugUtils.getBoolean("apt.nonrecurse.visit", true); // NOI18N
+    private DebugUtils() {
+    }
 
-    public static final int     BUF_SIZE = 8192*Integer.getInteger("cnd.file.buffer", 1).intValue(); // NOI18N
+    public static boolean getBoolean(String name, boolean result) {
+        String text = System.getProperty(name);
+        if( text != null ) {
+            result = Boolean.parseBoolean(text);
+        }
+        return result;
+    } 
+
+    public static int getInt(String name, int result){
+        String text = System.getProperty(name);
+        if( text != null ) {
+            try {
+                result = Integer.parseInt(text);
+            } catch(NumberFormatException e){
+                // default value
+            }
+        }
+        return result;
+    }
+
+    public static final boolean STANDALONE;
+    static {
+        STANDALONE = initStandalone();
+    }
     
-    public static final boolean OPTIMIZE_INCLUDE_SEARCH = DebugUtils.getBoolean("cnd.optimize.include.search", true); // NOI18N
-
-    public static final boolean TRACE_APT = Boolean.getBoolean("cnd.apt.trace"); // NOI18N
-    public static final boolean TRACE_APT_LEXER = Boolean.getBoolean("cnd.aptlexer.trace"); // NOI18N
-    public static final boolean TRACE_APT_CACHE = Boolean.getBoolean("cnd.apt.cache.hits"); // NOI18N
-
-    public static final boolean USE_APT_TEST_TOKEN = Boolean.getBoolean("cnd.apt.apttoken"); // NOI18N
-
-    public static final boolean TEST_APT_SERIALIZATION = DebugUtils.getBoolean("cnd.cache.apt", false); // NOI18N
-
-    public static final boolean APT_DISPOSE_TOKENS = DebugUtils.getBoolean("apt.dispose.tokens", false); // NOI18N
-    
-    public static final boolean APT_USE_SOFT_REFERENCE = DebugUtils.getBoolean("apt.soft.reference", true); // NOI18N
-    
-    public static final boolean APT_ABSOLUTE_INCLUDES = DebugUtils.getBoolean("apt.absolute.include", true); // NOI18N
-    
-    public static final boolean APT_RECURSIVE_BUILD = DebugUtils.getBoolean("apt.recursive.build", true); // NOI18N
+    private static boolean initStandalone() {
+        return ! DebugUtils.class.getClassLoader().getClass().getName().startsWith("org.netbeans."); // NOI18N
+    }    
 }

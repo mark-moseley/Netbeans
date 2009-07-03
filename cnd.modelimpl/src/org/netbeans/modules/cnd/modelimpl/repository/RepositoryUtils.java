@@ -38,185 +38,217 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-
 package org.netbeans.modules.cnd.modelimpl.repository;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import org.netbeans.modules.cnd.api.model.CsmIdentifiable;
-import org.netbeans.modules.cnd.api.model.CsmOffsetableDeclaration;
+import java.util.concurrent.ConcurrentHashMap;
+import org.netbeans.modules.cnd.api.model.CsmNamespace;
+import org.netbeans.modules.cnd.api.model.CsmObject;
+import org.netbeans.modules.cnd.api.model.CsmProject;
+import org.netbeans.modules.cnd.modelimpl.csm.core.CsmIdentifiable;
 import org.netbeans.modules.cnd.api.model.CsmUID;
 import org.netbeans.modules.cnd.api.project.NativeProject;
-import org.netbeans.modules.cnd.apt.debug.DebugUtils;
+import org.netbeans.modules.cnd.debug.DebugUtils;
 import org.netbeans.modules.cnd.modelimpl.csm.core.ProjectBase;
 import org.netbeans.modules.cnd.modelimpl.debug.TraceFlags;
+import org.netbeans.modules.cnd.modelimpl.uid.KeyBasedUID;
+import org.netbeans.modules.cnd.modelimpl.uid.UIDProviderIml;
 import org.netbeans.modules.cnd.repository.api.Repository;
 import org.netbeans.modules.cnd.repository.api.RepositoryAccessor;
+import org.netbeans.modules.cnd.repository.api.RepositoryException;
 import org.netbeans.modules.cnd.repository.spi.Key;
 import org.netbeans.modules.cnd.repository.spi.Persistent;
 import org.netbeans.modules.cnd.repository.spi.RepositoryListener;
+import org.netbeans.modules.cnd.utils.CndUtils;
 
 /**
  *
  * @author Vladimir Voskresensky
  */
-public class RepositoryUtils {
-    
-    private static final boolean TRACE_REPOSITORY_ACCESS = DebugUtils.getBoolean("cnd.modelimpl.trace.repository", false);
+public final class RepositoryUtils {
 
+    private static final boolean TRACE_ARGS = CndUtils.getBoolean("cnd.repository.trace.args", false); //NOI18N;
+    private static final boolean TRACE_REPOSITORY_ACCESS = TRACE_ARGS || DebugUtils.getBoolean("cnd.modelimpl.trace.repository", false);
+    private static final Repository repository = RepositoryAccessor.getRepository();
     /**
      * the version of the persistency mechanism
      */
-    private static int CURRENT_VERSION_OF_PERSISTENCY = 19;
+    private static int CURRENT_VERSION_OF_PERSISTENCY = 74;
+
     /** Creates a new instance of RepositoryUtils */
     private RepositoryUtils() {
     }
-    
     ////////////////////////////////////////////////////////////////////////////
     // repository access wrappers
     private static volatile int counter = 0;
-    public static <T extends CsmIdentifiable> T get(CsmUID<T> uid) {
+
+    public static <T> T get(CsmUID<T> uid) {
         Key key = UIDtoKey(uid);
-        Persistent out = get(key);
-        assert out == null || (out instanceof CsmIdentifiable);
-        return (T)out;
+        Persistent obj = get(key);
+        assert obj == null || (obj instanceof CsmIdentifiable) : "unexpected object with class " + obj.getClass() + obj; // NOI18N
+        // we are sure in type, because of uid type
+        @SuppressWarnings("unchecked")
+        T out = (T)obj;
+        return out;
     }
-    
+
     public static Persistent tryGet(Key key) {
-	assert key != null;
-	Persistent out = RepositoryAccessor.getRepository().tryGet(key);
-	if (TRACE_REPOSITORY_ACCESS) {
-	    System.err.printf("%d:trying key %s got %s", nextIndex(), key, out);
-	}
-	return out;
+        assert key != null;
+        Persistent out = repository.tryGet(key);
+        if (TRACE_REPOSITORY_ACCESS && isTracingKey(key)) {
+            System.err.printf("%d:trying key %s got %s", nextIndex(), key, out);
+        }
+        return out;
     }
-    
+
     public static Persistent get(Key key) {
         assert key != null;
-        long time = 0;
-        int index = 0;
-        if (TRACE_REPOSITORY_ACCESS) {
-            index = nextIndex();
-            time = System.currentTimeMillis();
-            System.err.println(index + ":getting key " + key);
-        }
-        Persistent out = RepositoryAccessor.getRepository().get(key);
-        if (TRACE_REPOSITORY_ACCESS) {
+        if (TRACE_REPOSITORY_ACCESS && isTracingKey(key)) {
+            long time = System.currentTimeMillis();
+            int index = nextIndex();
+            System.err.println(index + ": " + System.identityHashCode(key) + "@getting key " + key);
+            Persistent out = repository.get(key);
             time = System.currentTimeMillis() - time;
-            System.err.println(index + ":got in " + time + "ms the key " + key);
+            System.err.println(index + ": " + System.identityHashCode(key) + "@got" + (out == null ? " - NULL":"") + " in " + time + "ms the key " + key);
+            return out;
         }
-	return out;
+        return repository.get(key);
     }
-    
+
     private static synchronized int nextIndex() {
         return counter++;
     }
-    
-    public static void remove(CsmUID uid) {
+
+    public static void remove(CsmUID uid, CsmObject obj) {
         Key key = UIDtoKey(uid);
         if (key != null) {
-            long time = 0;
-            int index = 0;
-            if (TRACE_REPOSITORY_ACCESS) {
-                index = nextIndex();
-                time = System.currentTimeMillis();
-                System.err.println(index + ":removing key " + key);
-            }
-            if (!TraceFlags.SAFE_REPOSITORY_ACCESS) {
-                RepositoryAccessor.getRepository().remove(key);
-            }
-            if (TRACE_REPOSITORY_ACCESS) {
-                time = System.currentTimeMillis() - time;
-                System.err.println(index + ":removed in " + time + "ms the key " + key);
+            try {
+                if (TRACE_REPOSITORY_ACCESS && isTracingKey(key)) {
+                    long time = System.currentTimeMillis();
+                    int index = nextIndex();
+                    System.err.println(index + ": " + System.identityHashCode(key) + "@removing key " + key);
+                    if (!TraceFlags.SAFE_REPOSITORY_ACCESS) {
+                        repository.remove(key);
+                    }
+                    time = System.currentTimeMillis() - time;
+                    System.err.println(index + ": " + System.identityHashCode(key) + "@removed in " + time + "ms the key " + key);
+                    return;
+                }
+                if (!TraceFlags.SAFE_REPOSITORY_ACCESS) {
+                    repository.remove(key);
+                }
+            } finally {
+                disposeUID(uid, obj);
             }
         }
     }
-    
+
+    @SuppressWarnings("unchecked")
+    public static void disposeUID(CsmUID uid, CsmObject obj) {
+        if (uid instanceof KeyBasedUID<?>) {
+            ((KeyBasedUID<CsmObject>)uid).dispose(obj);
+        }
+    }
+
     public static void remove(Collection<? extends CsmUID> uids) {
         if (uids != null) {
             for (CsmUID uid : uids) {
-                remove(uid);
+                remove(uid, null);
             }
         }
     }
-    
-    public static CsmUID put(CsmIdentifiable csmObj) {
-        CsmUID uid = null;
+
+    public static <T> CsmUID<T> put(T csmObj) {
+        CsmUID<T> uid = null;
         if (csmObj != null) {
-            uid = csmObj.getUID();
+            // during put we suppress check for null
+            uid = UIDProviderIml.get(csmObj, false);
             assert uid != null;
             Key key = UIDtoKey(uid);
-	    put(key, (Persistent) csmObj);
+            put(key, (Persistent) csmObj);
+            if (!((csmObj instanceof CsmNamespace)||(csmObj instanceof CsmProject))){
+                assert uid.getObject() != null;
+            }
         }
         return uid;
-    }    
-    
-    public static void put(Key key, Persistent obj) {
-	if (key != null) {
-	    long time = 0;
-	    int index = 0;
-	    if (TRACE_REPOSITORY_ACCESS) {
-		index = nextIndex();
-		time = System.currentTimeMillis();
-		System.err.println(index + ":putting key " + key);
-	    }
-	    RepositoryAccessor.getRepository().put(key, obj);
-	    if (TRACE_REPOSITORY_ACCESS) {
-		time = System.currentTimeMillis() - time;
-		System.err.println(index + ":put in " + time + "ms the key " + key);
-	    }
-	}
     }
-    
-    public static void hang(CsmIdentifiable csmObj) {
-        CsmUID uid = null;
-        if (csmObj != null) {
-            uid = csmObj.getUID();
-            assert uid != null;
-            Key key = UIDtoKey(uid);
-	    hang(key, (Persistent)csmObj);
+
+    public static void put(Key key, Persistent obj) {
+        if (key != null) {
+            if (TRACE_REPOSITORY_ACCESS && isTracingKey(key)) {
+                long time = System.currentTimeMillis();
+                int index = nextIndex();
+                System.err.println(index + ": " + System.identityHashCode(key) + "@putting key " + key);
+                repository.put(key, obj);
+                time = System.currentTimeMillis() - time;
+                System.err.println(index + ": " + System.identityHashCode(key) + "@put in " + time + "ms the key " + key);
+                return;
+            }
+            repository.put(key, obj);
         }
     }
-    
-    public static void hang(Key key, Persistent obj) {
-	if (key != null) {
-	    long time = 0;
-	    int index = 0;
-	    if (TRACE_REPOSITORY_ACCESS) {
-		index = nextIndex();
-		time = System.currentTimeMillis();
-		System.err.println(index + ":hanging key " + key);
-	    }
-	    RepositoryAccessor.getRepository().hang(key, obj);
-	    if (TRACE_REPOSITORY_ACCESS) {
-		time = System.currentTimeMillis() - time;
-		System.err.println(index + ":hung in " + time + "ms the key " + key);
-	    }
-	}
+
+    public static void hang(Object csmObj) {
+        CsmUID uid = null;
+        if (csmObj != null) {
+            // during hang we suppress check for null
+            uid = UIDProviderIml.get(csmObj, false);
+            assert uid != null;
+            Key key = UIDtoKey(uid);
+            hang(key, (Persistent) csmObj);
+            if (!((csmObj instanceof CsmNamespace)||(csmObj instanceof CsmProject))){
+                assert uid.getObject() != null;
+            }
+        }
     }
-    
-    public static <T extends CsmOffsetableDeclaration> List<CsmUID<T>> put(List<T> decls) {
+
+    public static void hang(Key key, Persistent obj) {
+        if (key != null) {
+            if (TRACE_REPOSITORY_ACCESS && isTracingKey(key)) {
+                long time = System.currentTimeMillis();
+                int index = nextIndex();
+                System.err.println(index + ": " + System.identityHashCode(key) + "@hanging key " + key);
+                repository.hang(key, obj);
+                time = System.currentTimeMillis() - time;
+                System.err.println(index + ": " + System.identityHashCode(key) + "@hung in " + time + "ms the key " + key);
+                return;
+            }
+            repository.hang(key, obj);
+        }
+    }
+
+    public static <T> Collection<CsmUID<T>> put(Collection<T> decls) {
         assert decls != null;
         List<CsmUID<T>> uids = new ArrayList<CsmUID<T>>(decls.size());
-        for (T decl: decls) {
-            CsmUID<T> uid = put(decl);
-            uids.add(uid);
+        for (T decl : decls) {
+            if (decl instanceof CsmIdentifiable) {
+                CsmUID<T> uid = put(decl);
+                uids.add(uid);
+            }
         }
         return uids;
     }
-    
+
+    public static <T extends CsmObject> void setSelfUIDs(Collection<T> decls) {
+        assert decls != null;
+        for (T decl : decls) {
+            org.netbeans.modules.cnd.modelimpl.csm.core.Utils.setSelfUID(decl);
+        }
+    }
     ////////////////////////////////////////////////////////////////////////////
     //
     public static Key UIDtoKey(CsmUID uid) {
         if (uid instanceof KeyHolder) {
-            return ((KeyHolder)uid).getKey();
+            return ((KeyHolder) uid).getKey();
         } else {
             return null;
         }
     }
-    
+
     public static CharSequence getUnitName(CsmUID uid) {
         Key key = UIDtoKey(uid);
         assert key != null;
@@ -224,71 +256,91 @@ public class RepositoryUtils {
 
         return unitName;
     }
-    
+
     public static void startup() {
-	Repository repository = RepositoryAccessor.getRepository();
-	repository.startup(CURRENT_VERSION_OF_PERSISTENCY);
-	repository.unregisterRepositoryListener(RepositoryListenerImpl.instance());
-	repository.registerRepositoryListener(RepositoryListenerImpl.instance());
+        repository.startup(CURRENT_VERSION_OF_PERSISTENCY);
+        repository.unregisterRepositoryListener(getRepositoryListenerProxy());
+        repository.registerRepositoryListener(getRepositoryListenerProxy());
     }
-    
+
+    private static RepositoryListenerProxy myRepositoryListenerProxy;
+    private static synchronized RepositoryListenerProxy getRepositoryListenerProxy() {
+        if (myRepositoryListenerProxy == null) {
+            myRepositoryListenerProxy = new RepositoryListenerProxy();
+        }
+        return myRepositoryListenerProxy;
+    }
+
     public static void shutdown() {
-	// we intentionally do not unregister listener here since it will be automatically 
-	// unregistered as soon as shutdown (which is async.) finishes
-        RepositoryAccessor.getRepository().shutdown();
+        // we intentionally do not unregister listener here since it will be automatically
+        // unregistered as soon as shutdown (which is async.) finishes
+        repository.shutdown();
     }
-    
+
     public static void cleanCashes() {
-        RepositoryAccessor.getRepository().cleanCaches();
+        repository.cleanCaches();
+    }
+
+    public static void debugClear() {
+        repository.debugClear();
     }
 
     public static void closeUnit(CsmUID uid, Set<String> requiredUnits, boolean cleanRepository) {
         closeUnit(UIDtoKey(uid), requiredUnits, cleanRepository);
     }
-    
-    public static void closeUnit(String unitName,  Set<String> requiredUnits) {
-	closeUnit(unitName, requiredUnits, ! TraceFlags.PERSISTENT_REPOSITORY);
+
+    public static void closeUnit(String unitName, Set<String> requiredUnits, boolean cleanRepository) {
+        RepositoryListenerImpl.instance().onExplicitClose(unitName);
+        _closeUnit(unitName, requiredUnits, cleanRepository);
     }
 
-    public static void closeUnit(String unitName,  Set<String> requiredUnits, boolean cleanRepository) {
-	RepositoryListenerImpl.instance().onExplicitClose(unitName);
-        RepositoryAccessor.getRepository().closeUnit(unitName, cleanRepository, requiredUnits);
-    }
-    
-    public static void closeUnit(Key key, Set<String> requiredUnits) {
-	closeUnit(key, requiredUnits, ! TraceFlags.PERSISTENT_REPOSITORY);
-    }
-    
     public static void closeUnit(Key key, Set<String> requiredUnits, boolean cleanRepository) {
         assert key != null;
-        RepositoryAccessor.getRepository().closeUnit(key.getUnit().toString(), cleanRepository, requiredUnits);
+        _closeUnit(key.getUnit().toString(), requiredUnits, cleanRepository);
     }
-    
+
+    private static void _closeUnit(String unit, Set<String> requiredUnits, boolean cleanRepository) {
+        assert unit != null;
+        if (!cleanRepository) {
+            int errors = myRepositoryListenerProxy.getErrorCount(unit);
+            if (errors > 0) {
+                System.err.println("Clean index for project \""+unit+"\" because index was corrupted (was "+errors+" errors)."); // NOI18N
+                cleanRepository = true;
+            }
+        }
+        myRepositoryListenerProxy.cleanErrorCount(unit);
+        repository.closeUnit(unit, cleanRepository, requiredUnits);
+    }
+
+    public static int getRepositoryErrorCount(ProjectBase project){
+        return getRepositoryListenerProxy().getErrorCount(project.getUniqueName().toString());
+    }
+
     public static void onProjectDeleted(NativeProject nativeProject) {
-	Key key = KeyUtilities.createProjectKey(nativeProject);
-	RepositoryAccessor.getRepository().removeUnit(key.getUnit().toString());
+        Key key = KeyUtilities.createProjectKey(nativeProject);
+        repository.removeUnit(key.getUnit().toString());
     }
 
     public static void openUnit(ProjectBase project) {
-	CsmUID uid = project.getUID();
-	assert uid != null;
-	Key key = UIDtoKey(uid);
-	openUnit(key);
+        CsmUID uid = project.getUID();
+        assert uid != null;
+        Key key = UIDtoKey(uid);
+        openUnit(key);
     }
-    
+
     public static void openUnit(Key key) {
-	openUnit(key.getUnit().toString());
+        openUnit(key.getUnitId(), key.getUnit().toString());
     }
-    
-    private static void openUnit(String unitName) {
-	// TODO explicit open should be called here: 
-	RepositoryListenerImpl.instance().onExplicitOpen(unitName);
-	RepositoryAccessor.getRepository().openUnit(unitName);
+
+    private static void openUnit(int unitId, String unitName) {
+        // TODO explicit open should be called here:
+        RepositoryListenerImpl.instance().onExplicitOpen(unitName);
+        repository.openUnit(unitId, unitName);
     }
-    
+
     public static void unregisterRepositoryListener(RepositoryListener listener) {
-        RepositoryAccessor.getRepository().unregisterRepositoryListener(listener);
-    }    
+        repository.unregisterRepositoryListener(listener);
+    }
 
     static int getUnitId(String unitName) {
         return RepositoryAccessor.getTranslator().getUnitId(unitName);
@@ -310,5 +362,61 @@ public class RepositoryUtils {
         return RepositoryAccessor.getTranslator().getFileNameById(unitId, fileId);
     }
 
+    private static boolean isTracingKey(Key key) {
+        if (TRACE_ARGS) {
+            if (key.getDepth() == 3 &&
+                    ("argc".contentEquals(key.getAt(2)) || // NOI18N
+                    "main".contentEquals(key.getAt(2)))) { // NOI18N
+                return true;
+            }
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    private static class RepositoryListenerProxy implements RepositoryListener {
+        private RepositoryListener parent = RepositoryListenerImpl.instance();
+        private Map<String,Integer> wasErrors = new ConcurrentHashMap<String,Integer>();
+        private RepositoryListenerProxy(){
+        }
+        public int getErrorCount(String unitName) {
+            Integer i = wasErrors.get(unitName);
+            if (i == null) {
+                return 0;
+            } else {
+                return i.intValue();
+            }
+        }
+        public void cleanErrorCount(String unitName) {
+            wasErrors.remove(unitName);
+        }
+        public boolean unitOpened(String unitName) {
+            return parent.unitOpened(unitName);
+        }
+        public void unitClosed(String unitName) {
+            parent.unitClosed(unitName);
+        }
+        public void anExceptionHappened(String unitName, RepositoryException exc) {
+            primitiveErrorStrategy(unitName, exc);
+            parent.anExceptionHappened(unitName, exc);
+        }
+
+        /**
+         * Strategy only count errors.
+         * TODO enhancement:
+         * Provide intelligence logic that take into account possibility to "fixing" errors.
+         * For example error in "file" segment can be fixed by file reparse.
+         */
+        private void primitiveErrorStrategy(String unitName, RepositoryException exc){
+            Integer i = wasErrors.get(unitName);
+            if (i == null) {
+                i = Integer.valueOf(1);
+            } else {
+                i = Integer.valueOf(i.intValue()+1);
+            }
+            wasErrors.put(unitName, i);
+        }
+    }
 }
 
