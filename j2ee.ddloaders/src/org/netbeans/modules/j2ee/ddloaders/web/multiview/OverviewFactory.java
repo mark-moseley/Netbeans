@@ -45,7 +45,6 @@ import org.netbeans.modules.xml.multiview.ui.SectionView;
 import org.netbeans.modules.xml.multiview.ui.ToolBarDesignEditor;
 import org.netbeans.modules.xml.multiview.ui.SectionInnerPanel;
 import org.netbeans.modules.j2ee.ddloaders.web.DDDataObject;
-import org.netbeans.modules.j2ee.dd.api.web.JspPropertyGroup;
 
 /**
  * @author mkuchtiak
@@ -63,6 +62,8 @@ public class OverviewFactory implements org.netbeans.modules.xml.multiview.ui.In
     public SectionInnerPanel createInnerPanel(Object key) {
         if ("listeners".equals(key)) return new ListenersPanel((SectionView)editor.getContentView(), dObj);
         else if ("context_params".equals(key)) return new ContextParamsPanel((SectionView)editor.getContentView(), dObj);
+        else if ("absoluteOrdering".equals(key)) return new AbsoluteOrderingPanel((SectionView)editor.getContentView(), dObj);
+        else if ("relativeOrdering".equals(key)) return new RelativeOrderingPanel((SectionView)editor.getContentView(), dObj);
         else return new OverviewPanel((SectionView)editor.getContentView(), dObj);
     }
 }
