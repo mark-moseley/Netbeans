@@ -69,6 +69,7 @@ import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.ant.AntArtifactQuery;
+import org.netbeans.modules.j2ee.common.J2eeProjectCapabilities;
 import org.netbeans.modules.j2ee.dd.api.ejb.EjbJarMetadata;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeApplicationProvider;
 import org.netbeans.modules.j2ee.deployment.devmodules.spi.J2eeModuleProvider;
@@ -233,51 +234,35 @@ public class Utils {
         // TODO: HACK - this must be solved by freeform's own implementation of EnterpriseReferenceContainer, see issue 57003
         // call ejb should not make this check, all should be handled in EnterpriseReferenceContainer
         boolean isCallerFreeform = enterpriseProject.getClass().getName().equals("org.netbeans.modules.ant.freeform.FreeformProject");
+
+        boolean isCallerEE6WebProject = isEE6WebProject(enterpriseProject);
         
         List<Project> filteredResults = new ArrayList<Project>(allProjects.length);
         for (int i = 0; i < allProjects.length; i++) {
             boolean isEJBModule = false;
             J2eeModuleProvider j2eeModuleProvider = allProjects[i].getLookup().lookup(J2eeModuleProvider.class);
-            if (j2eeModuleProvider != null && j2eeModuleProvider.getJ2eeModule().getModuleType().equals(J2eeModule.EJB)) {
+            if (j2eeModuleProvider != null && j2eeModuleProvider.getJ2eeModule().getType().equals(J2eeModule.Type.EJB)) {
                 isEJBModule = true;
             }
+
+            // If the caller project is NOT a freeform project, include all EJB modules
+            // If the caller project is a freeform project, include caller itself only
+            // If the caller project is a Java EE 6 web project, include itself in the list
             if ((isEJBModule && !isCallerFreeform) ||
-                    (isCallerFreeform && enterpriseProject.equals(allProjects[i]))) {
+                    (enterpriseProject.equals(allProjects[i]) && (isCallerFreeform || isCallerEE6WebProject) ) ) {
                 filteredResults.add(allProjects[i]);
             }
         }
         return filteredResults.toArray(new Project[filteredResults.size()]);
     }
-    
-//TODO: this method should be removed and org.netbeans.modules.j2ee.common.Util.isJavaEE5orHigher(Project project)
-//should be called instead of it
-    public static boolean isJavaEE5orHigher(Project project) {
-        if (project == null) {
-            return false;
-        }
-        J2eeModuleProvider j2eeModuleProvider = project.getLookup().lookup(J2eeModuleProvider.class);
-        if (j2eeModuleProvider != null) {
-            J2eeModule j2eeModule = j2eeModuleProvider.getJ2eeModule();
-            if (j2eeModule != null) {
-                Object type = j2eeModule.getModuleType();
-                double version = Double.parseDouble(j2eeModule.getModuleVersion());
-                if (J2eeModule.EJB.equals(type) && (version > 2.1)) {
-                    return true;
-                }
-                if (J2eeModule.WAR.equals(type) && (version > 2.4)) {
-                    return true;
-                }
-                if (J2eeModule.CLIENT.equals(type) && (version > 1.4)) {
-                    return true;
-                }
-            }
-        }
-        return false;
+
+    public static boolean isEE6WebProject(Project enterpriseProject) {
+        return J2eeProjectCapabilities.forProject(enterpriseProject).isEjb31Supported();
     }
     
     public static boolean isAppClient(Project project) {
         J2eeModuleProvider module = project.getLookup().lookup(J2eeModuleProvider.class);
-        return  (module != null) ? module.getJ2eeModule().getModuleType().equals(J2eeModule.CLIENT) : false;
+        return  (module != null) ? module.getJ2eeModule().getType().equals(J2eeModule.Type.CAR) : false;
     }
     
     /**
@@ -289,6 +274,9 @@ public class Utils {
             return true;
         }
         JavaSource javaSource = JavaSource.forFileObject(fileObject);
+        if (javaSource == null) {
+            return false;
+        }
         final boolean[] result = new boolean[] { false };
         javaSource.runUserActionTask(new Task<CompilationController>() {
             public void run(CompilationController controller) throws IOException {
@@ -360,6 +348,19 @@ public class Utils {
 
     public static AntArtifact getAntArtifact(final EjbReference ejbReference) throws IOException {
         
+        Project project = getProject(ejbReference);
+        if (project == null) {
+            return null;
+        }
+        AntArtifact[] antArtifacts = AntArtifactQuery.findArtifactsByType(project, JavaProjectConstants.ARTIFACT_TYPE_JAR);
+        boolean hasArtifact = (antArtifacts != null && antArtifacts.length > 0);
+        
+        return hasArtifact ? antArtifacts[0] : null;
+        
+    }
+
+    public static Project getProject(final EjbReference ejbReference) throws IOException {
+
         MetadataModel<EjbJarMetadata> ejbReferenceMetadataModel = ejbReference.getEjbModule().getMetadataModel();
         FileObject ejbReferenceEjbClassFO = ejbReferenceMetadataModel.runReadAction(new MetadataModelAction<EjbJarMetadata, FileObject>() {
             public FileObject run(EjbJarMetadata metadata) throws Exception {
@@ -367,12 +368,10 @@ public class Utils {
             }
         });
 
-        Project project = FileOwnerQuery.getOwner(ejbReferenceEjbClassFO);
-        AntArtifact[] antArtifacts = AntArtifactQuery.findArtifactsByType(project, JavaProjectConstants.ARTIFACT_TYPE_JAR);
-        boolean hasArtifact = (antArtifacts != null && antArtifacts.length > 0);
-        
-        return hasArtifact ? antArtifacts[0] : null;
-        
+        if (ejbReferenceEjbClassFO == null) {
+            return null;
+        }
+        return FileOwnerQuery.getOwner(ejbReferenceEjbClassFO);
     }
  
     /**
