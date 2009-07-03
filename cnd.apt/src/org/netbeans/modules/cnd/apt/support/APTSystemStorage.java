@@ -46,6 +46,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
+import org.netbeans.modules.cnd.apt.impl.support.APTMacroCache;
 import org.netbeans.modules.cnd.apt.impl.support.APTSystemMacroMap;
 import org.netbeans.modules.cnd.apt.utils.APTUtils;
 
@@ -89,20 +90,22 @@ public final class APTSystemStorage {
                 // create new one and put in map
                 map = new APTSystemMacroMap(sysMacros);
                 allMacroMaps.put(configID, map);
-                APTUtils.LOG.log(Level.FINE, 
-                        "new system macro map was added\n {0}", // NOI18N
-                        new Object[] { map });
+                if (APTUtils.LOG.isLoggable(Level.FINE)) {
+                    APTUtils.LOG.log(Level.FINE,
+                            "new system macro map was added\n {0}", // NOI18N
+                            new Object[] { map });
+                }
             }
             return map;
         }
     }
     
-    // it's preferable to use getIncludes(String configID, List sysIncludes)
-    public List<String> getIncludes(List<String> sysIncludes) {
-        return includesStorage.get(sysIncludes);
-    }    
+//    // it's preferable to use getIncludes(String configID, List sysIncludes)
+//    public List<CharSequence> getIncludes(List<CharSequence> sysIncludes) {
+//        return includesStorage.get(sysIncludes);
+//    }
     
-    public List<String> getIncludes(String configID, List<String> sysIncludes) {
+    public List<IncludeDirEntry> getIncludes(CharSequence configID, List<String> sysIncludes) {
         return includesStorage.get(configID, sysIncludes);
     }   
     
@@ -111,5 +114,6 @@ public final class APTSystemStorage {
             allMacroMaps.clear();
         }
         includesStorage.dispose();
+        APTMacroCache.getManager().dispose();
     }
 }
