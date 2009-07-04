@@ -41,41 +41,37 @@
 
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
+import java.io.IOException;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
-import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
+import org.openide.util.NbBundle;
 
-public class GNUCCompiler extends GNUCCCCompiler {
-
-    @Override
-    public String getDevelopmentModeOptions(int value) {
-        CompilerDescriptor compiler = getFlavor().getToolchainDescriptor().getC();
-        if (compiler != null && compiler.getDevelopmentModeFlags() != null && compiler.getDevelopmentModeFlags().length > value){
-            return compiler.getDevelopmentModeFlags()[value];
-        }
-        return ""; // NOI18N
-    }
+public abstract class SunCCCCompiler extends CCCCompiler {
     
-    /** Creates a new instance of GNUCCompiler */
-    protected GNUCCompiler(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+    protected SunCCCCompiler(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
         super(env, flavor, kind, name, displayName, path);
     }
-
-    public static GNUCCompiler create(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        return new GNUCCompiler(env, flavor, kind, name, displayName, path);
-    }
-
-    @Override
-    public GNUCCompiler createCopy() {
-        GNUCCompiler copy = new GNUCCompiler(getExecutionEnvironment(), getFlavor(), getKind(), "", getDisplayName(), getPath());
-        copy.setName(getName());
-        copy.setSystemIncludeDirectories(getSystemIncludeDirectories());
-        copy.setSystemPreprocessorSymbols(getSystemPreprocessorSymbols());
-        return copy;
-    }
     
-    @Override
-    public CompilerDescriptor getDescriptor() {
-        return getFlavor().getToolchainDescriptor().getC();
+    protected abstract String getCompilerStderrCommand();
+    protected abstract String getCompilerStderrCommand2();
+    
+    protected Pair getFreshSystemIncludesAndDefines() {
+        Pair res = new Pair();
+        try {
+            getSystemIncludesAndDefines(getCompilerStderrCommand(), false, res);
+            if (getCompilerStderrCommand2() != null) {
+                getSystemIncludesAndDefines(getCompilerStderrCommand2(), false, res);
+            }
+            res.systemIncludeDirectoriesList.addUnique(applyPathPrefix("/usr/include")); // NOI18N
+
+            saveSystemIncludesAndDefines();
+        } catch (IOException ioe) {
+            System.err.println("IOException " + ioe);
+            String errormsg = NbBundle.getMessage(getClass(), "CANTFINDCOMPILER", getPath()); // NOI18N
+            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(errormsg, NotifyDescriptor.ERROR_MESSAGE));
+        }
+        return res;
     }
 }

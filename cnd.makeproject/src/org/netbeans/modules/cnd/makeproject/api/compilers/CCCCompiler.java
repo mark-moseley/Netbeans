@@ -41,59 +41,223 @@
 
 package org.netbeans.modules.cnd.makeproject.api.compilers;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
 import org.netbeans.modules.cnd.api.compilers.CompilerSet.CompilerFlavor;
+import org.netbeans.modules.cnd.api.compilers.ToolchainManager.CompilerDescriptor;
+import org.netbeans.modules.cnd.api.execution.LinkSupport;
+import org.netbeans.modules.cnd.api.remote.CommandProvider;
+import org.netbeans.modules.cnd.api.utils.IpeUtils;
+import org.netbeans.modules.cnd.api.utils.PlatformInfo;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironmentFactory;
+import org.openide.util.Lookup;
+import org.openide.util.Utilities;
 
-public class CCCCompiler extends BasicCompiler {
+public abstract class CCCCompiler extends BasicCompiler {
+    private Pair compilerDefinitions;
     private static File tmpFile = null;
     
-    public CCCCompiler(CompilerFlavor flavor, int kind, String name, String displayName, String path) {
-        super(flavor, kind, name, displayName, path);
+    protected CCCCompiler(ExecutionEnvironment env, CompilerFlavor flavor, int kind, String name, String displayName, String path) {
+        super(env, flavor, kind, name, displayName, path);
     }
-    
-    // To be overridden
-    public String getMTLevelOptions(int value) {
-        return ""; // NOI18N
-    }
-    
-    // To be overridden
-    public String getLibraryLevelOptions(int value) {
-        return ""; // NOI18N
-    }
-    
-    // To be overridden
-    public String getStandardsEvolutionOptions(int value) {
-        return ""; // NOI18N
-    }
-    
-    // To be overridden
-    public String getLanguageExtOptions(int value) {
-        return ""; // NOI18N
-    }
-    
-    protected void getSystemIncludesAndDefines(String command, boolean stdout) throws IOException {
-            Process process;
-            process = Runtime.getRuntime().exec(command + " " + tmpFile()); // NOI18N
-            if (stdout)
-                parseCompilerOutput(process.getInputStream());
-            else
-                parseCompilerOutput(process.getErrorStream());
+
+    @Override
+    public boolean setSystemIncludeDirectories(List<String> values) {
+        assert values != null;
+        if (compilerDefinitions == null) {
+            compilerDefinitions = new Pair();
         }
-    
-    // To be overridden
+        if (values.equals(compilerDefinitions.systemIncludeDirectoriesList)) {
+            return false;
+        }
+        PersistentList<String> systemIncludeDirectoriesList = new PersistentList<String>(values);
+        normalizePaths(systemIncludeDirectoriesList);
+        compilerDefinitions.systemIncludeDirectoriesList = systemIncludeDirectoriesList;
+        saveSystemIncludesAndDefines();
+        return true;
+    }
+
+    @Override
+    public boolean setSystemPreprocessorSymbols(List<String> values) {
+        assert values != null;
+        if (compilerDefinitions == null) {
+            compilerDefinitions = new Pair();
+        }
+        if (values.equals(compilerDefinitions.systemPreprocessorSymbolsList)) {
+            return false;
+        }
+        compilerDefinitions.systemPreprocessorSymbolsList = new PersistentList<String>(values);
+        saveSystemIncludesAndDefines();
+        return true;
+    }
+
+    @Override
+    public List<String> getSystemPreprocessorSymbols() {
+        if (compilerDefinitions != null){
+            return compilerDefinitions.systemPreprocessorSymbolsList;
+        }
+        getSystemIncludesAndDefines();
+        return compilerDefinitions.systemPreprocessorSymbolsList;
+    }
+
+    @Override
+    public List<String> getSystemIncludeDirectories() {
+        if (compilerDefinitions != null){
+            return compilerDefinitions.systemIncludeDirectoriesList;
+        }
+        getSystemIncludesAndDefines();
+        return compilerDefinitions.systemIncludeDirectoriesList;
+    }
+
     public void saveSystemIncludesAndDefines() {
+        if (compilerDefinitions != null){
+            compilerDefinitions.systemIncludeDirectoriesList.saveList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
+            compilerDefinitions.systemPreprocessorSymbolsList.saveList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
+        }
     }
-    
-    // To be overridden
+
+    private void restoreSystemIncludesAndDefines() {
+        PersistentList<String> systemIncludeDirectoriesList = PersistentList.restoreList(getUniqueID() + "systemIncludeDirectoriesList"); // NOI18N
+        PersistentList<String>systemPreprocessorSymbolsList = PersistentList.restoreList(getUniqueID() + "systemPreprocessorSymbolsList"); // NOI18N
+        if (systemIncludeDirectoriesList != null && systemPreprocessorSymbolsList != null) {
+            compilerDefinitions = new Pair(systemIncludeDirectoriesList, systemPreprocessorSymbolsList);
+        }
+    }
+
+    private synchronized void getSystemIncludesAndDefines() {
+        if (compilerDefinitions == null) {
+            restoreSystemIncludesAndDefines();
+            if (compilerDefinitions == null) {
+                compilerDefinitions = getFreshSystemIncludesAndDefines();
+            }
+        }
+    }
+
     public void resetSystemIncludesAndDefines() {
+        compilerDefinitions = getFreshSystemIncludesAndDefines();
+    }
+
+    public String getMTLevelOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getMultithreadingFlags() != null && compiler.getMultithreadingFlags().length > value){
+            return compiler.getMultithreadingFlags()[value];
+        }
+        return ""; // NOI18N
+    }
+    
+    public String getLibraryLevelOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getLibraryFlags() != null && compiler.getLibraryFlags().length > value){
+            return compiler.getLibraryFlags()[value];
+        }
+        return ""; // NOI18N
+    }
+    
+    public String getStandardsEvolutionOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getStandardFlags() != null && compiler.getStandardFlags().length > value){
+            return compiler.getStandardFlags()[value];
+        }
+        return ""; // NOI18N
+    }
+    
+    public String getLanguageExtOptions(int value) {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getLanguageExtensionFlags() != null && compiler.getLanguageExtensionFlags().length > value){
+            return compiler.getLanguageExtensionFlags()[value];
+        }
+        return ""; // NOI18N
+    }
+    
+    protected void getSystemIncludesAndDefines(String arguments, boolean stdout, Pair pair) throws IOException {
+        String path = getPath();
+        if (path != null && path.length() == 0) {
+            return;
+        }
+        if (path == null || !PlatformInfo.getDefault(getExecutionEnvironment()).fileExists(path)) {
+            path = getDefaultPath();
+        }
+        String command = path;
+        path = IpeUtils.getDirName(path);
+        if (getExecutionEnvironment().isLocal() && Utilities.isWindows()) {
+            command = LinkSupport.resolveWindowsLink(command);
+        }
+
+        Process process;
+        InputStream is = null;
+        BufferedReader reader;
+
+        PlatformInfo pi = PlatformInfo.getDefault(getExecutionEnvironment());
+        Map<String, String> env = pi.getEnv();
+        if (getExecutionEnvironment().isRemote()) {
+            CommandProvider provider = Lookup.getDefault().lookup(CommandProvider.class);
+            if (provider != null) {
+                String newPath = env.get(pi.getPathName());
+                newPath = newPath == null ? "" : newPath + pi.pathSeparator();
+                newPath += path;
+                env.put(pi.getPathName(), newPath);
+
+                provider.run(getExecutionEnvironment(), remote_command(command + arguments, stdout), env);
+                reader = new BufferedReader(new StringReader(provider.getOutput()));
+            } else {
+                Logger.getLogger("cnd.remote.logger").warning("CommandProvider for remote run is not found"); //NOI18N
+                return;
+            }
+        } else {
+            List<String> newEnv = new ArrayList<String>();
+            for (Map.Entry<String, String> entry : env.entrySet()) {
+                String key = entry.getKey();
+                String value = entry.getValue();
+                if (key.equals(pi.getPathName())) {
+                    newEnv.add(pi.getPathName() + "=" + path + pi.pathSeparator() + value); // NOI18N
+                } else {
+                    newEnv.add(key + "=" + (value != null ? value : "")); // NOI18N
+                }
+            }
+            process = Runtime.getRuntime().exec(command + arguments + " " + tmpFile(), newEnv.toArray(new String[newEnv.size()])); // NOI18N
+            if (stdout) {
+                is = process.getInputStream();
+            } else {
+                is = process.getErrorStream();
+            }
+            reader = new BufferedReader(new InputStreamReader(is));
+        }
+        parseCompilerOutput(reader, pair);
+        try {
+            if (is != null) {
+                is.close();
+            }
+        } catch (IOException ex) {
+        }
+    }
+    
+    //TODO: move to a more convenient place and remove fixed tempfile name
+    private String remote_command(String command, boolean use_stdout) {
+        String diversion = use_stdout ? "" : "2>&1 "; // NOI18N
+        return "sh -c \"touch /tmp/xyz.c; " + command + " /tmp/xyz.c " + diversion + "; rm -f /tmp/xyz.c\""; // NOI18N
     }
     
     // To be overridden
-    protected void parseCompilerOutput(InputStream is) {
+    protected abstract void parseCompilerOutput(BufferedReader reader, Pair pair);
+
+    protected abstract Pair getFreshSystemIncludesAndDefines();
+
+    protected String getDefaultPath() {
+        CompilerDescriptor compiler = getDescriptor();
+        if (compiler != null && compiler.getNames().length > 0){
+            return compiler.getNames()[0];
+        }
+        return ""; // NOI18N
     }
     
     /**
@@ -118,17 +282,27 @@ public class CCCCompiler extends BasicCompiler {
 	return false;
     }
 
-    protected void parseUserMacros(final String line, final PersistentList preprocessorList) {
+    protected void parseUserMacros(final String line, final PersistentList<String> preprocessorList) {
         int defineIndex = line.indexOf("-D"); // NOI18N
-        while (defineIndex > 0) {
+        while (defineIndex >= 0) {
             String token;
             int spaceIndex = line.indexOf(" ", defineIndex + 1); // NOI18N
             if (spaceIndex > 0) {
                 token = line.substring(defineIndex+2, spaceIndex);
+                if (defineIndex > 0 && line.charAt(defineIndex-1)=='"') {
+                    if (token.length() > 0 && token.charAt(token.length()-1)=='"') {
+                        token = token.substring(0,token.length()-1);
+                    }
+                }
                 preprocessorList.add(token);
                 defineIndex = line.indexOf("-D", spaceIndex); // NOI18N
             } else {
                 token = line.substring(defineIndex+2);
+                if (defineIndex > 0 && line.charAt(defineIndex-1)=='"') {
+                    if (token.length() > 0 && token.charAt(token.length()-1)=='"') {
+                        token = token.substring(0,token.length()-1);
+                    }
+                }
                 preprocessorList.add(token);
                 break;
             }
@@ -139,18 +313,48 @@ public class CCCCompiler extends BasicCompiler {
         if (tmpFile == null) {
             try {
                 tmpFile = File.createTempFile("xyz", ".c"); // NOI18N
-}
-            catch (IOException ioe) {
+                tmpFile.deleteOnExit();
+            } catch (IOException ioe) {
             }
-            tmpFile.deleteOnExit();
         }
-        if (tmpFile != null)
+        if (tmpFile != null) {
             return tmpFile.getAbsolutePath();
-        else
+        } else {
             return "/dev/null"; // NOI18N
+        }
     }
     
     protected String getUniqueID() {
-        return getClass().getName() + getPath().hashCode() + "."; // NOI18N
+        if (getCompilerSet() == null || getCompilerSet().isAutoGenerated()) {
+            return getClass().getName() +
+                    ExecutionEnvironmentFactory.toUniqueID(getExecutionEnvironment()).hashCode() + getPath().hashCode() + "."; // NOI18N
+        } else {
+            return getClass().getName() + getCompilerSet().getName() +
+                    ExecutionEnvironmentFactory.toUniqueID(getExecutionEnvironment()).hashCode() + getPath().hashCode() + "."; // NOI18N
+        }
+    }
+
+    private void dumpLists() {
+        System.out.println("==================================" + getDisplayName()); // NOI18N
+        for (int i = 0; i < compilerDefinitions.systemIncludeDirectoriesList.size(); i++) {
+            System.out.println("-I" + compilerDefinitions.systemIncludeDirectoriesList.get(i)); // NOI18N
+        }
+        for (int i = 0; i < compilerDefinitions.systemPreprocessorSymbolsList.size(); i++) {
+            System.out.println("-D" + compilerDefinitions.systemPreprocessorSymbolsList.get(i)); // NOI18N
+        }
+    }
+
+    protected final class Pair {
+        public PersistentList<String> systemIncludeDirectoriesList;
+        public PersistentList<String> systemPreprocessorSymbolsList;
+        public Pair(){
+            systemIncludeDirectoriesList = new PersistentList<String>();
+            systemPreprocessorSymbolsList = new PersistentList<String>();
+        }
+        public Pair(PersistentList<String> systemIncludeDirectoriesList,
+                    PersistentList<String> systemPreprocessorSymbolsList){
+            this.systemIncludeDirectoriesList = systemIncludeDirectoriesList;
+            this.systemPreprocessorSymbolsList = systemPreprocessorSymbolsList;
+        }
     }
 }
