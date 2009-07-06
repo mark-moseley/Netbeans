@@ -38,53 +38,76 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.cnd.modelimpl.repository;
+package org.netbeans.modules.cnd.modelimpl.util;
 
-import java.io.DataInput;
-import java.io.IOException;
-import org.netbeans.modules.cnd.api.model.CsmInclude;
-import org.netbeans.modules.cnd.modelimpl.csm.core.CsmObjectFactory;
-import org.netbeans.modules.cnd.modelimpl.csm.core.Utils;
-import org.netbeans.modules.cnd.repository.spi.PersistentFactory;
+import java.lang.ref.WeakReference;
+import java.util.*;
 
 /**
- * A key for CsmInclude objects (file and offset -based)
+ * A list that keeps weak references to its elements
+ * @author Vladimir Kvashin
  */
+public class WeakList<T> implements Iterable<T> {
 
-/*package*/
-final class IncludeKey extends OffsetableKey {
+    private final List<WeakReference<T>> list = new ArrayList<WeakReference<T>>();
 
-    public IncludeKey(CsmInclude obj) {
-        super(obj, Utils.getCsmIncludeKindKey(), obj.getIncludeName()); // NOI18N
+    /**
+     * Adds a weak reference to the given element to this list
+     */
+    public synchronized void add(T element) {
+        list.add(new WeakReference<T>(element));
     }
 
-    /*package*/ IncludeKey(DataInput aStream) throws IOException {
-        super(aStream);
+    /**
+     * Adds all weak references frim the given iterator to this list
+     */
+    public synchronized void addAll(Iterator<T> elements) {
+        while (elements.hasNext()) {
+            list.add(new WeakReference<T>(elements.next()));
+        }
     }
 
-    public PersistentFactory getPersistentFactory() {
-        return CsmObjectFactory.instance();
+    /*
+     * Removes all references to the given element from this list
+     */
+    public synchronized void remove(T element) {
+        for (Iterator<WeakReference<T>> it = list.iterator(); it.hasNext();) {
+            WeakReference<T> ref = it.next();
+            if (ref.get() == element) {
+                it.remove();
+            }
+        }
     }
 
-    @Override
-    public String toString() {
-        String retValue;
-
-        retValue = "InclKey: " + super.toString(); // NOI18N
-        return retValue;
+    /** Removes all elements */
+    public synchronized void clear() {
+        list.clear();
     }
 
-    @Override
-    public int getSecondaryDepth() {
-        return super.getSecondaryDepth() + 1;
+    /** 
+     * Returns an iterator of non-null references.
+     * NB: it iterates over a snapshot made at the moment of the call
+     */
+    public synchronized Iterator<T> iterator() {
+        List<T> result = new ArrayList<T>();
+        addTo(result);
+        return result.iterator();
     }
 
-    @Override
-    public int getSecondaryAt(int level) {
-        if (level == 0) {
-            return KeyObjectFactory.KEY_INCLUDE_KEY;
-        } else {
-            return super.getSecondaryAt(level - 1);
+    public synchronized Collection<T> join(Collection<? extends T> collection) {
+        List<T> result = new ArrayList<T>(collection.size() + list.size());
+        result.addAll(collection);
+        addTo(result);
+        return result;
+    }
+
+    private void addTo(Collection<T> collection) {
+        for (Iterator<WeakReference<T>> it = list.iterator(); it.hasNext();) {
+            WeakReference<T> ref = it.next();
+            T element = ref.get();
+            if (element != null) {
+                collection.add(element);
+            }
         }
     }
 }
