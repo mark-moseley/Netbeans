@@ -44,12 +44,14 @@ import java.io.File;
 import java.io.IOException;
 import org.netbeans.api.project.Project;
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
+import org.netbeans.junit.RandomlyFails;
 import org.netbeans.modules.project.ui.OpenProjectList;
+import org.openide.util.test.MockLookup;
 
 /** Test of ProjectSupport class.
  * @author Jiri Skrivanek 
  */
+@RandomlyFails
 public class ProjectSupportTest extends NbTestCase {
     
     /** Creates a new test. 
@@ -60,17 +62,10 @@ public class ProjectSupportTest extends NbTestCase {
     }
 
     /** Set up. */
-    protected void setUp() throws IOException {
+    protected @Override void setUp() throws IOException {
+        MockLookup.setLayersAndInstances();
         clearWorkDir();
         System.out.println("########  "+getName()+"  #######");
-    }
-
-    /** Creates a new test suite.
-     * @return returns a new suite.
-     */
-    public static NbTestSuite suite() {
-        NbTestSuite suite = new NbTestSuite(ProjectSupportTest.class);
-        return suite;
     }
 
     private static final String PROJECT_NAME = "SampleProject";
