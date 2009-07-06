@@ -1,30 +1,31 @@
 package org.netbeans.modules.nativeexecution.api.util;
 
-import com.jcraft.jsch.ChannelExec;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.CancellationException;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.modules.nativeexecution.api.HostInfo;
 import org.netbeans.modules.nativeexecution.api.NativeProcessBuilder;
+import org.netbeans.modules.nativeexecution.support.FetchHostInfoTask;
+import org.netbeans.modules.nativeexecution.support.Logger;
+import org.netbeans.modules.nativeexecution.support.TasksCachedProcessor;
 import org.openide.util.Exceptions;
-import org.openide.util.Utilities;
 
 /**
  * Utility class that provides information about particual host.
@@ -35,12 +36,12 @@ public final class HostInfoUtils {
      * String constant that can be used to identify a localhost.
      */
     public static final String LOCALHOST = "127.0.0.1"; // NOI18N
-    private static List<String> myIPAdresses = new ArrayList<String>();
-    private static Map<String, Boolean> filesExistenceHash =
+    private static final java.util.logging.Logger log = Logger.getInstance();
+    private static final List<String> myIPAdresses = new ArrayList<String>();
+    private static final Map<String, Boolean> filesExistenceHash =
             Collections.synchronizedMap(new WeakHashMap<String, Boolean>());
-    private static Map<ExecutionEnvironment, HostInfo> hostInfo =
-            Collections.synchronizedMap(new WeakHashMap<ExecutionEnvironment, HostInfo>());
-    private static final String cmd_test = "/bin/test"; // NOI18N
+    private static final TasksCachedProcessor<ExecutionEnvironment, HostInfo> hostInfoCachedProcessor =
+            new TasksCachedProcessor<ExecutionEnvironment, HostInfo>(new FetchHostInfoTask(), false);
 
 
     static {
@@ -61,6 +62,30 @@ public final class HostInfoUtils {
     }
 
     /**
+     * Utility method that dumps HostInfo to specified stream
+     * @param hostinfo hostinfo that should be dumped
+     * @param stream stream to dump to
+     */
+    public static void dumpInfo(HostInfo hostinfo, PrintStream stream) {
+        stream.println("------------"); // NOI18N
+        if (hostinfo == null) {
+            stream.println("HostInfo is NULL"); // NOI18N
+        } else {
+            stream.println("Hostname      : " + hostinfo.getHostname()); // NOI18N
+            stream.println("OS Family     : " + hostinfo.getOSFamily()); // NOI18N
+            stream.println("OS            : " + hostinfo.getOS().getName()); // NOI18N
+            stream.println("OS Version    : " + hostinfo.getOS().getVersion()); // NOI18N
+            stream.println("OS Bitness    : " + hostinfo.getOS().getBitness()); // NOI18N
+            stream.println("CPU Family    : " + hostinfo.getCpuFamily()); // NOI18N
+            stream.println("CPU #         : " + hostinfo.getCpuNum()); // NOI18N
+            stream.println("shell to use  : " + hostinfo.getShell()); // NOI18N
+            stream.println("tmpdir to use : " + hostinfo.getTempDir()); // NOI18N
+            stream.println("tmpdir (file) to use : " + hostinfo.getTempDirFile().toString()); // NOI18N
+        }
+        stream.println("------------"); // NOI18N
+    }
+
+    /**
      * Tests whether a file <tt>fname</tt> exists in <tt>execEnv</tt>.
      * Calling this method equals to calling
      * <pre>
@@ -78,7 +103,7 @@ public final class HostInfoUtils {
      * environment is not connected.
      */
     public static boolean fileExists(final ExecutionEnvironment execEnv,
-            final String fname) throws ConnectException {
+            final String fname) throws IOException {
         return fileExists(execEnv, fname, true);
     }
 
@@ -99,7 +124,7 @@ public final class HostInfoUtils {
      */
     public static boolean fileExists(final ExecutionEnvironment execEnv,
             final String fname, final boolean useCache)
-            throws ConnectException {
+            throws IOException {
         String key = execEnv.toString() + fname;
 
         if (useCache && filesExistenceHash.containsKey(key)) {
@@ -115,15 +140,13 @@ public final class HostInfoUtils {
                 throw new ConnectException();
             }
 
-            NativeProcessBuilder npb = new NativeProcessBuilder(
-                    execEnv, cmd_test).setArguments("-f", fname);
+            NativeProcessBuilder npb = NativeProcessBuilder.newProcessBuilder(execEnv);
+            npb.setExecutable("test").setArguments("-e", fname); // NOI18N
 
             try {
                 fileExists = npb.call().waitFor() == 0;
             } catch (InterruptedException ex) {
-                Exceptions.printStackTrace(ex);
-            } catch (IOException ex) {
-                Exceptions.printStackTrace(ex);
+                throw new IOException(ex.getMessage());
             }
         }
 
@@ -132,54 +155,71 @@ public final class HostInfoUtils {
         return fileExists;
     }
 
-    /**
-     * Returns string that identifies OS installed on the host specified by the
-     * <tt>execEnv</tt>.
-     * For localhost it just returns <tt>System.getProperty("os.name")</tt>,
-     * for remote one - the result of <tt>/bin/uname -s</tt> command execution.
-     *
-     * @param execEnv <tt>ExecutionEnvironment</tt>
-     * @return string that identifies OS installed on the host specified by the
-     * <tt>execEnv</tt>
-     * @throws ConnectException if host, identified by this execution
-     * environment is not connected.
-     */
-    public static String getOS(final ExecutionEnvironment execEnv)
-            throws ConnectException {
-        HostInfo info = getHostInfo(execEnv);
-        return info.os;
-    }
+    public static String searchFile(ExecutionEnvironment execEnv,
+            List<String> searchPaths, String file, boolean searchInUserPaths) {
+        NativeProcessBuilder npb;
+        BufferedReader br;
+        String line;
+        Process p;
 
-    /**
-     * Returns string that identifies platform that <tT>execEnv</tt> is refers
-     * to.
-     * @param execEnv <tt>ExecutionEnvironment</tt>
-     * @return string that identifies platform that <tT>execEnv</tt> is refers
-     * to.
-     * @throws java.net.ConnectException if host, identified by this execution
-     * environment is not connected.
-     */
-    public static String getPlatform(final ExecutionEnvironment execEnv)
-            throws ConnectException {
-        HostInfo info = getHostInfo(execEnv);
-        return info.platform;
-    }
+        try {
+            HostInfo hostInfo = HostInfoUtils.getHostInfo(execEnv);
 
-    /**
-     * Returns string that identifies the number of bits in the address space of
-     * the native instruction set (32- or 64-bit) on the host that
-     * <tt>execEnv</tt> is refers to.
-     *
-     * @param execEnv <tt>ExecutionEnvironment</tt>
-     * @return "32" for 32-bit OS and "64" for 64-bit one
-     *
-     * @throws java.net.ConnectException if host, identified by this execution
-     * environment is not connected.
-     */
-    public static String getIsaBits(ExecutionEnvironment execEnv)
-            throws ConnectException {
-        HostInfo info = getHostInfo(execEnv);
-        return info.instructionSet;
+            if (hostInfo == null) {
+                return null;
+            }
+
+            String shell = hostInfo.getShell();
+
+            if (shell == null) {
+                return null;
+            }
+
+            List<String> sp = new ArrayList<String>(searchPaths);
+
+            if (searchInUserPaths) {
+                npb = NativeProcessBuilder.newProcessBuilder(execEnv);
+                npb.setExecutable(shell).setArguments("-c", "echo $PATH"); // NOI18N
+
+                p = npb.call();
+                p.waitFor();
+
+                br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                line = br.readLine();
+
+                if (line != null) {
+                    sp.addAll(Arrays.asList(line.split("[;:]"))); // NOI18N
+                }
+            }
+
+            StringBuilder cmd = new StringBuilder();
+
+            for (Iterator<String> i = sp.iterator(); i.hasNext();) {
+                cmd.append("/bin/ls " + i.next() + "/" + file); // NOI18N
+                if (i.hasNext()) {
+                    cmd.append(" || "); // NOI18N
+                }
+            }
+
+            npb = NativeProcessBuilder.newProcessBuilder(execEnv);
+            npb.setExecutable(shell).setArguments("-c", cmd.toString()); // NOI18N
+
+            p = npb.call();
+            p.waitFor();
+
+            br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            line = br.readLine();
+
+            return (line == null || "".equals(line.trim())) ? null : line.trim(); // NOI18N
+        } catch (IOException ex) {
+            log.finest("Exception in searchFile() " + ex.toString()); // NOI18N
+        } catch (InterruptedException ex) {
+            log.finest("Exception in searchFile() " + ex.toString()); // NOI18N
+        }
+
+        log.finest("File " + file + " not found"); // NOI18N
+
+        return null;
     }
 
     /**
@@ -200,157 +240,48 @@ public final class HostInfoUtils {
         return result;
     }
 
-    public static String getShell(ExecutionEnvironment execEnv)
-            throws ConnectException {
-        HostInfo info = getHostInfo(execEnv);
-        return info.shell;
+    /**
+     * Tests whether host info has been already fetched for the particular
+     * execution environment.
+     *
+     * @param execEnv environment to perform test against
+     * @return <tt>true</tt> if info is available and getHostInfo() could be
+     * called without a risk to be blocked for a significant time.
+     * <tt>false</tt> otherwise.
+     */
+    public static boolean isHostInfoAvailable(final ExecutionEnvironment execEnv) {
+        return hostInfoCachedProcessor.isResultAvailable(execEnv);
     }
 
-    static synchronized void updateHostInfo(ExecutionEnvironment execEnv) {
-        if (execEnv.isLocal()) {
-            hostInfo.put(execEnv, getLocalHostInfo());
-        } else {
-            Session session =
-                    ConnectionManager.getInstance().getConnectionSession(execEnv);
-            hostInfo.put(execEnv, getRemoteHostInfo(session));
-        }
-    }
-
-    private static HostInfo getHostInfo(ExecutionEnvironment execEnv) throws ConnectException {
-        HostInfo info = hostInfo.get(execEnv);
-        if (info == null) {
-            if (execEnv.isRemote()) {
-                throw new ConnectException();
-            }
-
-            updateHostInfo(execEnv);
-            info = hostInfo.get(execEnv);
-        }
-
-        return info;
-    }
-
-    private static HostInfo getLocalHostInfo() {
-        HostInfo info = new HostInfo();
-        info.os = System.getProperty("os.name"); // NOI18N
-        info.platform = System.getProperty("os.arch"); // NOI18N
-        info.instructionSet = System.getProperty("sun.cpu.isalist").contains("amd64") ? "64" : "32"; // NOI18N
-
-        if (Utilities.isWindows()) {
-            String cygwinRoot = queryWindowsRegistry(
-                    "HKLM\\SOFTWARE\\Cygnus Solutions\\Cygwin\\mounts v2\\/", // NOI18N
-                    "native", // NOI18N
-                    ".*native.*REG_SZ(.*)"); // NOI18N
-
-            if (cygwinRoot != null) {
-                info.shell = cygwinRoot + "\\bin\\sh"; // NOI18N
-            } else {
-                // TODO: mingGW, no *nix emulator...
-                info.shell = null;
-            }
-            
-        } else {
-            info.shell = "/bin/sh"; // NOI18N
-        }
-
-        return info;
-    }
-
-    private static String queryWindowsRegistry(String key, String param, String regExpr) {
+    /**
+     * Returns <tt>HostInfo</tt> with information about the host identified
+     * by <tt>execEnv</tt>. Invocation of this method may block current thread
+     * for rather significant amount of time or can even initiate UI-user
+     * interraction. This happens when execEnv represents remote host and no
+     * active connection to that host is available.
+     * An attempt to establish new connection will be performed. This may initiate
+     * password prompt.
+     *
+     * One should avoid to call this method from within AWT thread without prior 
+     * call to isHostInfoAvailable().
+     *
+     * @param execEnv execution environment to get information about
+     * @return information about the host represented by execEnv. <tt>null</tt>
+     * if interrupted of connection initiation is cancelled by user.
+     * @see #isHostInfoAvailable(org.netbeans.modules.nativeexecution.api.ExecutionEnvironment)
+     */
+    public static HostInfo getHostInfo(final ExecutionEnvironment execEnv) throws IOException, CancellationException {
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    "c:\\windows\\system32\\reg.exe", // NOI18N
-                    "query", key, "/v", param); // NOI18N
-            Process p = pb.start();
-            String s;
-            Pattern pattern = Pattern.compile(regExpr);
-            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            try {
-                p.waitFor();
-            } catch (InterruptedException ex) {
-            }
-
-            while (true) {
-                s = br.readLine();
-                if (s == null) {
-                    break;
-                }
-                Matcher m = pattern.matcher(s);
-                if (m.matches()) {
-                    return m.group(1).trim();
-                }
-            }
-        } catch (IOException e) {
+            return hostInfoCachedProcessor.compute(execEnv);
+        } catch (InterruptedException ex) {
+            throw new CancellationException("getHostInfo interrupted"); // NOI18N
         }
-
-        return null;
     }
 
-    private static HostInfo getRemoteHostInfo(Session session) {
-        ChannelExec echannel = null;
-        StringBuilder command = new StringBuilder();
-
-        command.append("U=/bin/uname &&"); // NOI18N
-        command.append("O=`$U -s` && /bin/echo $O &&"); // NOI18N
-        command.append("P=`$U -p` && test 'unknown' = $P && $U -m || echo $P &&"); // NOI18N
-        command.append("test 'SunOS' = $O && /bin/isainfo -b || $U -a | grep x86_64 || echo 32 &&"); // NOI18N
-        command.append("/bin/ls /bin/sh 2>/dev/null || /bin/ls /usr/bin/sh 2>/dev/null"); // NOI18N
-
-        try {
-            echannel = (ChannelExec) session.openChannel("exec"); // NOI18N
-            echannel.setCommand(command.toString());
-            echannel.connect();
-        } catch (JSchException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-
-        HostInfo info = new HostInfo();
-
-        try {
-            InputStream out = echannel.getInputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(out));
-            String str;
-            int lineno = 0;
-            while ((str = reader.readLine()) != null) {
-                switch (lineno) {
-                    case 0:
-                        String uname_s = str.trim();
-                        if (uname_s.contains("_NT-")) { // NOI18N catches Cygwin and MinGW
-                            info.os = "Windows"; // NOI18N
-                        } else if (uname_s.equals("Darwin")) { // NOI18N
-                            info.os = "Mac_OS_X"; // NOI18N
-                        } else {
-                            info.os = uname_s;
-                        }
-                        break;
-                    case 1:
-                        info.platform = str.trim().toLowerCase();
-                        break;
-                    case 2:
-                        info.instructionSet = str.trim().toLowerCase();
-                        break;
-                    case 3:
-                        info.shell = str.trim().toLowerCase();
-                }
-                lineno++;
-            }
-        } catch (IOException ex) {
-            Exceptions.printStackTrace(ex);
-        }
-
-        return info;
-    }
-
-    private static class HostInfo {
-
-        String os;
-        String platform;
-        String instructionSet;
-        String shell;
-
-        @Override
-        public String toString() {
-            return "os = " + os + "; platform = " + platform + "; instructionSet = " + instructionSet; // NOI18N
-        }
+    /**
+     * For testing purposes only!
+     */
+    protected static void resetHostsData() {
+        hostInfoCachedProcessor.resetCache();
     }
 }
