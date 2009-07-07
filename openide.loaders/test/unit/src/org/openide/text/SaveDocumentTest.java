@@ -43,16 +43,12 @@
 package org.openide.text;
 
 
-import java.io.File;
 import java.io.IOException;
 import javax.swing.text.BadLocationException;
-import javax.swing.text.Position;
 import javax.swing.text.StyledDocument;
 
-import junit.textui.TestRunner;
 
 import org.netbeans.junit.NbTestCase;
-import org.netbeans.junit.NbTestSuite;
 import org.openide.actions.*;
 import org.openide.cookies.CloseCookie;
 import org.openide.cookies.EditCookie;
@@ -64,7 +60,7 @@ import org.openide.cookies.SaveCookie;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataNode;
 import org.openide.loaders.DataObject;
 import org.openide.loaders.DataObjectExistsException;
@@ -75,7 +71,6 @@ import org.openide.loaders.UniFileLoader;
 import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
-import org.openide.text.CloneableEditorSupport;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
@@ -83,17 +78,6 @@ import org.openide.windows.CloneableOpenSupport;
 
 
 /**
- * How to run from IDE:
- *   1. Mount jar: junit.jar
- *   2. Mount dir: openide/src
- *   3. Mount dir: openide/test/regr/src
- *   4. Run class UnstableTest from dir openide/test/regr/src in internal execution 
- *   (inside IDE VM - set execution type in Properties window)
- *   It will open new window in Editor. When deadlock is there IDE hangs.
- * How to run from command line: 
- *   In directory: <NetBeans>/openide/test/
- *   Command: ant -Dxtest.testtypes=regression -Dxtest.attribs=stable
- *
  * @author  Peter Zavadsky
  */
 public class SaveDocumentTest extends NbTestCase {
@@ -121,8 +105,7 @@ public class SaveDocumentTest extends NbTestCase {
     public void testSaveDocument() throws Exception {
         System.err.println("Test Save Document");
         
-        FileObject fo = Repository.getDefault().getDefaultFileSystem()
-            .getRoot().createData("test", "txt");
+        FileObject fo = FileUtil.getConfigRoot().createData("test", "txt");
 
         DataObject data = DataObject.find(fo);
         
@@ -229,7 +212,7 @@ public class SaveDocumentTest extends NbTestCase {
         protected FileObject findPrimaryFile (FileObject fo) {
             boolean isSysFile;
             try {
-                isSysFile = fo.getFileSystem () == Repository.getDefault ().getDefaultFileSystem ();
+                isSysFile = fo.getFileSystem().isDefault();
             } catch (FileStateInvalidException fsie) {
                 // Never mind.
                 isSysFile = false;
