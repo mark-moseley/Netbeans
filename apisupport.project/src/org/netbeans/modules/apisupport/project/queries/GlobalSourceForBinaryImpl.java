@@ -46,7 +46,6 @@ import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
@@ -60,12 +59,14 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
-import org.netbeans.modules.apisupport.project.NbModuleProjectType;
 import org.netbeans.modules.apisupport.project.Util;
 import org.netbeans.modules.apisupport.project.universe.ModuleList;
 import org.netbeans.modules.apisupport.project.universe.NbPlatform;
+import org.netbeans.modules.apisupport.project.universe.SourceRootsProvider;
+import org.netbeans.modules.apisupport.project.universe.SourceRootsSupport;
 import org.netbeans.modules.apisupport.project.universe.TestEntry;
 import org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation;
+import org.netbeans.spi.project.support.ant.EditableProperties;
 import org.openide.ErrorManager;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
@@ -82,6 +83,7 @@ import org.xml.sax.SAXException;
  *
  * @author Martin Krauskopf
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.spi.java.queries.SourceForBinaryQueryImplementation.class)
 public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImplementation {
     
     /** for use from unit tests */
@@ -89,32 +91,23 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
     
     public SourceForBinaryQuery.Result findSourceRoots(URL binaryRoot) {
         try {
-            { // #68685 hack - associate reasonable sources with XTest's versions of various test libs
-                String binaryRootS = binaryRoot.toExternalForm();
-                URL result = null;
-                if (binaryRootS.startsWith("jar:file:")) { // NOI18N
-                    if (binaryRootS.endsWith("/xtest/lib/nbjunit.jar!/")) { // NOI18N
-                        result = new URL(binaryRootS.substring("jar:".length(), binaryRootS.length() - "/xtest/lib/nbjunit.jar!/".length()) + "/xtest/nbjunit/src/"); // NOI18N
-                    } else if (binaryRootS.endsWith("/xtest/lib/nbjunit-ide.jar!/")) { // NOI18N
-                        result = new URL(binaryRootS.substring("jar:".length(), binaryRootS.length() - "/xtest/lib/nbjunit-ide.jar!/".length()) + "/xtest/nbjunit/ide/src/"); // NOI18N
-                    } else if (binaryRootS.endsWith("/xtest/lib/insanelib.jar!/")) { // NOI18N
-                        result = new URL(binaryRootS.substring("jar:".length(), binaryRootS.length() - "/xtest/lib/insanelib.jar!/".length()) + "/performance/insanelib/src/"); // NOI18N
-                    } else {
-                        // tests.jar in test distribution 
-                        TestEntry testJar = TestEntry.get(archiveURLToFile(binaryRoot));
-                        if (testJar != null) {
-                           result = testJar.getSrcDir();
+            if (binaryRoot.toExternalForm().startsWith("jar:file:")) { // NOI18N
+                // check for tests.jar in test distribution
+                File jar = FileUtil.archiveOrDirForURL(binaryRoot);
+                TestEntry testJar = jar != null ? TestEntry.get(jar) : null;
+                if (testJar != null) {
+                    URL result = testJar.getSrcDir();
+                    if (result != null) {
+                        final FileObject resultFO = URLMapper.findFileObject(result);
+                        if (resultFO != null) {
+                            return new SourceForBinaryQuery.Result() {
+                                public FileObject[] getRoots() {
+                                    return new FileObject[] {resultFO};
+                                }
+                                public void addChangeListener(ChangeListener l) {}
+                                public void removeChangeListener(ChangeListener l) {}
+                            };
                         }
-                    }
-                    final FileObject resultFO = result != null ? URLMapper.findFileObject(result) : null;
-                    if (resultFO != null) {
-                        return new SourceForBinaryQuery.Result() {
-                            public FileObject[] getRoots() {
-                                return new FileObject[] {resultFO};
-                            }
-                            public void addChangeListener(ChangeListener l) {}
-                            public void removeChangeListener(ChangeListener l) {}
-                        };
                     }
                 }
             }
@@ -126,18 +119,23 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
                     break;
                 }
             }
-            if (supposedPlaf == null) {
-                return null;
-            }
             if (!binaryRoot.getProtocol().equals("jar")) { // NOI18N
                 Util.err.log(binaryRoot + " is not an archive file."); // NOI18N
                 return null;
             }
-            File binaryRootF = archiveURLToFile(binaryRoot);
-            FileObject fo = FileUtil.toFileObject(binaryRootF);
+            File binaryRootF = FileUtil.archiveOrDirForURL(binaryRoot);
+            FileObject fo = binaryRootF != null ? FileUtil.toFileObject(binaryRootF) : null;
             if (fo == null) {
                 Util.err.log("Cannot found FileObject for " + binaryRootF + "(" + binaryRoot + ")"); // NOI18N
                 return null;
+            }
+            if (supposedPlaf == null) {
+                // try external clusters
+                URL[] sourceRoots = ModuleList.getSourceRootsForExternalModule(binaryRootF);
+                if (sourceRoots.length > 0)
+                    return new ExtClusterResult(new SourceRootsSupport(sourceRoots, null),
+                            binaryRoot, fo.getName().replace('-', '.'));
+                return null;    // TODO C.P library wrapper sources support? probably not
             }
   //          if (testCnb != null && supposedPlaf != null) {
                 // test
@@ -148,33 +146,26 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
             throw new AssertionError(ex);
         }
     }
-    
-    private static final class NbPlatformResult implements
-            SourceForBinaryQuery.Result, PropertyChangeListener {
-        
-        private final ChangeSupport changeSupport = new ChangeSupport(this);
-        private final NbPlatform platform;
-        private final URL binaryRoot;
-        private final String cnb;
-        
-        private boolean alreadyListening;
-        
-        NbPlatformResult(final NbPlatform platform, final URL binaryRoot, final String cnb) {
-            this.platform = platform;
-            this.binaryRoot = binaryRoot;
+
+    private static abstract class SourceRootsProviderResult implements SourceForBinaryQuery.Result {
+        private SourceRootsProvider srp;
+        final String cnb;
+        final URL binaryRoot;
+
+        SourceRootsProviderResult(final SourceRootsProvider srp, final URL binaryRoot, final String cnb) {
+            this.srp = srp;
             this.cnb = cnb;
-//            this.testType = testType;
-//            this.testCluster = testCluster;
+            this.binaryRoot = binaryRoot;
         }
-        
+
         public FileObject[] getRoots() {
             final List<FileObject> candidates = new ArrayList<FileObject>();
             try {
-                for (URL root : platform.getSourceRoots()) {
+                for (URL root : srp.getSourceRoots()) {
                     if (root.getProtocol().equals("jar")) { // NOI18N
                         // suppose zipped sources
-                        File nbSrcF = archiveURLToFile(root);
-                        if (!nbSrcF.exists()) {
+                        File nbSrcF = FileUtil.archiveOrDirForURL(root);
+                        if (nbSrcF == null || !nbSrcF.exists()) {
                             continue;
                         }
                         NetBeansSourcesParser nbsp;
@@ -203,7 +194,7 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
                         // Does not resolve nbjunit and similar from ZIPped
                         // sources. Not a big issue since the default distributed
                         // sources do not contain them anyway.
-                        String relPath = resolveSpecialNBSrcPath(binaryRoot);
+                        String relPath = resolveRelativePath(root);
                         if (relPath == null) {
                             continue;
                         }
@@ -219,8 +210,63 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
             }
             return candidates.toArray(new FileObject[candidates.size()]);
         }
-        
+
+        protected abstract String resolveRelativePath(URL sourceRoot) throws IOException;
+
+        // TODO C.P listening on cluster sources change? probably not needed
         public void addChangeListener(ChangeListener l) {
+        }
+
+        public void removeChangeListener(ChangeListener l) {
+        }
+    }
+
+    private static final class ExtClusterResult extends SourceRootsProviderResult {
+
+        private ExtClusterResult(SourceRootsSupport sourceRootsSupport, URL binaryRoot, String cnb) {
+
+            super(sourceRootsSupport, binaryRoot, cnb);
+        }
+
+        @Override
+        protected String resolveRelativePath(URL sourceRoot) throws IOException {
+            // TODO C.P cache root + cnb -> relpath? dig into library wrappers?
+            File srPath = new File(URI.create(sourceRoot.toExternalForm()));
+            File moduleSrc = new File(srPath, "src");    // NOI18N
+            if (moduleSrc.exists()) {   // src root is module project root directly
+                return "src/";    // NOI18N
+            }
+            File prjProp = new File(srPath, "nbproject/project.properties");    // NOI18N
+            if (prjProp.exists()) {
+                // maybe suite root
+                EditableProperties ep = Util.loadProperties(FileUtil.toFileObject(prjProp));
+                String prjName = ep.get("project." + cnb);    // NOI18N
+                if (prjName != null) {
+                    return prjName + "/src/";
+                }
+            }
+            // either artificially composed sources without nbproject - not supported -
+            // or (part of) NB.org source tree, which should have been resolved against NbPlatform
+            return null;
+        }
+    }
+
+    private static final class NbPlatformResult extends SourceRootsProviderResult
+            implements PropertyChangeListener {
+        
+        private final ChangeSupport changeSupport = new ChangeSupport(this);
+        private final NbPlatform platform;
+        
+        private boolean alreadyListening;
+        
+        NbPlatformResult(final NbPlatform platform, final URL binaryRoot, final String cnb) {
+            super(platform, binaryRoot, cnb);
+            this.platform = platform;
+//            this.testType = testType;
+//            this.testCluster = testCluster;
+        }
+
+        public @Override void addChangeListener(ChangeListener l) {
             // start listening on NbPlatform
             changeSupport.addChangeListener(l);
             if (!alreadyListening) {
@@ -229,7 +275,7 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
             }
         }
 
-        public void removeChangeListener(ChangeListener l) {
+        public @Override void removeChangeListener(ChangeListener l) {
             changeSupport.removeChangeListener(l);
             if (!changeSupport.hasListeners()) {
                 platform.removePropertyChangeListener(this);
@@ -238,32 +284,16 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
         }
         
         public void propertyChange(PropertyChangeEvent evt) {
-            if (NbPlatform.PROP_SOURCE_ROOTS.equals(evt.getPropertyName())) {
+            if (SourceRootsProvider.PROP_SOURCE_ROOTS.equals(evt.getPropertyName())) {
                 changeSupport.fireChange();
             }
         }
-        
-    }
-    
-    private static String resolveSpecialNBSrcPath(URL binaryRoot) throws MalformedURLException {
-        String binaryRootS = binaryRoot.toExternalForm();
-        String result = null;
-        if (binaryRootS.startsWith("jar:file:")) { // NOI18N
-            if (binaryRootS.endsWith("/modules/org-netbeans-modules-nbjunit.jar!/")) { // NOI18N
-                result = "xtest/nbjunit/src/"; // NOI18N
-            } else if (binaryRootS.endsWith("/modules/org-netbeans-modules-nbjunit-ide.jar!/")) { // NOI18N
-                result = "xtest/nbjunit/ide/src/"; // NOI18N
-            } else if (binaryRootS.endsWith("/modules/ext/insanelib.jar!/")) { // NOI18N
-                result = "performance/insanelib/src/"; // NOI18N
-            } else {
-                result = null;
-            }
-        }
-        return result;
-    }
 
-    private static File archiveURLToFile(final URL archiveURL) {
-        return new File(URI.create(FileUtil.getArchiveFile(archiveURL).toExternalForm()));
+        @Override
+        protected String resolveRelativePath(URL sourceRoot) throws IOException {
+            return null;
+        }
+        
     }
     
     public static final class NetBeansSourcesParser {
@@ -383,9 +413,9 @@ public final class GlobalSourceForBinaryImpl implements SourceForBinaryQueryImpl
             String cnb = null;
             if (Util.findText(type).equals("org.netbeans.modules.apisupport.project")) { // NOI18N
                 Element cfg = Util.findElement(docel, "configuration", "http://www.netbeans.org/ns/project/1"); // NOI18N
-                Element data = Util.findElement(cfg, "data", NbModuleProjectType.NAMESPACE_SHARED); // NOI18N
+                Element data = Util.findElement(cfg, "data", null); // NOI18N
                 if (data != null) {
-                    cnb = Util.findText(Util.findElement(data, "code-name-base", NbModuleProjectType.NAMESPACE_SHARED)); // NOI18N
+                    cnb = Util.findText(Util.findElement(data, "code-name-base", null)); // NOI18N
                 }
             }
             return cnb;

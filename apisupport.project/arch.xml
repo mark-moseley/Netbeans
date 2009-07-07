@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- -*- sgml-indent-step: 1 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -313,14 +313,6 @@ made subject to such option by the copyright holder.
     <api group="org.apache.tools.ant.Task" name="junit" type="import" category="devel">
      <p>
       For working with unit tests.
-     </p>
-    </api>
-   </li>
-   <li>
-    <api group="java.io.File" name="XTest" type="import" category="friend">
-     <p>
-      XTest file layouts and <code>nbjunit.jar</code> needed for some test
-      functionality.
      </p>
     </api>
    </li>
