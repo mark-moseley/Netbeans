@@ -69,7 +69,10 @@ public class CppMetaModel implements PropertyChangeListener {
 
     private Collection<ParsingListener> listeners = new ConcurrentLinkedQueue<ParsingListener>();
 
-    private static CppMetaModel instance;
+    private static CppMetaModel instance = new CppMetaModel();
+    static {
+        TopComponent.getRegistry().addPropertyChangeListener(instance);
+    }
 
     private static RequestProcessor cppParserRP;
 
@@ -80,12 +83,7 @@ public class CppMetaModel implements PropertyChangeListener {
     }
 
     public static CppMetaModel getDefault() {
-	if (instance == null) {
-	    instance = new CppMetaModel();
-            TopComponent.getRegistry().addPropertyChangeListener(instance);
-
-	}
-	return instance;
+    	return instance;
     }
 
     public void propertyChange(PropertyChangeEvent evt) {
@@ -150,16 +148,20 @@ public class CppMetaModel implements PropertyChangeListener {
     public void scheduleParsing(final Document doc) {
 
 	final String title = (String) doc.getProperty(Document.TitleProperty);
-	log.log(Level.FINE, "CppMetaModel.scheduleParsing: Checking " + getShortName(doc) +
+        if (log.isLoggable(Level.FINE)) {
+            log.log(Level.FINE, "CppMetaModel.scheduleParsing: Checking " + getShortName(doc) +
 		" [" + Thread.currentThread().getName() + "]"); // NOI18N
+        }
 	final CppFile file = map.get(title);
         // try to cancel task
         if (task != null) {
             task.cancel();
         }
 	if (file == null) {
-	    log.log(Level.FINE, "CppMetaModel.scheduleParsing: Starting initial parse for " +
+            if (log.isLoggable(Level.FINE)) {
+                log.log(Level.FINE, "CppMetaModel.scheduleParsing: Starting initial parse for " +
 			getShortName(doc));
+            }
 	    task = getCppParserRP().post(new Runnable() {
 		public void run() {
 		    CppFile file = new CppFile(title);
@@ -169,8 +171,10 @@ public class CppMetaModel implements PropertyChangeListener {
 		}
 	    }, reparseDelay);
 	} else if (file.needsUpdate()) {
-	    log.log(Level.FINE, "CppMetaModel.scheduleParsing: Starting update parse for " +
+            if (log.isLoggable(Level.FINE)) {
+                log.log(Level.FINE, "CppMetaModel.scheduleParsing: Starting update parse for " +
 			getShortName(doc));
+            }
 	    task = getCppParserRP().post(new Runnable() {
 		public void run() {
 		    file.startParsing(doc);
@@ -187,25 +191,16 @@ public class CppMetaModel implements PropertyChangeListener {
 	}*/
     }
     
-    private void fireObjectParsed(Document doc)
-    {
-//        synchronized (listeners)
-//        {
-	    Object o = doc.getProperty(Document.StreamDescriptionProperty);
-            DataObject dobj = (o instanceof DataObject) ? (DataObject) o : null;
-//            for(Iterator it = listeners.iterator(); it.hasNext();)
-//            {
-//                ((ParsingListener)it.next()).objectParsed(new ParsingEvent(dobj));
-//            }
-            // vk++ had to change the code above to avoid concurrent modification exception
-            ParsingListener[] alist = new ParsingListener[listeners.size()];
-            listeners.toArray(alist);
-            for (int i = 0; i < alist.length; i++) {
-                alist[i].objectParsed(new ParsingEvent(dobj));
+    private void fireObjectParsed(Document doc) {
+        Object o = doc.getProperty(Document.StreamDescriptionProperty);
+        if (o instanceof DataObject) {
+            DataObject dobj = (DataObject) o;
+            // listeners is a ConcurrentLinkedQueue now. It intelligently
+            // handles concurrent modification without throwing exceptions.
+            for (ParsingListener listener : listeners) {
+                listener.objectParsed(new ParsingEvent(dobj));
             }
-            // vk--
-            
-//        }        
+        }
     }
 
     private String getShortName(Document doc) {
