@@ -53,8 +53,8 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import javax.swing.text.Document;
+import org.netbeans.api.editor.DialogBinding;
 import org.netbeans.api.java.source.JavaSource;
-import org.netbeans.api.java.source.ui.DialogBinding;
 import org.netbeans.modules.vmd.api.io.DataObjectContext;
 import org.netbeans.modules.vmd.api.io.ProjectUtils;
 import org.netbeans.modules.vmd.api.model.DesignComponent;
@@ -69,6 +69,7 @@ import org.netbeans.modules.vmd.midp.components.points.SwitchPointCD;
 import org.netbeans.modules.vmd.midp.components.sources.SwitchCaseEventSourceCD;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.CodeUtils;
 import org.netbeans.modules.vmd.midp.propertyeditors.api.usercode.PropertyEditorUserCode;
+import org.openide.awt.Mnemonics;
 import org.openide.util.NbBundle;
 
 /**
@@ -83,21 +84,49 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
     private static final String SWITCH_OPERAND = NbBundle.getMessage(PropertyEditorJavaString.class, "LBL_SWITCH_OPERAND_STR"); // NOI18N
     private static final String CASE_OPERAND = NbBundle.getMessage(PropertyEditorJavaString.class, "LBL_CASE_OPERAND_STR"); // NOI18N
     private static final String JAVA_EXPRESSION = NbBundle.getMessage(PropertyEditorJavaString.class, "LBL_JAVA_EXPRESSION_STR"); // NOI18N
+    
+    private static final String AMP   = "&";
+    private static final String COLON = ":";
+    
     protected WeakReference<DesignComponent> component;
     private TypeID typeID;
-    private final CustomEditor customEditor;
+    private CustomEditor customEditor;
+    private PropertyValue resetToDefaultValue;
 
     private PropertyEditorJavaString(TypeID typeID) {
         this.typeID = typeID;
-        customEditor = new CustomEditor();
+    }
+    
+    private PropertyEditorJavaString(TypeID typeID, PropertyValue resetToDefaultValue) {
+        this(typeID);
+        this.resetToDefaultValue = resetToDefaultValue;
     }
 
     public static final PropertyEditorJavaString createInstance(TypeID typeID) {
         return new PropertyEditorJavaString(typeID);
     }
+    
+    public static final PropertyEditorJavaString createInstance(TypeID typeID, PropertyValue resetTodefaultValue) {
+        return new PropertyEditorJavaString(typeID, resetTodefaultValue);
+    }
+
+    @Override
+    public void cleanUp(DesignComponent component) {
+        super.cleanUp(component);
+        typeID = null;
+        if (customEditor != null) {
+            customEditor.cleanUp();
+            customEditor = null;
+        }
+        this.component = null;
+        resetToDefaultValue = null;
+    }
 
     @Override
     public Component getCustomEditor() {
+        if (customEditor == null) {
+            customEditor = new CustomEditor();
+        }
         PropertyValue value = (PropertyValue) super.getValue();
         if (value != null) {
             customEditor.setText(MidpTypes.getJavaCode(value));
@@ -128,6 +157,11 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
         saveValue(text);
     }
 
+    @Override
+    public Object getDefaultValue() {
+        return resetToDefaultValue;
+    }
+
     private void saveValue(String text) {
         if (text != null) {
             super.setValue(MidpTypes.createJavaCodeValue(text));
@@ -147,7 +181,10 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
 
     @Override
     public String getCustomEditorTitle() {
-        return getLabelName();
+        String title = getLabelName();
+        title = title.replace( AMP , "");
+        title = title.replace( COLON , "");
+        return title;
     }
 
     @Override
@@ -180,10 +217,18 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
             initComponents();
         }
 
+        void cleanUp() {
+            textPane = null;
+            this.removeAll();
+        }
+
         private void initComponents() {
             setLayout(new GridBagLayout());
             GridBagConstraints constraints = new GridBagConstraints();
-            JLabel label = new JLabel(getLabelName());
+            JLabel label = new JLabel();
+
+            Mnemonics.setLocalizedText(label, getLabelName());
+
             constraints.insets = new Insets(12, 12, 3, 12);
             constraints.anchor = GridBagConstraints.NORTHWEST;
             constraints.gridx = 0;
@@ -194,6 +239,12 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
             add(label, constraints);
 
             textPane = new JEditorPane();
+
+            label.setLabelFor( textPane );
+            
+            textPane.getAccessibleContext().setAccessibleName( label.getText());
+            textPane.getAccessibleContext().setAccessibleDescription( label.getText());
+            
             SwingUtilities.invokeLater(new Runnable() {
 
                 //otherwise we get: java.lang.AssertionError: BaseKit.install() incorrectly called from non-AWT thread.
@@ -233,7 +284,9 @@ public final class PropertyEditorJavaString extends DesignPropertyEditor {
                 DataObjectContext context = ProjectUtils.getDataObjectContextForDocument(_component.getDocument());
                 swingDoc.putProperty(Document.StreamDescriptionProperty, context.getDataObject());
                 int offset = CodeUtils.getMethodOffset(context);
+                String text = textPane.getText();
                 DialogBinding.bindComponentToFile(context.getDataObject().getPrimaryFile(), offset, 0, textPane);
+                textPane.setText(text);
             }
         }
     }
