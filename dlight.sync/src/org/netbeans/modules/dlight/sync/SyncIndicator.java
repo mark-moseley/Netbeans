@@ -36,7 +36,7 @@
  *
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.memory;
+package org.netbeans.modules.dlight.sync;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -45,40 +45,46 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
+import java.util.logging.Level;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
-import javax.swing.JLabel;
 import org.netbeans.modules.dlight.api.storage.DataRow;
 import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
 import org.netbeans.modules.dlight.indicators.graph.GraphConfig;
 import org.netbeans.modules.dlight.indicators.graph.RepairPanel;
 import org.netbeans.modules.dlight.spi.indicator.Indicator;
 import org.netbeans.modules.dlight.util.DLightExecutorService;
+import org.netbeans.modules.dlight.util.DLightLogger;
 import org.netbeans.modules.dlight.util.UIThread;
 import org.netbeans.modules.dlight.util.UIUtilities;
 import org.openide.util.NbBundle;
 
 /**
- * Memory usage indicator
+ * Thread usage indicator
  * @author Vladimir Kvashin
  */
-public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
+public class SyncIndicator extends Indicator<SyncIndicatorConfiguration> {
 
-    private  MemoryIndicatorPanel panel;
+    private SyncIndicatorPanel panel;
     private final Set<String> acceptedColumnNames;
-    private long lastValue;
+    private final List<String> acceptedThreadsCountColumnNames;
+    private float lastLocks;
+    private int lastThreads = 1;
 
-    public MemoryIndicator(MemoryIndicatorConfiguration configuration) {
+    public SyncIndicator(SyncIndicatorConfiguration configuration) {
         super(configuration);
-        this.panel = new MemoryIndicatorPanel(getDefaultAction());
         this.acceptedColumnNames = new HashSet<String>();
         for (Column column : getMetadataColumns()) {
             acceptedColumnNames.add(column.getColumnName());
         }
+        this.acceptedThreadsCountColumnNames = configuration.getThreadColumnNames();
     }
 
     @Override
-    public JComponent getComponent() {
+    public synchronized JComponent getComponent() {
+        if (panel == null) {
+            panel = new SyncIndicatorPanel(getDefaultAction());
+        }
         return panel.getPanel();
     }
 
@@ -88,9 +94,20 @@ public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
     public void updated(List<DataRow> rows) {
         for (DataRow row : rows) {
             for (String column : row.getColumnNames()) {
-                if (acceptedColumnNames.contains(column)) {
-                    String value = row.getStringValue(column); //TODO: change to Long
-                    lastValue = Long.parseLong(value);
+                if (acceptedThreadsCountColumnNames.contains(column)) {
+                    String threads = row.getStringValue(column);
+                    try {
+                        lastThreads = Integer.parseInt(threads);
+                    } catch (NumberFormatException ex) {
+                        DLightLogger.instance.log(Level.WARNING, null, ex);
+                    }
+                } else if (acceptedColumnNames.contains(column)) {
+                    String locks = row.getStringValue(column);
+                    try {
+                        lastLocks = Float.parseFloat(locks);
+                    } catch (NumberFormatException ex) {
+                        DLightLogger.instance.log(Level.WARNING, null, ex);
+                    }
                 }
             }
         }
@@ -98,7 +115,7 @@ public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
 
     @Override
     protected void tick() {
-        panel.addData(lastValue);
+        panel.addData(Math.round(lastThreads * Math.min(lastLocks, 100) / 100), lastThreads);
     }
 
     @Override
@@ -123,7 +140,7 @@ public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
                             });
                             return retValue;
                         }
-                    }, "Click On Repair in Memory Indicator task");//NOI18N
+                    }, "Click On Repair in Sync Indicator task");//NOI18N
                 }
             });
             UIThread.invoke(new Runnable() {
@@ -143,6 +160,6 @@ public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
     }
 
     private static String getMessage(String name) {
-        return NbBundle.getMessage(MemoryIndicator.class, name);
+        return NbBundle.getMessage(SyncIndicator.class, name);
     }
 }
