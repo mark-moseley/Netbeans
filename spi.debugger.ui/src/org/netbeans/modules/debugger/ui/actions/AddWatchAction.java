@@ -43,15 +43,22 @@ package org.netbeans.modules.debugger.ui.actions;
 
 import java.awt.Dialog;
 import java.util.ResourceBundle;
+import java.util.prefs.Preferences;
 import javax.swing.*;
 import org.netbeans.api.debugger.DebuggerManager;
 import org.netbeans.modules.debugger.ui.WatchPanel;
 
+import org.netbeans.modules.debugger.ui.views.VariablesViewButtons;
+import org.netbeans.spi.debugger.ContextProvider;
 import org.openide.DialogDisplayer;
 import org.openide.awt.Mnemonics;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
+import org.openide.util.NbPreferences;
 import org.openide.util.actions.CallableSystemAction;
+import org.openide.windows.Mode;
+import org.openide.windows.TopComponent;
+import org.openide.windows.WindowManager;
 
 
 /**
@@ -143,6 +150,14 @@ public class AddWatchAction extends CallableSystemAction {
         watchHistory = watch;
         
         // open watches view
-        ViewActions.openComponent ("watchesView", false).requestVisible();
+        TopComponent watchesView = WindowManager.getDefault().findTopComponent("watchesView"); // NOI18N
+        if (watchesView != null && watchesView.isOpened()) {
+            Mode mw = WindowManager.getDefault().findMode(watchesView);
+            if (mw != null && mw.getSelectedTopComponent() == watchesView) {
+                return ; // Watches is already selected
+            }
+        }
+        String viewName = VariablesViewButtons.isWatchesViewNested() ? "localsView" : "watchesView";
+        ViewActions.openComponent (viewName, false).requestVisible();
     }
 }
