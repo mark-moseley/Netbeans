@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,6 +43,8 @@ package org.netbeans.modules.db.sql.editor.ui.actions;
 
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
+import java.awt.DefaultFocusTraversalPolicy;
 import java.awt.Dimension;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
@@ -56,6 +58,7 @@ import javax.swing.Action;
 import javax.swing.ComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JComboBox;
+import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -65,6 +68,7 @@ import org.netbeans.api.db.explorer.ConnectionManager;
 import org.netbeans.api.db.explorer.DatabaseConnection;
 import org.netbeans.modules.db.api.sql.execute.SQLExecution;
 import org.openide.awt.Mnemonics;
+import org.openide.cookies.EditorCookie;
 import org.openide.util.Lookup;
 import org.openide.util.Mutex;
 import org.openide.util.NbBundle;
@@ -84,24 +88,29 @@ public class ConnectionAction extends SQLExecutionBaseAction {
     protected void actionPerformed(SQLExecution sqlExecution) {
     }
 
+    @Override
     public Action createContextAwareInstance(Lookup actionContext) {
         return new ConnectionContextAwareDelegate(this, actionContext);
     }
 
     private static final class ConnectionContextAwareDelegate extends ContextAwareDelegate {
 
+        private final Lookup actionContext;
         private ToolbarPresenter toolbarPresenter;
 
         public ConnectionContextAwareDelegate(ConnectionAction parent, Lookup actionContext) {
             super(parent, actionContext);
+            this.actionContext = actionContext;
         }
 
+        @Override
         public Component getToolbarPresenter() {
-            toolbarPresenter = new ToolbarPresenter();
+            toolbarPresenter = new ToolbarPresenter(actionContext);
             toolbarPresenter.setSQLExecution(getSQLExecution());
             return toolbarPresenter;
         }
 
+        @Override
         public void setEnabled(boolean enabled) {
             if (toolbarPresenter != null) {
                 toolbarPresenter.setEnabled(enabled);
@@ -109,6 +118,7 @@ public class ConnectionAction extends SQLExecutionBaseAction {
             super.setEnabled(enabled);
         }
 
+        @Override
         protected void setSQLExecution(final SQLExecution sqlExecution) {
             Mutex.EVENT.readAccess(new Runnable() {
                 public void run() {
@@ -125,14 +135,17 @@ public class ConnectionAction extends SQLExecutionBaseAction {
 
     private static final class ToolbarPresenter extends JPanel {
 
+       private final Lookup actionContext;
         private JComboBox combo;
         private JLabel comboLabel;
         private DatabaseConnectionModel model;
 
-        public ToolbarPresenter() {
+        public ToolbarPresenter(final Lookup actionContext) {
             initComponents();
+            this.actionContext = actionContext;
         }
 
+        @Override
         public Dimension getMinimumSize() {
             Dimension dim = super.getMinimumSize();
             return new Dimension(0, dim.height);
@@ -146,6 +159,26 @@ public class ConnectionAction extends SQLExecutionBaseAction {
             setLayout(new BorderLayout(4, 0));
             setBorder(new EmptyBorder(0, 2, 0, 8));
             setOpaque(false);
+            setFocusTraversalPolicyProvider(true);
+           setFocusTraversalPolicy(new DefaultFocusTraversalPolicy() {
+              @Override
+              public Component getDefaultComponent(Container aContainer) {
+                 final EditorCookie ec = actionContext.lookup(
+                       EditorCookie.class);
+                 if (ec != null) {
+                    JEditorPane[] panes = ec.getOpenedPanes();
+                    if (panes != null) {
+                       for (JEditorPane pane : panes) {
+                          if (pane.isShowing()) {
+                             return pane;
+                          }
+                       }
+                    }
+                 }
+
+                 return null;
+              }
+           });
 
             combo = new JComboBox();
             combo.addItemListener(new ItemListener() {
@@ -161,6 +194,7 @@ public class ConnectionAction extends SQLExecutionBaseAction {
             String accessibleName = NbBundle.getMessage(ConnectionAction.class, "LBL_DatabaseConnection");
             combo.getAccessibleContext().setAccessibleName(accessibleName);
             combo.getAccessibleContext().setAccessibleDescription(accessibleName);
+            combo.setPreferredSize (new Dimension (Math.min (combo.getPreferredSize ().width, 400), combo.getPreferredSize ().height));
 
             add(combo, BorderLayout.CENTER);
 
@@ -171,6 +205,7 @@ public class ConnectionAction extends SQLExecutionBaseAction {
             add(comboLabel, BorderLayout.WEST);
         }
 
+        @Override
         public void setEnabled(boolean enabled) {
             combo.setEnabled(enabled);
             super.setEnabled(enabled);
@@ -180,13 +215,13 @@ public class ConnectionAction extends SQLExecutionBaseAction {
     private static final class DatabaseConnectionModel extends AbstractListModel implements ComboBoxModel, ConnectionListener, PropertyChangeListener {
 
         private ConnectionListener listener;
-        private List connectionList; // must be ArrayList
+        private List<DatabaseConnection> connectionList; // must be ArrayList
         private SQLExecution sqlExecution;
 
         public DatabaseConnectionModel() {
-            listener = (ConnectionListener)WeakListeners.create(ConnectionListener.class, this, ConnectionManager.getDefault());
+            listener = WeakListeners.create (ConnectionListener.class, this, ConnectionManager.getDefault ());
             ConnectionManager.getDefault().addConnectionListener(listener);
-            connectionList = new ArrayList();
+            connectionList = new ArrayList<DatabaseConnection>();
             connectionList.addAll(Arrays.asList(ConnectionManager.getDefault().getConnections()));
         }
 
@@ -248,6 +283,7 @@ public class ConnectionAction extends SQLExecutionBaseAction {
 
     private static final class DatabaseConnectionRenderer extends DefaultListCellRenderer {
 
+        @Override
         public Component getListCellRendererComponent(JList list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             Object displayName = null;
             String tooltipText = null;
