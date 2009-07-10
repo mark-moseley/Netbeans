@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -34,45 +34,25 @@
  *
  * Contributor(s):
  *
- * Portions Copyrighted 2008 Sun Microsystems, Inc.
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.memory;
+package org.netbeans.modules.dlight.indicators.support;
 
-import java.util.List;
-import javax.swing.JComponent;
-import org.netbeans.modules.dlight.api.storage.DataRow;
+import org.netbeans.modules.dlight.indicators.PlotIndicatorConfiguration;
 import org.netbeans.modules.dlight.spi.indicator.Indicator;
-
+import org.netbeans.modules.dlight.spi.indicator.IndicatorFactory;
 
 /**
- * Mmory usage indicator
- * @author Vladimir Kvashin
+ * @author Alexey Vladykin
  */
-public class MemoryIndicator extends Indicator<MemoryIndicatorConfiguration> {
+@org.openide.util.lookup.ServiceProvider(service = org.netbeans.modules.dlight.spi.indicator.IndicatorFactory.class)
+public final class PlotIndicatorFactory implements IndicatorFactory<PlotIndicatorConfiguration> {
 
-    private final MemoryIndicatorPanel panel;
-    private final String colName;
-
-    public MemoryIndicator(MemoryIndicatorConfiguration configuration) {
-        super(configuration);
-        this.panel = new MemoryIndicatorPanel();
-        this.colName = configuration.getColName();
+    public Indicator<PlotIndicatorConfiguration> create(PlotIndicatorConfiguration configuration) {
+        return new PlotIndicator(configuration);
     }
 
-    @Override
-    public JComponent getComponent() {
-        return panel;
-    }
-
-    public void reset() {
-    }
-
-    public void updated(List<DataRow> data) {
-        for (DataRow row : data) {
-            String value = row.getStringValue(colName);
-            if (value != null) {
-                panel.setValue(Long.valueOf(value));
-            }
-        }
+    public String getID() {
+        return IndicatorConfigurationIDs.PLOT_ID;
     }
 }
