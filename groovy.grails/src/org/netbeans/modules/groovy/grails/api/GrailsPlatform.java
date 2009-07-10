@@ -54,17 +54,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
+import javax.swing.event.ChangeListener;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.platform.JavaPlatform;
 import org.netbeans.api.java.platform.JavaPlatformManager;
 import org.netbeans.api.project.FileOwnerQuery;
 import org.netbeans.api.project.Project;
-import org.netbeans.modules.groovy.grails.KillableProcess;
 import org.netbeans.modules.groovy.grails.RuntimeHelper;
+import org.netbeans.modules.groovy.grails.WrapperProcess;
 import org.netbeans.modules.groovy.grails.server.GrailsInstanceProvider;
 import org.netbeans.modules.groovy.grails.settings.GrailsSettings;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
@@ -73,6 +76,7 @@ import org.openide.NotifyDescriptor;
 import org.openide.execution.NbProcessDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
+import org.openide.util.ChangeSupport;
 import org.openide.util.NbBundle;
 import org.openide.util.NbPreferences;
 import org.openide.util.Parameters;
@@ -94,7 +98,9 @@ public final class GrailsPlatform {
 
     private static final Logger LOGGER = Logger.getLogger(GrailsPlatform.class.getName());
 
-    private static ClassPath EMPTY_CLASSPATH = ClassPathSupport.createClassPath(new URL[] {});
+    private static final AtomicLong UNIQUE_MARK = new AtomicLong();
+
+    private static final ClassPath EMPTY_CLASSPATH = ClassPathSupport.createClassPath(new URL[] {});
 
     private static final Set<String> GUARDED_COMMANDS = new HashSet<String>();
 
@@ -102,11 +108,13 @@ public final class GrailsPlatform {
         Collections.addAll(GUARDED_COMMANDS, "run-app", "run-app-https", "run-war", "shell"); //NOI18N
     }
 
+    private final ChangeSupport changeSupport = new ChangeSupport(this);
+
     private static GrailsPlatform instance;
 
-    private boolean initialized;
-
     private Version version;
+
+    private ClassPath classpath;
 
     private GrailsPlatform() {
         super();
@@ -170,51 +178,61 @@ public final class GrailsPlatform {
     }
 
     public ClassPath getClassPath() {
-        if (!isConfigured()) {
-            return EMPTY_CLASSPATH;
-        }
-
-        File grailsHome = getGrailsHome();
-        if (!grailsHome.exists()) {
-            return EMPTY_CLASSPATH;
-        }
-
-        List<File> jars = new ArrayList<File>();
-
-        File distDir = new File(grailsHome, "dist"); // NOI18N
-        File[] files = distDir.listFiles();
-        if (files != null) {
-            jars.addAll(Arrays.asList(files));
-        }
-
-        File libDir = new File(grailsHome, "lib"); // NOI18N
-        files = libDir.listFiles();
-        if (files != null) {
-            jars.addAll(Arrays.asList(files));
-        }
-
-        List<URL> urls = new ArrayList<URL>(jars.size());
-
-        for (File f : jars) {
-            try {
-                if (f.isFile()) {
-                    URL entry = f.toURI().toURL();
-                    if (FileUtil.isArchiveFile(entry)) {
-                        entry = FileUtil.getArchiveRoot(entry);
-                        urls.add(entry);
-                    }
-                }
-            } catch (MalformedURLException mue) {
-                assert false : mue;
+        synchronized (this) {
+            if (classpath != null) {
+                return classpath;
             }
+
+            if (!isConfigured()) {
+                classpath = EMPTY_CLASSPATH;
+                return classpath;
+            }
+
+            File grailsHome = getGrailsHome();
+            if (!grailsHome.exists()) {
+                classpath = EMPTY_CLASSPATH;
+                return classpath;
+            }
+
+            List<File> jars = new ArrayList<File>();
+
+            File distDir = new File(grailsHome, "dist"); // NOI18N
+            File[] files = distDir.listFiles();
+            if (files != null) {
+                jars.addAll(Arrays.asList(files));
+            }
+
+            File libDir = new File(grailsHome, "lib"); // NOI18N
+            files = libDir.listFiles();
+            if (files != null) {
+                jars.addAll(Arrays.asList(files));
+            }
+
+            List<URL> urls = new ArrayList<URL>(jars.size());
+
+            for (File f : jars) {
+                try {
+                    if (f.isFile()) {
+                        URL entry = f.toURI().toURL();
+                        if (FileUtil.isArchiveFile(entry)) {
+                            entry = FileUtil.getArchiveRoot(entry);
+                            urls.add(entry);
+                        }
+                    }
+                } catch (MalformedURLException mue) {
+                    assert false : mue;
+                }
+            }
+
+            classpath = ClassPathSupport.createClassPath(urls.toArray(new URL[urls.size()]));
+            return classpath;
         }
-        return ClassPathSupport.createClassPath(urls.toArray(new URL[urls.size()]));
     }
 
     // TODO not public API unless it is really needed
     public Version getVersion() {
         synchronized (this) {
-            if (initialized) {
+            if (version != null) {
                 return version;
             }
 
@@ -233,10 +251,17 @@ public final class GrailsPlatform {
             } catch (IllegalArgumentException ex) {
                 version = Version.VERSION_DEFAULT;
             }
-            initialized = true;
 
             return version;
         }
+    }
+
+    public void addChangeListener(ChangeListener listener) {
+        changeSupport.addChangeListener(listener);
+    }
+
+    public void removeChangeListener(ChangeListener listener) {
+        changeSupport.removeChangeListener(listener);
     }
 
     /**
@@ -244,16 +269,19 @@ public final class GrailsPlatform {
      */
     private void reload() {
         synchronized (this) {
-            initialized = false;
+            version = null;
+            classpath = null;
         }
 
+        changeSupport.fireChange();
+        
         // figure out the version on background
         // default executor as general purpose should be enough for this
         RequestProcessor.getDefault().post(new Runnable() {
 
             public void run() {
                 synchronized (GrailsPlatform.this) {
-                    if (initialized) {
+                    if (version != null) {
                         return;
                     }
 
@@ -272,7 +300,6 @@ public final class GrailsPlatform {
                     } catch (IllegalArgumentException ex) {
                         version = Version.VERSION_DEFAULT;
                     }
-                    initialized = true;
                 }
             }
         });
@@ -284,7 +311,7 @@ public final class GrailsPlatform {
      * @return the grails home
      * @throws IllegalStateException if the runtime is not configured
      */
-    private File getGrailsHome() {
+    public File getGrailsHome() {
         String grailsBase = GrailsSettings.getInstance().getGrailsBase();
         if (grailsBase == null || !RuntimeHelper.isValidRuntime(new File(grailsBase))) {
             throw new IllegalStateException("Grails not configured"); // NOI18N
@@ -676,12 +703,7 @@ public final class GrailsPlatform {
             command.append(" ").append(descriptor.getName());
             command.append(" ").append(createCommandArguments(descriptor.getArguments()));
 
-            // FIXME fix this hack - needed for proper process tree kill
-            // see KillableProcess
-            if (Utilities.isWindows() && GUARDED_COMMANDS.contains(descriptor.getName())) {
-                command.append(" ").append("REM NB:" // NOI18N
-                        +  descriptor.getDirectory().getAbsolutePath());
-            }
+            String preProcessUUID = UUID.randomUUID().toString();
 
             LOGGER.log(Level.FINEST, "Command is: {0}", command.toString());
 
@@ -715,9 +737,9 @@ public final class GrailsPlatform {
             // no executable check before java6
             Process process = null;
             try {
-                process = new KillableProcess(
+                process = new WrapperProcess(
                         grailsProcessDesc.exec(null, envp, true, descriptor.getDirectory()),
-                        descriptor.getDirectory(), descriptor.getName());
+                        preProcessUUID);
             } catch (IOException ex) {
                 NotifyDescriptor desc = new NotifyDescriptor.Message(
                         NbBundle.getMessage(GrailsPlatform.class, "MSG_StartFailedIOE",
