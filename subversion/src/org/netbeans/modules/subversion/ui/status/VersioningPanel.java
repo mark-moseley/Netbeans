@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -63,12 +63,12 @@ import org.openide.LifecycleManager;
 import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import java.awt.*;
-import java.awt.image.BufferedImage;
 import java.awt.event.*;
 import java.util.*;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeEvent;
 import java.io.File;
+import java.util.logging.Level;
 import java.util.prefs.PreferenceChangeEvent;
 import java.util.prefs.PreferenceChangeListener;
 import org.netbeans.modules.subversion.ui.update.UpdateAction;
@@ -114,7 +114,6 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
         setVersioningComponent(syncTable.getComponent());
         reScheduleRefresh(0);
 
-        // XXX click it in form editor, probbaly requires  Mattisse >=v2
         jPanel2.setFloatable(false);
         jPanel2.putClientProperty("JToolBar.isRollover", Boolean.TRUE);  // NOI18N
         jPanel2.setLayout(new ToolbarLayout());
@@ -316,7 +315,7 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
     }
     
     private SyncFileNode [] getNodes(Context context, int includeStatus) {
-        SvnFileNode [] fnodes = subversion.getNodes(context, includeStatus);
+        SvnFileNode [] fnodes = SvnUtils.getNodes(context, includeStatus);
         SyncFileNode [] nodes = new SyncFileNode[fnodes.length];
         for (int i = 0; i < fnodes.length; i++) {
             if (Thread.interrupted()) return null;
@@ -356,9 +355,13 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
             return;
         }          
         LifecycleManager.getDefault().saveAll();
-        if(context.getRootFiles().length < 1) {
+        if(context == null || context.getRootFiles().length < 1) {
             return;
-        }        
+        }
+        // XXX #168094 logging
+        if (!SvnUtils.isManaged(context.getRootFiles()[0])) {
+            Subversion.LOG.warning("VersioningPanel.onRefreshAction: context contains unmanaged file " + context.getRootFiles()[0].getAbsolutePath()); //NOI18N
+        }
         refreshStatuses();
     }
 
@@ -383,10 +386,25 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);     
             return; 
-        }                 
+        }
+        // XXX #168094 logging
+        if (repository == null) {
+            Subversion.LOG.info("VersioningPanel.refreshStatuses: null repositoryUrl for " + context.getRootFiles()[0].getAbsolutePath()); //NOI18N
+            boolean allUnmanaged = true;
+            for (File root : context.getRootFiles()) {
+                if (SvnUtils.isManaged(root)) {
+                    allUnmanaged = false;
+                    break;
+                }
+            }
+            if (allUnmanaged) {
+                Exception e = new Exception("VersioningPanel.refreshStatuses: null repositoryUrl for " + context.getRootFiles()[0].getAbsolutePath()); //NOI18N
+                Subversion.LOG.log(Level.INFO, null, e);
+            }
+        }
         RequestProcessor rp = Subversion.getInstance().getRequestProcessor(repository);
         svnProgressSupport = new SvnProgressSupport() {
-            public void perform() {                
+            public void perform() {
                 StatusAction.executeStatus(context, this);
                 setupModels();
             }            
@@ -605,8 +623,11 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
             }
 
             if (toolbarHeight == -1) {
-                BufferedImage image = new BufferedImage(1,1,BufferedImage.TYPE_BYTE_GRAY);
-                Graphics2D g = image.createGraphics();
+                Graphics g = GraphicsEnvironment.getLocalGraphicsEnvironment()
+                                                .getDefaultScreenDevice()
+                                                .getDefaultConfiguration()
+                                                .createCompatibleImage(1, 1)
+                                                .getGraphics();
                 UIDefaults def = UIManager.getLookAndFeelDefaults();
 
                 int height = 0;
@@ -678,7 +699,7 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
      * WARNING: Do NOT modify this code. The content of this method is
      * always regenerated by the Form Editor.
      */
-    // <editor-fold defaultstate="collapsed" desc=" Generated Code ">//GEN-BEGIN:initComponents
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
         java.awt.GridBagConstraints gridBagConstraints;
 
@@ -695,20 +716,20 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
 
         setLayout(new java.awt.GridBagLayout());
 
-        org.openide.awt.Mnemonics.setLocalizedText(tgbAll, org.openide.util.NbBundle.getBundle(VersioningPanel.class).getString("CTL_Synchronize_Action_All_Label")); // NOI18N
+        tgbAll.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/remote_vs_local.png"))); // NOI18N
         java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/subversion/ui/status/Bundle"); // NOI18N
         tgbAll.setToolTipText(bundle.getString("CTL_Synchronize_Action_All_Tooltip")); // NOI18N
         tgbAll.setFocusable(false);
         tgbAll.addActionListener(this);
         jPanel2.add(tgbAll);
 
-        org.openide.awt.Mnemonics.setLocalizedText(tgbLocal, org.openide.util.NbBundle.getBundle(VersioningPanel.class).getString("CTL_Synchronize_Action_Local_Label")); // NOI18N
+        tgbLocal.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/local_vs_local.png"))); // NOI18N
         tgbLocal.setToolTipText(bundle.getString("CTL_Synchronize_Action_Local_Tooltip")); // NOI18N
         tgbLocal.setFocusable(false);
         tgbLocal.addActionListener(this);
         jPanel2.add(tgbLocal);
 
-        org.openide.awt.Mnemonics.setLocalizedText(tgbRemote, org.openide.util.NbBundle.getBundle(VersioningPanel.class).getString("CTL_Synchronize_Action_Remote_Label")); // NOI18N
+        tgbRemote.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/remote_vs_remote.png"))); // NOI18N
         tgbRemote.setToolTipText(bundle.getString("CTL_Synchronize_Action_Remote_Tooltip")); // NOI18N
         tgbRemote.setFocusable(false);
         tgbRemote.addActionListener(this);
@@ -718,15 +739,16 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
         jSeparator1.setPreferredSize(new java.awt.Dimension(2, 20));
         jPanel2.add(jSeparator1);
 
-        btnRefresh.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/refresh.png")));
+        btnRefresh.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/refresh.png"))); // NOI18N
         btnRefresh.setToolTipText(bundle.getString("CTL_Synchronize_Action_Refresh_Tooltip")); // NOI18N
+        btnRefresh.setActionCommand("null"); // NOI18N
         btnRefresh.setFocusable(false);
         btnRefresh.setPreferredSize(new java.awt.Dimension(22, 23));
         btnRefresh.addActionListener(this);
         jPanel2.add(btnRefresh);
         btnRefresh.getAccessibleContext().setAccessibleName("Refresh Status");
 
-        btnDiff.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/diff.png")));
+        btnDiff.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/diff.png"))); // NOI18N
         btnDiff.setToolTipText(bundle.getString("CTL_Synchronize_Action_Diff_Tooltip")); // NOI18N
         btnDiff.setFocusable(false);
         btnDiff.setPreferredSize(new java.awt.Dimension(22, 25));
@@ -737,7 +759,7 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
         jPanel3.setOpaque(false);
         jPanel2.add(jPanel3);
 
-        btnUpdate.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/update.png")));
+        btnUpdate.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/update.png"))); // NOI18N
         btnUpdate.setToolTipText(bundle.getString("CTL_Synchronize_Action_Update_Tooltip")); // NOI18N
         btnUpdate.setFocusable(false);
         btnUpdate.setPreferredSize(new java.awt.Dimension(22, 25));
@@ -745,7 +767,7 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
         jPanel2.add(btnUpdate);
         btnUpdate.getAccessibleContext().setAccessibleName("Update");
 
-        btnCommit.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/commit.png")));
+        btnCommit.setIcon(new javax.swing.ImageIcon(getClass().getResource("/org/netbeans/modules/subversion/resources/icons/commit.png"))); // NOI18N
         btnCommit.setToolTipText(bundle.getString("CTL_CommitForm_Action_Commit_Tooltip")); // NOI18N
         btnCommit.setFocusable(false);
         btnCommit.setPreferredSize(new java.awt.Dimension(22, 25));
@@ -791,32 +813,32 @@ class VersioningPanel extends JPanel implements ExplorerManager.Provider, Prefer
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnDiffActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnDiffActionPerformed
-        onDiffAction();
-    }//GEN-LAST:event_btnDiffActionPerformed
+        onDiffAction();//GEN-LAST:event_btnDiffActionPerformed
+    }                                       
 
     private void tgbAllActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_tgbAllActionPerformed
-        onDisplayedStatusChanged();
-    }//GEN-LAST:event_tgbAllActionPerformed
+        onDisplayedStatusChanged();//GEN-LAST:event_tgbAllActionPerformed
+    }                                      
 
     private void btnUpdateActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnUpdateActionPerformed
-        onUpdateAction();
-    }//GEN-LAST:event_btnUpdateActionPerformed
+        onUpdateAction();//GEN-LAST:event_btnUpdateActionPerformed
+    }                                         
 
     private void tgbRemoteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_tgbRemoteActionPerformed
-        onDisplayedStatusChanged();
-    }//GEN-LAST:event_tgbRemoteActionPerformed
+        onDisplayedStatusChanged();//GEN-LAST:event_tgbRemoteActionPerformed
+    }                                         
 
     private void tgbLocalActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_tgbLocalActionPerformed
-        onDisplayedStatusChanged();
-    }//GEN-LAST:event_tgbLocalActionPerformed
+        onDisplayedStatusChanged();//GEN-LAST:event_tgbLocalActionPerformed
+    }                                        
 
     private void btnCommitActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnCommitActionPerformed
-        onCommitAction();
-    }//GEN-LAST:event_btnCommitActionPerformed
+        onCommitAction();//GEN-LAST:event_btnCommitActionPerformed
+    }                                         
 
     private void btnRefreshActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRefreshActionPerformed
-        onRefreshAction();
-    }//GEN-LAST:event_btnRefreshActionPerformed
+        onRefreshAction();//GEN-LAST:event_btnRefreshActionPerformed
+    }                                          
     
     
     // Variables declaration - do not modify//GEN-BEGIN:variables
