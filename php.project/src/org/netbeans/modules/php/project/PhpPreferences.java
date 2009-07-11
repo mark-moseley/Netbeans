@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -21,12 +21,6 @@
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
  *
- * Contributor(s):
- *
- * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
- * Microsystems, Inc. All Rights Reserved.
- *
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -37,18 +31,36 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
+ *
+ * Contributor(s):
+ *
+ * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
+
 package org.netbeans.modules.php.project;
 
+import java.util.prefs.Preferences;
+import org.openide.util.NbPreferences;
+
 /**
- * @author ads
+ * @author Radek Matous
  */
-public final class PhpProjectType {
+public final class PhpPreferences {
+    // Do not change arbitrary - consult with layer's folder OptionsExport
+    // Path to Preferences node for storing private preferences which are not imported
+    private static final String PRIVATE_PREFERENCES_PATH = "private"; // NOI18N
 
-    public static final String TYPE = "org.netbeans.modules.php.project"; // NOI18N
-    public static final String PROJECT_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project/1"; // NOI18N
-    static final String PRIVATE_CONFIGURATION_NAMESPACE = "http://www.netbeans.org/ns/php-project-private/1"; // NOI18N
+    private PhpPreferences() {
+    }
 
-    private PhpProjectType() {
+    /**
+     * @param importEnabled true means that preferences in this preferences node are
+     * expected to be imported through import/export dialog in Options Dialog and also
+     * by upgrader when first started new NB version
+     * @return instance of Preferences node
+     */
+    public static Preferences getPreferences(boolean importEnabled) {
+        Preferences forModule = NbPreferences.forModule(PhpPreferences.class);
+        return (importEnabled) ? forModule : forModule.node(PRIVATE_PREFERENCES_PATH);
     }
 }

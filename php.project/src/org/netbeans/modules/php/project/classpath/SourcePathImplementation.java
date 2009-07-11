@@ -39,64 +39,63 @@
 
 package org.netbeans.modules.php.project.classpath;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.beans.PropertyChangeEvent;
 import java.util.List;
-import org.netbeans.modules.php.project.ui.options.PhpOptions;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
+import java.net.URL;
+import org.netbeans.modules.php.project.SourceRoots;
+import org.netbeans.spi.java.classpath.ClassPathImplementation;
+import org.netbeans.spi.java.classpath.PathResourceImplementation;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
+import org.openide.util.WeakListeners;
 
 /**
- * @author Petr Hrebejk, Tomas Mysik
+ * Source class path implementation.
+ * @author Tor Norbye
+ * @author Tomas Zezula
  */
-public final class GlobalIncludePathSupport extends BasePathSupport {
-    private static final GlobalIncludePathSupport INSTANCE = new GlobalIncludePathSupport();
+final class SourcePathImplementation implements ClassPathImplementation, PropertyChangeListener {
+    private final PropertyChangeSupport support = new PropertyChangeSupport(this);
+    private List<PathResourceImplementation> resources;
+    private final SourceRoots src;
 
-    private GlobalIncludePathSupport() {
+    public SourcePathImplementation(SourceRoots sources) {
+        assert sources != null;
+        src = sources;
+        src.addPropertyChangeListener(WeakListeners.propertyChange(this, src));
     }
 
-    public static GlobalIncludePathSupport getInstance() {
-        return INSTANCE;
-    }
-
-    public Iterator<Item> itemsIterator() {
-        // XXX more performance friendly impl. would return a lazzy iterator
-        return itemsList().iterator();
-    }
-
-    public List<Item> itemsList() {
-        String[] pe = PhpOptions.getInstance().getPhpGlobalIncludePathAsArray();
-        List<Item> items = new ArrayList<Item>(pe.length);
-        for (String p : pe) {
-            Item item = null;
-            File f = new File(p);
-            if (!f.exists()) {
-                item = Item.createBroken(p, p);
-            } else {
-                item = Item.create(p, p);
-            }
-            items.add(item);
-        }
-        return items;
-    }
-
-    /** Converts list of classpath items into array of Strings.
-     * !! This method creates references in the project !!
-     */
-    public String[] encodeToStrings(Iterator<Item> classpath) {
-        List<String> result = new ArrayList<String>();
-        while (classpath.hasNext()) {
-            Item item = classpath.next();
-            result.add(item.getFilePath());
-        }
-
-        String[] items = new String[result.size()];
-        for (int i = 0; i < result.size(); i++) {
-            if (i < result.size() - 1) {
-                items[i] = result.get(i) + ":"; // NOI18N
-            } else  {
-                items[i] = result.get(i);
+    public List<PathResourceImplementation> getResources() {
+        synchronized (this) {
+            if (resources != null) {
+                return resources;
             }
         }
-        return items;
+        final URL[] urls = src.getRootURLs();
+        synchronized (this) {
+            if (resources == null) {
+                List<PathResourceImplementation> result = new ArrayList<PathResourceImplementation>(urls.length);
+                for (URL root : urls) {
+                    result.add(ClassPathSupport.createResource(root));
+                }
+                resources = Collections.unmodifiableList(result);
+            }
+            return resources;
+        }
+    }
+
+    public void addPropertyChangeListener(PropertyChangeListener listener) {
+        support.addPropertyChangeListener(listener);
+    }
+
+    public void removePropertyChangeListener(PropertyChangeListener listener) {
+        support.removePropertyChangeListener(listener);
+    }
+
+    public synchronized void propertyChange(PropertyChangeEvent evt) {
+       resources = null;
     }
 }

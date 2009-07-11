@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -38,62 +38,47 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
+package org.netbeans.modules.php.project.classpath;
 
-package org.netbeans.modules.php.project;
-
-import java.beans.PropertyChangeEvent;
-import java.beans.PropertyChangeListener;
-import java.nio.charset.Charset;
-import java.nio.charset.IllegalCharsetNameException;
-import org.netbeans.modules.php.project.ui.customizer.PhpProjectProperties;
-import org.netbeans.spi.project.support.ant.PropertyEvaluator;
-import org.netbeans.spi.queries.FileEncodingQueryImplementation;
+import java.util.List;
+import java.util.Set;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.modules.php.project.api.PhpSourcePath;
+import org.netbeans.modules.php.project.api.PhpSourcePath.FileType;
+import org.netbeans.modules.php.project.ui.actions.support.CommandUtils;
+import org.netbeans.spi.java.classpath.ClassPathProvider;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.filesystems.FileObject;
+import org.openide.util.WeakSet;
 
 /**
- * Copied from ruby project.
- * @author Tomas Zezula
+ * Provides ClassPath for php files on include path.
  */
-public class PhpProjectEncodingQueryImpl extends FileEncodingQueryImplementation implements PropertyChangeListener {
-
-    private final PropertyEvaluator eval;
-    private Charset cache;
-
-    public PhpProjectEncodingQueryImpl(final PropertyEvaluator eval) {
-        assert eval != null;
-        this.eval = eval;
-        this.eval.addPropertyChangeListener(this);
+@org.openide.util.lookup.ServiceProvider(service = ClassPathProvider.class, position = 200)
+public class IncludePathClassPathProvider implements ClassPathProvider {
+    static Set<ClassPath> projectIncludes = new WeakSet<ClassPath>();
+    /** Default constructor for lookup. */
+    public IncludePathClassPathProvider() {
     }
-
-    public Charset getEncoding(FileObject file) {
-        assert file != null;
-        synchronized (this) {
-            if (cache != null) {
-                return cache;
-            }
-        }
-        String enc = eval.getProperty(PhpProjectProperties.SOURCE_ENCODING);
-        synchronized (this) {
-            if (cache == null) {
-                try {
-                    //From discussion with K. Frank the project returns Charset.defaultCharset ()
-                    //for older projects (no encoding property). The old project used system encoding => Charset.defaultCharset ()
-                    //should work for most users.
-                    cache = enc == null ? Charset.defaultCharset() : Charset.forName(enc);
-                } catch (IllegalCharsetNameException exception) {
-                    return null;
+    public static void addProjectIncludePath(ClassPath cp) {
+        projectIncludes.add(cp);
+    }
+    public ClassPath findClassPath(FileObject file, String type) {
+        if (CommandUtils.isPhpFile(file)) {
+            FileType fileType = PhpSourcePath.getFileType(file);
+            if (fileType.equals(FileType.INCLUDE)) {
+                /*for global include path*/
+                List<FileObject> includePath = PhpSourcePath.getIncludePath(file);
+                return ClassPathSupport.createClassPath(includePath.toArray(new FileObject[includePath.size()]));
+            } else if (fileType.equals(FileType.UNKNOWN)) {
+                /*include pathes for individual projects*/
+                for (ClassPath classPath : projectIncludes) {
+                    if (classPath.contains(file)) {
+                        return classPath;
+                    }
                 }
             }
-            return cache;
         }
-    }
-
-    public void propertyChange(PropertyChangeEvent event) {
-        String propName = event.getPropertyName();
-        if (propName == null || propName.equals(PhpProjectProperties.SOURCE_ENCODING)) {
-            synchronized (this) {
-                cache = null;
-            }
-        }
+        return null;
     }
 }
