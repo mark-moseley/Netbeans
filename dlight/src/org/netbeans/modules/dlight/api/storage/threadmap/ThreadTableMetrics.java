@@ -37,60 +37,34 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.dlight.visualizers.threadmap;
+package org.netbeans.modules.dlight.api.storage.threadmap;
 
 import java.util.ArrayList;
 import java.util.List;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadInfo;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapData;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState;
+import org.netbeans.modules.dlight.api.storage.DataTableMetadata.Column;
+import org.openide.util.NbBundle;
 
 /**
  *
- * @author Alexander Simon (adapted for CND)
+ * @author Alexander Simon
  */
-public class MonitoredData {
-    private List<ThreadMapData> data = new ArrayList<ThreadMapData>();
-    private MonitoredData(List<ThreadMapData> data) {
-        this.data = data;
+public final class ThreadTableMetrics {
+    private static final List<Column> columns;
+    static {
+        columns = new ArrayList<Column>(3);
+        columns.add(create("threadName", String.class)); // NOI18N
+        columns.add(create("state", StateLine.class)); // NOI18N
+        columns.add(create("summary", StateSummary.class)); // NOI18N
     }
 
-    public static MonitoredData getMonitoredData(List<ThreadMapData> data) {
-        return new MonitoredData(data);
+    private ThreadTableMetrics() {
     }
 
-    public int getThreadsSize() {
-        return data.size();
+    private static  Column create(String id, Class clazz) {
+        return new Column(id, clazz, NbBundle.getMessage(ThreadTableMetrics.class, id), null);
     }
 
-    public int getThreadStatesSize() {
-        return data.get(0).getThreadState().size();
-    }
-
-    public ThreadInfo getThreadInfo(int index){
-        return data.get(index).getThreadInfo();
-    }
-
-    public int[] getThreadIds() {
-        int[] res = new int[data.size()];
-        for(int i = 0; i < data.size(); i++){
-            res[i] = data.get(i).getThreadInfo().getThreadId();
-        }
-        return res;
-    }
-
-    public List<ThreadState> getThreadStates(int index) {
-        return data.get(index).getThreadState();
-    }
-
-    public long[] getStateTimestamps() {
-        List<ThreadState> states = data.get(0).getThreadState();
-        int size = states.size();
-        long[] res = new long[size];
-        for(int i = 0; i < size; i++) {
-            ThreadState state = states.get(i);
-            res[i] = state.getTimeStamp();
-        }
-        return res;
+    public static final List<Column> getThredMapColumn(){
+        return columns;
     }
 }

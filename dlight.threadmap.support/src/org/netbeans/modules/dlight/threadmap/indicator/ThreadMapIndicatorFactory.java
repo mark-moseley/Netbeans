@@ -37,60 +37,20 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.dlight.visualizers.threadmap;
+package org.netbeans.modules.dlight.threadmap.indicator;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadInfo;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapData;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState;
+import org.netbeans.modules.dlight.spi.indicator.Indicator;
+import org.netbeans.modules.dlight.spi.indicator.IndicatorFactory;
 
-/**
- *
- * @author Alexander Simon (adapted for CND)
- */
-public class MonitoredData {
-    private List<ThreadMapData> data = new ArrayList<ThreadMapData>();
-    private MonitoredData(List<ThreadMapData> data) {
-        this.data = data;
+@org.openide.util.lookup.ServiceProvider(service = org.netbeans.modules.dlight.spi.indicator.IndicatorFactory.class)
+public class ThreadMapIndicatorFactory implements IndicatorFactory<ThreadMapIndicatorConfiguration> {
+
+    public Indicator<ThreadMapIndicatorConfiguration> create(ThreadMapIndicatorConfiguration configuration) {
+        return new ThreadMapIndicator(configuration);
     }
 
-    public static MonitoredData getMonitoredData(List<ThreadMapData> data) {
-        return new MonitoredData(data);
+    public String getID() {
+        return ThreadMapIndicatorConfiguration.ID;
     }
 
-    public int getThreadsSize() {
-        return data.size();
-    }
-
-    public int getThreadStatesSize() {
-        return data.get(0).getThreadState().size();
-    }
-
-    public ThreadInfo getThreadInfo(int index){
-        return data.get(index).getThreadInfo();
-    }
-
-    public int[] getThreadIds() {
-        int[] res = new int[data.size()];
-        for(int i = 0; i < data.size(); i++){
-            res[i] = data.get(i).getThreadInfo().getThreadId();
-        }
-        return res;
-    }
-
-    public List<ThreadState> getThreadStates(int index) {
-        return data.get(index).getThreadState();
-    }
-
-    public long[] getStateTimestamps() {
-        List<ThreadState> states = data.get(0).getThreadState();
-        int size = states.size();
-        long[] res = new long[size];
-        for(int i = 0; i < size; i++) {
-            ThreadState state = states.get(i);
-            res[i] = state.getTimeStamp();
-        }
-        return res;
-    }
 }

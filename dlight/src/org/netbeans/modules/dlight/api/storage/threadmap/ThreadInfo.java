@@ -37,60 +37,20 @@
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
 
-package org.netbeans.modules.dlight.visualizers.threadmap;
-
-import java.util.ArrayList;
-import java.util.List;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadInfo;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapData;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState;
+package org.netbeans.modules.dlight.api.storage.threadmap;
 
 /**
  *
- * @author Alexander Simon (adapted for CND)
+ * @author Alexander Simon
  */
-public class MonitoredData {
-    private List<ThreadMapData> data = new ArrayList<ThreadMapData>();
-    private MonitoredData(List<ThreadMapData> data) {
-        this.data = data;
-    }
+public interface ThreadInfo {
+    /**
+     * @return ststem thread ID.
+     */
+    int getThreadId();
 
-    public static MonitoredData getMonitoredData(List<ThreadMapData> data) {
-        return new MonitoredData(data);
-    }
-
-    public int getThreadsSize() {
-        return data.size();
-    }
-
-    public int getThreadStatesSize() {
-        return data.get(0).getThreadState().size();
-    }
-
-    public ThreadInfo getThreadInfo(int index){
-        return data.get(index).getThreadInfo();
-    }
-
-    public int[] getThreadIds() {
-        int[] res = new int[data.size()];
-        for(int i = 0; i < data.size(); i++){
-            res[i] = data.get(i).getThreadInfo().getThreadId();
-        }
-        return res;
-    }
-
-    public List<ThreadState> getThreadStates(int index) {
-        return data.get(index).getThreadState();
-    }
-
-    public long[] getStateTimestamps() {
-        List<ThreadState> states = data.get(0).getThreadState();
-        int size = states.size();
-        long[] res = new long[size];
-        for(int i = 0; i < size; i++) {
-            ThreadState state = states.get(i);
-            res[i] = state.getTimeStamp();
-        }
-        return res;
-    }
+    /**
+     * @return Thread name. It is a function full name that was called.
+     */
+    String getThreadName();
 }

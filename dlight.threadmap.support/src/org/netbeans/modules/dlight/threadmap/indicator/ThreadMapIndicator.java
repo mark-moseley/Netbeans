@@ -36,61 +36,44 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.dlight.threadmap.indicator;
 
-package org.netbeans.modules.dlight.visualizers.threadmap;
-
-import java.util.ArrayList;
+import java.awt.BorderLayout;
 import java.util.List;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadInfo;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapData;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import org.netbeans.modules.dlight.api.storage.DataRow;
+import org.netbeans.modules.dlight.spi.indicator.Indicator;
 
-/**
- *
- * @author Alexander Simon (adapted for CND)
- */
-public class MonitoredData {
-    private List<ThreadMapData> data = new ArrayList<ThreadMapData>();
-    private MonitoredData(List<ThreadMapData> data) {
-        this.data = data;
+/*package*/ class ThreadMapIndicator extends Indicator<ThreadMapIndicatorConfiguration> {
+
+    private final JPanel theButton;
+
+    public ThreadMapIndicator(ThreadMapIndicatorConfiguration configuration) {
+        super(configuration);
+        theButton = new JPanel(new BorderLayout());
+        theButton.add(new JLabel("Show ThreadMap!"), BorderLayout.CENTER); // NOI18N
     }
 
-    public static MonitoredData getMonitoredData(List<ThreadMapData> data) {
-        return new MonitoredData(data);
+    @Override
+    protected void repairNeeded(boolean needed) {
     }
 
-    public int getThreadsSize() {
-        return data.size();
+    @Override
+    protected void tick() {
     }
 
-    public int getThreadStatesSize() {
-        return data.get(0).getThreadState().size();
+    @Override
+    public void updated(List<DataRow> data) {
     }
 
-    public ThreadInfo getThreadInfo(int index){
-        return data.get(index).getThreadInfo();
+    @Override
+    public void reset() {
     }
 
-    public int[] getThreadIds() {
-        int[] res = new int[data.size()];
-        for(int i = 0; i < data.size(); i++){
-            res[i] = data.get(i).getThreadInfo().getThreadId();
-        }
-        return res;
-    }
-
-    public List<ThreadState> getThreadStates(int index) {
-        return data.get(index).getThreadState();
-    }
-
-    public long[] getStateTimestamps() {
-        List<ThreadState> states = data.get(0).getThreadState();
-        int size = states.size();
-        long[] res = new long[size];
-        for(int i = 0; i < size; i++) {
-            ThreadState state = states.get(i);
-            res[i] = state.getTimeStamp();
-        }
-        return res;
+    @Override
+    public JComponent getComponent() {
+        return theButton;
     }
 }

@@ -36,76 +36,70 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
+package org.netbeans.modules.dlight.api.storage.threadmap;
 
-package org.netbeans.modules.dlight.threadmap.support.spi;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
  * @author Alexander Simon
  */
-public interface ThreadState {
+public final class ThreadMapDataQuery {
+
+    private final TimeUnit timeUnit;
+    private final long timeFrom;
+    private final long timeTo;
+    private final long step;
+    private final boolean fullState;
 
     /**
-     * Aggregated thread states.
+     * @param timeUnit time unit.
+     * @param timeFrom start time in time units.
+     * @param timeTo end time in time units.
+     * @param step aggregation time in time units.
+     * @param fullState state aggregation. True - no aggregation by state (see FullThreadState enumeration). False - aggregate to ShortThreadState.
+     * @return list threads data about all threads that alive in selected time period.
      */
-    public static enum ShortThreadState {
-        NotExist,
-        Sleeping,
-        Waiting,
-        Blocked,
-        Running,
+    public ThreadMapDataQuery(TimeUnit timeUnit, long timeFrom, long timeTo, long step, boolean fullState) {
+        this.timeUnit = timeUnit;
+        this.timeFrom = timeFrom;
+        this.timeTo = timeTo;
+        this.step = step;
+        this.fullState = fullState;
     }
 
     /**
-     * All possible thread states.
+     * @return time unit.
      */
-    public static enum FullThreadState {
-        NotExist,
-        Stopped,
-        SleepingOther,
-        SleepingUserTextPageFault,
-        SleepingUserDataPageFault,
-        SleepingKernelPageFault,
-        SleepingSemafore,
-        SleepingConditionalVariable,
-        SleepingSystemSynchronization,
-        SleepingUserSynchronization,
-        WaitingCPU,
-        RunningOther,
-        RunningSystemCall,
-        RunningUser,
+    public TimeUnit getTimeUnit() {
+        return timeUnit;
     }
 
     /**
-     * @return size of state
+     * @return start time in time units.
      */
-    int size();
+    public long getTimeFrom() {
+        return timeFrom;
+    }
 
     /**
-     * returns string representation of enum value of ShortThreadState or FullThreadState.
-     *
-     * @param index of state.
-     * @return state ID by index.
+     * @return end time in time units.
      */
-    String getStateName(int index);
+    public long getTimeTo() {
+        return timeTo;
+    }
 
     /**
-     * @param index of state.
-     * @return value of state by index. Unit of value is 0.1%. I.e. sum of all values is 1000.
+     * @return aggregation time in time units.
      */
-    int getState(int index);
+    public long getStep() {
+        return step;
+    }
 
     /**
-     * returns -1 if there are no stack avaliable.
-     *
-     * @param index interested state.
-     * @return time in natural unit of state. It is guaranteed that exist stack damp on this time.
+     * @return state aggregation. True - no aggregation by state (see FullThreadState enumeration). False - aggregate to ShortThreadState.
      */
-    long getTimeStamp(int index);
-
-    /**
-     *
-     * @return beginning time in natural unit of state.
-     */
-    long getTimeStamp();
+    public boolean isFullState() {
+        return fullState;
+    }
 }
