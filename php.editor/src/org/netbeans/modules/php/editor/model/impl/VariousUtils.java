@@ -38,19 +38,28 @@
  */
 package org.netbeans.modules.php.editor.model.impl;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Stack;
-import org.netbeans.modules.gsf.api.annotations.CheckForNull;
+import org.netbeans.api.annotations.common.CheckForNull;
+import org.netbeans.api.lexer.Token;
+import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.php.editor.CodeUtils;
 import org.netbeans.modules.php.editor.index.PHPIndex;
+import org.netbeans.modules.php.editor.lexer.PHPTokenId;
 import org.netbeans.modules.php.editor.model.ClassScope;
+import org.netbeans.modules.php.editor.model.FieldElement;
+import org.netbeans.modules.php.editor.model.FileScope;
 import org.netbeans.modules.php.editor.model.FunctionScope;
 import org.netbeans.modules.php.editor.model.MethodScope;
 import org.netbeans.modules.php.editor.model.ModelElement;
-import org.netbeans.modules.php.editor.model.ModelScope;
+import org.netbeans.modules.php.editor.model.NamespaceScope;
 import org.netbeans.modules.php.editor.model.ModelUtils;
+import org.netbeans.modules.php.editor.model.Scope;
 import org.netbeans.modules.php.editor.model.TypeScope;
 import org.netbeans.modules.php.editor.model.VariableName;
 import org.netbeans.modules.php.editor.model.VariableScope;
@@ -64,7 +73,6 @@ import org.netbeans.modules.php.editor.parser.astnodes.Expression;
 import org.netbeans.modules.php.editor.parser.astnodes.FieldAccess;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionDeclaration;
 import org.netbeans.modules.php.editor.parser.astnodes.FunctionInvocation;
-import org.netbeans.modules.php.editor.parser.astnodes.Identifier;
 import org.netbeans.modules.php.editor.parser.astnodes.Include;
 import org.netbeans.modules.php.editor.parser.astnodes.Scalar.Type;
 import org.netbeans.modules.php.editor.parser.astnodes.MethodInvocation;
@@ -80,6 +88,8 @@ import org.netbeans.modules.php.editor.parser.astnodes.Variable;
 import org.netbeans.modules.php.editor.parser.astnodes.VariableBase;
 import org.netbeans.modules.php.project.api.PhpSourcePath;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.Parameters;
 
 /**
  *
@@ -95,7 +105,11 @@ public class VariousUtils {
     public static final String STATIC_FIELD__TYPE_PREFIX = "static.fld:";
     public static final String VAR_TYPE_PREFIX = "var:";
 
-    static String extractTypeFroVariableBase(VariableBase varBase, Map<String, VariableNameImpl> allAssignments) {
+    public static String extractTypeFroVariableBase(VariableBase varBase) {
+        return extractTypeFroVariableBase(varBase, Collections.<String, AssignmentImpl>emptyMap());
+    }
+
+    static String extractTypeFroVariableBase(VariableBase varBase, Map<String, AssignmentImpl> allAssignments) {
         Stack<VariableBase> stack = new Stack<VariableBase>();
         String typeName = null;
         createVariableBaseChain(varBase, stack);
@@ -150,7 +164,7 @@ public class VariousUtils {
 
 
     @CheckForNull
-    static String extractVariableTypeFromAssignment(Assignment assignment, Map<String, VariableNameImpl> allAssignments) {
+    static String extractVariableTypeFromAssignment(Assignment assignment, Map<String, AssignmentImpl> allAssignments) {
         Expression expression = assignment.getRightHandSide();
         if (expression instanceof Assignment) {
             // handle nested assignments, e.g. $l = $m = new ObjectName;
@@ -161,12 +175,7 @@ public class VariousUtils {
         }
         if (expression instanceof ClassInstanceCreation) {
             ClassInstanceCreation classInstanceCreation = (ClassInstanceCreation) expression;
-            Expression className = classInstanceCreation.getClassName().getName();
-
-            if (className instanceof Identifier) {
-                Identifier identifier = (Identifier) className;
-                return identifier.getName();
-            }
+            return CodeUtils.extractClassName(classInstanceCreation.getClassName());
         } else if (expression instanceof ArrayCreation) {
             return "array"; //NOI18N
         } else if (expression instanceof VariableBase) {
@@ -177,14 +186,16 @@ public class VariousUtils {
     }
 
     //TODO: needs to be improved to properly return more types
-    public static List<? extends TypeScope> getType(ModelScope topScope, VariableScope varScope, String semiTypeName, int offset, boolean justDispatcher) throws IllegalStateException {
-        Stack<String> stack = new Stack<String>();
-        TypeScope type = null;
+    public static List<? extends TypeScope> getType(FileScope topScope, VariableScope varScope, String semiTypeName, int offset, boolean justDispatcher) throws IllegalStateException {
+        List<? extends TypeScope> recentTypes = Collections.emptyList();
+        List<? extends TypeScope> oldRecentTypes = Collections.emptyList();
+        
         if (semiTypeName != null && semiTypeName.contains("@")) {
             String operation = null;
             String[] fragments = semiTypeName.split("[@:]");
             int len = (justDispatcher) ? fragments.length - 1 : fragments.length;
             for (int i = 0; i < len; i++) {
+                oldRecentTypes = recentTypes;                
                 String frag = fragments[i];
                 if (frag.trim().length() == 0) {
                     continue;
@@ -192,137 +203,115 @@ public class VariousUtils {
                 if (VariousUtils.METHOD_TYPE_PREFIX.startsWith(frag)) {
                     operation = VariousUtils.METHOD_TYPE_PREFIX;
                 } else if (VariousUtils.FUNCTION_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.FUNCTION_TYPE_PREFIX;
                 } else if (VariousUtils.STATIC_METHOD_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.STATIC_METHOD_TYPE_PREFIX;
                 } else if (VariousUtils.VAR_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.VAR_TYPE_PREFIX;
                 } else if (VariousUtils.FIELD_TYPE_PREFIX.startsWith(frag)) {
-                    assert operation == null;
                     operation = VariousUtils.FIELD_TYPE_PREFIX;
                 } else {
                     if (operation == null) {
                         assert i == 0;
-                        stack.push(frag);
+                        recentTypes = CachingSupport.getClasses(frag,topScope);
                     } else if (operation.startsWith(VariousUtils.METHOD_TYPE_PREFIX)) {
-                        String clsName = stack.isEmpty() ? null : stack.pop();
-                        if (clsName == null) {
-                            semiTypeName = null;
-                            break;
+                        List<TypeScope> newRecentTypes = new ArrayList<TypeScope>();
+                        for (TypeScope tScope : oldRecentTypes) {
+                            Collection<? extends MethodScope> inheritedMethods = CachingSupport.getInheritedMethods(tScope, frag, topScope, PHPIndex.ANY_ATTR);
+                            for (MethodScope meth : inheritedMethods) {
+                                newRecentTypes.addAll(meth.getReturnTypes());
+                            }
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName,topScope));
-                        if (cls == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
-                        if (meth == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        type = ModelUtils.getFirst(meth.getReturnTypes());
-                        if (type == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        stack.push(type.getName());
+                        recentTypes = newRecentTypes;
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.FUNCTION_TYPE_PREFIX)) {
-                        FunctionScope fnc = ModelUtils.getFirst(CachedModelSupport.getFunctions(frag, topScope));
-                        if (fnc == null) {
-                            semiTypeName = null;
-                            break;
+                        List<TypeScope> newRecentTypes = new ArrayList<TypeScope>();
+                        FunctionScope fnc = ModelUtils.getFirst(CachingSupport.getFunctions(frag, topScope));
+                        if (fnc != null) {
+                            newRecentTypes.addAll(fnc.getReturnTypes());
                         }
-                        type = ModelUtils.getFirst(fnc.getReturnTypes());
-                        if (type == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        stack.push(type.getName());
+                        recentTypes = newRecentTypes;
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.STATIC_METHOD_TYPE_PREFIX)) {
+                        List<TypeScope> newRecentTypes = new ArrayList<TypeScope>();
                         String[] frgs = frag.split("\\.");
                         assert frgs.length == 2;
                         String clsName = frgs[0];
-                        if (clsName == null) {
-                            semiTypeName = null;
-                            break;
+                        if (clsName != null) {
+                            boolean parent = false;
+                            if (varScope instanceof MethodScope) {//NOI18N
+                                if ("self".equals(clsName)) {
+                                    Scope inScope = varScope.getInScope();
+                                    clsName = inScope.getName();
+                                } else if ("parent".equals(clsName)) {
+                                    Scope inScope = varScope.getInScope();
+                                    clsName = inScope.getName();
+                                    parent = true;
+                                }
+                            }
+                            List<? extends ClassScope> classes = CachingSupport.getClasses(clsName, topScope);
+                            for (ClassScope cls : classes) {
+                                if (parent) {
+                                    cls = ModelUtils.getFirst(cls.getSuperClasses());
+                                    if (cls == null) continue;
+                                }
+                                Collection<? extends MethodScope> inheritedMethods = CachingSupport.getInheritedMethods(cls, frgs[1], topScope, PHPIndex.ANY_ATTR);
+                                for (MethodScope meth : inheritedMethods) {
+                                   newRecentTypes.addAll(meth.getReturnTypes());
+                                }
+                            }
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName, topScope));
-                        if (cls == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
-                                //ModelUtils.getFirst(cls.getMethods(frgs[1], PhpModifiers.STATIC));
-                        if (meth == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        type = ModelUtils.getFirst(meth.getReturnTypes());
-                        if (type == null) {
-                            semiTypeName = null;
-                            break;
-                        }
-                        stack.push(type.getName());
+                        recentTypes = newRecentTypes;
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.VAR_TYPE_PREFIX)) {
-                        type = null;
+                        List<TypeScope> newRecentTypes = new ArrayList<TypeScope>();
+                        String varName = frag;
                         if (varScope instanceof MethodScope) {//NOI18N
                             MethodScope mScope = (MethodScope) varScope;
                             if ((frag.equals("this") || frag.equals("$this"))) {//NOI18N
-                                type = (ClassScope) mScope.getInScope();
-                            } 
-                            if (type != null) {
-                                stack.push(type.getName());
-                                operation = null;
+                                String clsName = ((ClassScope) mScope.getInScope()).getName();
+                                newRecentTypes.addAll(CachingSupport.getClasses(clsName, topScope));
                             }
                         }
-                        if (type == null) {
-                            List<? extends VariableName> variables = varScope.getVariables(frag);
-                            if (!variables.isEmpty()) {
-                                VariableName varName = ModelUtils.getFirst(variables);
-                                type = varName != null ? ModelUtils.getFirst(varName.getTypes(offset)) : null;
-                                if (type != null) {
-                                    stack.push(type.getName());
-                                } else {
-                                    semiTypeName = null;
-                                    break;
-                                }
-                                operation = null;
+                        if (newRecentTypes.isEmpty()) {
+                            VariableName var = ModelUtils.getFirst(varScope.getDeclaredVariables(), varName);
+                            if (var != null) {
+                                newRecentTypes.addAll(var.getTypes(offset));
                             }
                         }
+                        recentTypes = newRecentTypes;
+                        operation = null;
+                        
                     } else if (operation.startsWith(VariousUtils.FIELD_TYPE_PREFIX)) {
-                        //TODO: not implemented yet
-                        return Collections.<TypeScope>emptyList();
+                        List<TypeScope> newRecentTypes = new ArrayList<TypeScope>();
+                        String fldName = frag;
+                        if (!fldName.startsWith("$")) {//NOI18N
+                            fldName = "$" + fldName;//NOI18N
+                        }
+                        for (TypeScope type : oldRecentTypes) {
+                            if (type instanceof ClassScope) {
+                                ClassScope cls = (ClassScope) type;
+                                Collection<? extends FieldElement> inheritedFields = CachingSupport.getInheritedFields(cls, fldName, topScope, PHPIndex.ANY_ATTR);
+                                for (FieldElement fieldElement : inheritedFields) {
+                                    newRecentTypes.addAll(fieldElement.getTypes(offset));
+                                }
+                            }
+                        }
+                        recentTypes = newRecentTypes;
+                        operation = null;
                     } else {
                         throw new UnsupportedOperationException(operation);
                     }
                 }
             }
-            if (stack.size() == 1) {
-                semiTypeName = stack.pop();
-            }
-        //throw new UnsupportedOperationException("Not supported yet.");
+        } else if (semiTypeName != null ) {
+            return new ArrayList<TypeScope>(CachingSupport.getTypes(semiTypeName, topScope));
         }
-        if (semiTypeName != null) {
-            if (type != null && semiTypeName.equals(type.getName())) {
-                return Collections.<TypeScope>singletonList(type);
-            } else {
-                type = ModelUtils.getFirst(CachedModelSupport.getTypes(semiTypeName, topScope));
-                if (type != null) {
-                    return Collections.<TypeScope>singletonList(type);
-                }
-                //assert false;
-            }
-        }
-        return Collections.<TypeScope>emptyList();
+       
+        return recentTypes;
     }
 
-    public static Stack<? extends ModelElement> getElemenst(ModelScope topScope, VariableScope varScope, String semiTypeName, int offset) throws IllegalStateException {
+    public static Stack<? extends ModelElement> getElemenst(FileScope topScope, VariableScope varScope, String semiTypeName, int offset) throws IllegalStateException {
         Stack<ModelElement> emptyStack = new Stack<ModelElement>();
         Stack<ModelElement> retval = new Stack<ModelElement>();
         Stack<String> stack = new Stack<String>();
@@ -362,11 +351,11 @@ public class VariousUtils {
                         if (clsName == null) {
                             return emptyStack;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName,topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName,topScope));
                         if (cls == null) {
                             return emptyStack;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getInheritedMethods(cls, frag, topScope, PHPIndex.ANY_ATTR));
                         if (meth == null) {
                             return emptyStack;
                         } else {
@@ -380,7 +369,7 @@ public class VariousUtils {
                         stack.push(type.getName());
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.FUNCTION_TYPE_PREFIX)) {
-                        FunctionScope fnc = ModelUtils.getFirst(CachedModelSupport.getFunctions(frag, topScope));
+                        FunctionScope fnc = ModelUtils.getFirst(CachingSupport.getFunctions(frag, topScope));
                         if (fnc == null) {
                             semiTypeName = null;
                             break;
@@ -395,12 +384,12 @@ public class VariousUtils {
                         stack.push(type.getName());
                         operation = null;
                     } else if (operation.startsWith(VariousUtils.CONSTRUCTOR_TYPE_PREFIX)) {
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(frag, topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(frag, topScope));
                         if (cls == null) {
                             semiTypeName = null;
                             break;
                         } else {
-                            MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, "__construct",topScope, PHPIndex.ANY_ATTR));//NOI18N
+                            MethodScope meth = ModelUtils.getFirst(CachingSupport.getMethods(cls, "__construct",topScope, PHPIndex.ANY_ATTR));//NOI18N
                             if (meth != null) {
                                 retval.push(meth);
                             } else {
@@ -416,11 +405,11 @@ public class VariousUtils {
                         if (clsName == null) {
                             return emptyStack;
                         }
-                        ClassScope cls = ModelUtils.getFirst(CachedModelSupport.getClasses(clsName, topScope));
+                        ClassScope cls = ModelUtils.getFirst(CachingSupport.getClasses(clsName, topScope));
                         if (cls == null) {
                             return emptyStack;
                         }
-                        MethodScope meth = ModelUtils.getFirst(CachedModelSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
+                        MethodScope meth = ModelUtils.getFirst(CachingSupport.getMethods(cls, frgs[1],topScope, PHPIndex.ANY_ATTR));
                                 //ModelUtils.getFirst(cls.getMethods(frgs[1], PhpModifiers.STATIC));
                         if (meth == null) {
                             return emptyStack;
@@ -447,7 +436,7 @@ public class VariousUtils {
                             }
                         }
                         if (type == null) {
-                            List<? extends VariableName> variables = varScope.getVariables(frag);
+                            List<? extends VariableName> variables = ModelUtils.filter(varScope.getDeclaredVariables(), frag);
                             if (!variables.isEmpty()) {
                                 VariableName varName = ModelUtils.getFirst(variables);
                                 type = varName != null ? ModelUtils.getFirst(varName.getTypes(offset)) : null;
@@ -488,17 +477,14 @@ public class VariousUtils {
         }
     }
 
-    private static String extractVariableTypeFromVariableBase(VariableBase varBase, Map<String, VariableNameImpl> allAssignments) {
+    private static String extractVariableTypeFromVariableBase(VariableBase varBase, Map<String, AssignmentImpl> allAssignments) {
         if (varBase instanceof Variable) {
             String varName = CodeUtils.extractVariableName((Variable) varBase);
-            VariableNameImpl nameImpl = allAssignments.get(varName);
-            if (nameImpl != null) {
-                VarAssignmentImpl last = ModelUtils.getLast(nameImpl.getAssignments());
-                if (last != null) {
-                    String semiTypeName = last.typeNameFromUnion();
-                    if (semiTypeName != null) {
-                        return semiTypeName;
-                    }
+            AssignmentImpl assignmentImpl = allAssignments.get(varName);
+            if (assignmentImpl != null) {
+                String semiTypeName = assignmentImpl.typeNameFromUnion();
+                if (semiTypeName != null) {
+                    return semiTypeName;
                 }
             }
             return "@" + VAR_TYPE_PREFIX + varName;
@@ -508,7 +494,7 @@ public class VariousUtils {
             return "@" + FUNCTION_TYPE_PREFIX + fname;
         } else if (varBase instanceof StaticMethodInvocation) {
             StaticMethodInvocation staticMethodInvocation = (StaticMethodInvocation) varBase;
-            String className = staticMethodInvocation.getClassName().getName();
+            String className = CodeUtils.extractUnqualifiedClassName(staticMethodInvocation);
             String methodName = CodeUtils.extractFunctionName(staticMethodInvocation.getMethod());
 
             if (className != null && methodName != null) {
@@ -550,35 +536,238 @@ public class VariousUtils {
         return null;
     }
 
-    public static FileObject resolveInclude(FileObject currentFile, Include include) {
-        String fileName = resolveFileName(include);
-        return (fileName != null) ? resolveRelativeFile(currentFile, fileName) : null;
+    /**
+     * @param sourceFile needs to be data file (not folder)
+     */
+    public static FileObject resolveInclude(FileObject sourceFile, Include include) {
+        Parameters.notNull("sourceFile", sourceFile);
+        FileObject retval = null;
+        if (sourceFile.isFolder()) {
+            throw new IllegalArgumentException(FileUtil.getFileDisplayName(sourceFile));
+        }
+        String fileName = resolveFileName(include);        
+        if (fileName != null) {
+            FileObject parent = sourceFile.getParent();
+            assert parent != null : FileUtil.getFileDisplayName(sourceFile);
+            retval = PhpSourcePath.resolveFile(parent, fileName);
+        }
+        return  retval;
     }
 
-    private static FileObject resolveRelativeFile(FileObject currentFile, String name) {
-        while (true) {
-            FileObject result;
+    private static final Collection<PHPTokenId> CTX_DELIMITERS = Arrays.asList(
+            PHPTokenId.PHP_OPENTAG, PHPTokenId.PHP_SEMICOLON, PHPTokenId.PHP_CURLY_OPEN, PHPTokenId.PHP_CURLY_CLOSE,
+            PHPTokenId.PHP_RETURN, PHPTokenId.PHP_OPERATOR, PHPTokenId.PHP_ECHO,
+            PHPTokenId.PHP_EVAL, PHPTokenId.PHP_NEW, PHPTokenId.PHP_NOT, PHPTokenId.PHP_CASE,
+            PHPTokenId.PHP_IF, PHPTokenId.PHP_ELSE, PHPTokenId.PHP_ELSEIF, PHPTokenId.PHP_PRINT,
+            PHPTokenId.PHP_FOR, PHPTokenId.PHP_FOREACH, PHPTokenId.PHP_WHILE,
+            PHPTokenId.PHPDOC_COMMENT_END, PHPTokenId.PHP_COMMENT_END, PHPTokenId.PHP_LINE_COMMENT,
+            PHPTokenId.PHP_CONSTANT_ENCAPSED_STRING, PHPTokenId.PHP_ENCAPSED_AND_WHITESPACE);
 
-//            if (psp != null) {
-                result = PhpSourcePath.resolveFile(currentFile.getParent(), name);
-//            } else {
-//                result = info.getFileObject().getParent().getFileObject(name);
-//            }
 
-            if (result != null) {
-                return result;
-            }
+    public enum State {
+        START, METHOD, INVALID, VARBASE, DOLAR, PARAMS, REFERENCE, STATIC_REFERENCE, FUNCTION, FIELD, VARIABLE, CLASSNAME, STOP
+    };
 
-            //try to strip a directory from the "name":
-            int slash = name.indexOf('/');
-
-            if (slash != (-1)) {
-                name = name.substring(slash + 1);
+    public static String getSemiType(TokenSequence<PHPTokenId> tokenSequence, State state, VariableScope varScope) throws IllegalStateException {
+        int commasCount = 0;
+        int anchor = -1;
+        int leftBraces = 0;
+        int rightBraces = State.PARAMS.equals(state) ? 1 : 0;
+        StringBuilder metaAll = new StringBuilder();
+        while (!state.equals(State.INVALID) && !state.equals(State.STOP) && tokenSequence.movePrevious() && skipWhitespaces(tokenSequence)) {
+            Token<PHPTokenId> token = tokenSequence.token();
+            if (!CTX_DELIMITERS.contains(token.id())) {
+                switch (state) {
+                    case METHOD:
+                    case START:
+                        state = (state.equals(State.METHOD)) ? State.STOP : State.INVALID;
+                        // state = State.INVALID;
+                        if (isReference(token)) {
+                            metaAll.insert(0, "@" + VariousUtils.METHOD_TYPE_PREFIX);
+                            state = State.REFERENCE;
+                        } else if (isStaticReference(token)) {
+                            metaAll.insert(0, "@" + VariousUtils.METHOD_TYPE_PREFIX);
+                            state = State.STATIC_REFERENCE;
+                        } else if (state.equals(State.STOP)) {
+                            metaAll.insert(0, "@" + VariousUtils.FUNCTION_TYPE_PREFIX);
+                        }
+                        break;
+                    case REFERENCE:
+                        state = State.INVALID;
+                        if (isRightBracket(token)) {
+                            rightBraces++;
+                            state = State.PARAMS;
+                        } else if (isString(token)) {
+                            metaAll.insert(0, token.text().toString());
+                            state = State.FIELD;
+                        } else if (isVariable(token)) {
+                            metaAll.insert(0, token.text().toString());
+                            state = State.VARBASE;
+                        }
+                        break;
+                    case STATIC_REFERENCE:
+                        state = State.INVALID;
+                        if (isString(token)) {
+                            metaAll.insert(0, "@" + VariousUtils.FIELD_TYPE_PREFIX);
+                            metaAll.insert(0, token.text().toString());
+                            state = State.CLASSNAME;
+                        } else if (isSelf(token) || isParent(token)) {
+                            metaAll.insert(0, buildStaticClassName(varScope, token.text().toString()));
+                            //TODO: maybe rather introduce its own State
+                            state = State.CLASSNAME;
+                        }
+                        break;
+                    case PARAMS:
+                        if (isWhiteSpace(token)) {
+                            state = State.PARAMS;
+                        } else if (isComma(token)) {
+                            if (metaAll.length() == 0) {
+                                commasCount++;
+                            }
+                        } else if (CTX_DELIMITERS.contains(token.id())) {
+                            state = State.INVALID;
+                        } else if (isLeftBracket(token)) {
+                            leftBraces++;
+                        } else if (isRightBracket(token)) {
+                            rightBraces++;
+                        }
+                        if (leftBraces == rightBraces) {
+                            state = State.FUNCTION;
+                        }
+                        break;
+                    case FUNCTION:
+                        state = State.INVALID;
+                        if (isString(token)) {
+                            metaAll.insert(0, token.text().toString());
+                            if (anchor == -1) {
+                                anchor = tokenSequence.offset();
+                            }
+                            state = State.METHOD;
+                        }
+                        break;
+                    case FIELD:
+                        state = State.INVALID;
+                        if (isReference(token)) {
+                            metaAll.insert(0, "@" + VariousUtils.FIELD_TYPE_PREFIX);
+                            state = State.REFERENCE;
+                        }
+                        break;
+                    case VARBASE:
+                        state = State.INVALID;
+                        if (isStaticReference(token)) {
+                            state = State.STATIC_REFERENCE;
+                            break;
+                        } else {
+                            state = State.VARIABLE;
+                        }
+                    case VARIABLE:
+                        metaAll.insert(0, "@" + VariousUtils.VAR_TYPE_PREFIX);
+                    case CLASSNAME:
+                        //TODO: self, parent not handled yet
+                        //TODO: maybe rather introduce its own State for self, parent
+                        state = State.STOP;
+                        break;
+                }
             } else {
-                return null;
+                if (state.equals(State.CLASSNAME)) {
+                    state = State.STOP;
+                    break;
+                } else if (state.equals(State.METHOD)) {
+                    state = State.STOP;
+                    PHPTokenId id = token.id();
+                    if (id != null && PHPTokenId.PHP_NEW.equals(id)) {
+                        metaAll.insert(0, "@" + VariousUtils.CONSTRUCTOR_TYPE_PREFIX);
+                    } else {
+                        metaAll.insert(0, "@" + VariousUtils.FUNCTION_TYPE_PREFIX);
+                    }
+                    break;
+                }
             }
         }
+        if (state.equals(State.STOP)) {
+            String retval = metaAll.toString();
+            if (retval != null) {
+                return retval;
+            }
+        }
+        return null;
     }
 
+    private static boolean skipWhitespaces(TokenSequence<PHPTokenId> tokenSequence) {
+        Token<PHPTokenId> token = tokenSequence.token();
+        while (token != null && isWhiteSpace(token)) {
+            boolean retval = tokenSequence.movePrevious();
+            token = tokenSequence.token();
+            if (!retval) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String buildStaticClassName(Scope scp, String staticClzName) {
+        if (scp instanceof MethodScope) {
+            MethodScope msi = (MethodScope) scp;
+            ClassScope csi = (ClassScope) msi.getInScope();
+            if ("self".equals(staticClzName)) {
+                staticClzName = csi.getName();
+            } else if ("parent".equals(staticClzName)) {
+                ClassScope clzScope = ModelUtils.getFirst(csi.getSuperClasses());
+                if (clzScope != null) {
+                    staticClzName = clzScope.getName();
+                }
+            }
+        }
+        return staticClzName;
+    }
+
+
+    private static boolean moveToOffset(TokenSequence<PHPTokenId> tokenSequence, final int offset) {
+        return tokenSequence == null || tokenSequence.move(offset) < 0;
+    }
+
+    private static boolean isDolar(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_TOKEN) && "$".contentEquals(token.text());//NOI18N
+    }
+
+    private static boolean isLeftBracket(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_TOKEN) && "(".contentEquals(token.text());//NOI18N
+    }
+
+    private static boolean isRightBracket(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_TOKEN) && ")".contentEquals(token.text());//NOI18N
+    }
+
+    private static boolean isComma(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_TOKEN) && ",".contentEquals(token.text());//NOI18N
+    }
+
+    private static boolean isReference(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_OBJECT_OPERATOR);
+    }
+
+    private static boolean isWhiteSpace(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.WHITESPACE);
+    }
+
+    private static boolean isStaticReference(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_PAAMAYIM_NEKUDOTAYIM);
+    }
+
+    private static boolean isVariable(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_VARIABLE);
+    }
+
+    private static boolean isSelf(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_SELF);
+    }
+
+    private static boolean isParent(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_PARENT);
+    }
+
+    private static boolean isString(Token<PHPTokenId> token) {
+        return token.id().equals(PHPTokenId.PHP_STRING);
+    }
 
 }
