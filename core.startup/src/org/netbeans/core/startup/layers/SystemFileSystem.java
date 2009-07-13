@@ -52,18 +52,24 @@ import java.io.ObjectStreamException;
 import java.io.Serializable;
 import java.net.URL;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileStatusEvent;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.LocalFileSystem;
 import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.util.Exceptions;
 import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 
@@ -72,7 +78,7 @@ import org.openide.util.NbBundle;
 * @author Jan Jancura, Ian Formanek, Petr Hamernik
 */
 public final class SystemFileSystem extends MultiFileSystem 
-implements FileSystem.Status {
+implements FileSystem.Status, FileChangeListener {
     // Must be public for BeanInfo to work: #11186.
 
     /** generated Serialized Version UID */
@@ -89,6 +95,8 @@ implements FileSystem.Status {
     /** name of file attribute with URL to 32x32 color icon */
     private static final String ATTR_ICON_32 = "SystemFileSystem.icon32"; // NOI18N
 
+    private static final Logger LOG = Logger.getLogger(SystemFileSystem.class.getName());
+
     /** user fs */
     private ModuleLayeredFileSystem user;
     /** home fs */
@@ -104,6 +112,7 @@ implements FileSystem.Status {
         
         setSystemName(SYSTEM_NAME);
         setHidden(true);
+        addFileChangeListener(this);
     }
 
 
@@ -206,15 +215,13 @@ implements FileSystem.Status {
 
     /** Annotate name
     */
-    public String annotateName (String s, Set set) {
+    public String annotateName(String s, Set<? extends FileObject> files) {
 
         // Look for a localized file name.
         // Note: all files in the set are checked. But please only place the attribute
         // on the primary file, and use this primary file name as the bundle key.
-        Iterator it = set.iterator ();
-        while (it.hasNext ()) {
+        for (FileObject fo : files) {
             // annotate a name
-            FileObject fo = (FileObject) it.next ();
             String displayName = annotateName(fo);
             if (displayName != null) {
                 return displayName;
@@ -273,10 +280,8 @@ implements FileSystem.Status {
 
     /** Annotate icon
     */
-    public Image annotateIcon (Image im, int type, Set s) {
-        Iterator it = s.iterator ();
-        while (it.hasNext ()) {
-            FileObject fo = (FileObject) it.next ();
+    public Image annotateIcon(Image im, int type, Set<? extends FileObject> files) {
+        for (FileObject fo : files) {
             Image img = annotateIcon(fo, type);
             if (img != null) {
                 return img;
@@ -370,6 +375,45 @@ implements FileSystem.Status {
         fireFileStatusChanged (new FileStatusEvent (this, fo, false, true));
     }
 
+    public void fileFolderCreated(FileEvent fe) {
+        log("fileFolderCreated", fe); // NOI18N
+    }
+
+    public void fileDataCreated(FileEvent fe) {
+        log("fileDataCreated", fe); // NOI18N
+    }
+
+    public void fileChanged(FileEvent fe) {
+        log("fileChanged", fe); // NOI18N
+    }
+
+    public void fileDeleted(FileEvent fe) {
+        log("fileDeleted", fe); // NOI18N
+    }
+
+    public void fileRenamed(FileRenameEvent fe) {
+        log("fileDeleted", fe); // NOI18N
+    }
+
+    public void fileAttributeChanged(FileAttributeEvent fe) {
+        log("fileAttributeChanged", fe); // NOI18N
+    }
+
+    private static void log(String type, FileEvent fe) {
+        if (LOG.isLoggable(Level.FINER)) {
+            LogRecord r = new LogRecord(Level.FINER, "LOG_FILE_EVENT");
+            r.setLoggerName(LOG.getName());
+            r.setParameters(new Object[] {
+                type,
+                fe.getFile().getPath(),
+                fe.getFile(),
+                fe
+            });
+            r.setResourceBundle(NbBundle.getBundle(SystemFileSystem.class));
+            LOG.log(r);
+        }
+    }
+
     // --- SAFETY ---
     private Object writeReplace() throws ObjectStreamException {
         new NotSerializableException("WARNING - SystemFileSystem is not designed to be serialized").printStackTrace(); // NOI18N
@@ -380,7 +424,12 @@ implements FileSystem.Status {
         private static final long serialVersionUID = 6436781994611L;
         SingletonSerializer() {}
         private Object readResolve () throws ObjectStreamException {
-            return Repository.getDefault().getDefaultFileSystem ();
+            try {
+                return FileUtil.getConfigRoot().getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+            return null;
         }
     }
     // --- SAFETY ---
