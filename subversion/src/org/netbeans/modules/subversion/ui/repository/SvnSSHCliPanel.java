@@ -39,18 +39,16 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.subversion.ui.wizards.repositorystep;
-
-import org.netbeans.modules.versioning.util.PlaceholderPanel;
+package org.netbeans.modules.subversion.ui.repository;
 
 /**
  *
  * @author  Petr Kuzel
  */
-public class RepositoryStepPanel extends javax.swing.JPanel {
+public class SvnSSHCliPanel extends javax.swing.JPanel {
 
     /** Creates new form RepositoryPanel */
-    public RepositoryStepPanel() {
+    public SvnSSHCliPanel() {
         initComponents();
     }
 
@@ -62,33 +60,52 @@ public class RepositoryStepPanel extends javax.swing.JPanel {
         // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
         private void initComponents() {
 
-                java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/subversion/ui/wizards/repositorystep/Bundle"); // NOI18N
+                java.util.ResourceBundle bundle = java.util.ResourceBundle.getBundle("org/netbeans/modules/subversion/ui/repository/Bundle"); // NOI18N
                 setName(bundle.getString("BK2018")); // NOI18N
+                setVerifyInputWhenFocusTarget(false);
 
-                progressPanel.setLayout(null);
+                tunnelLabel.setText(org.openide.util.NbBundle.getMessage(SvnSSHCliPanel.class, "BK0010")); // NOI18N
 
-                repositoryPanel.setLayout(null);
+                tunnelCommandTextField.setColumns(30);
+
+                tunnelCommandLabel.setText(org.openide.util.NbBundle.getMessage(SvnSSHCliPanel.class, "BK0009")); // NOI18N
+
+                tunnelHelpLabel.setText(org.openide.util.NbBundle.getMessage(SvnSSHCliPanel.class, "TT_svn_xxx")); // NOI18N
 
                 org.jdesktop.layout.GroupLayout layout = new org.jdesktop.layout.GroupLayout(this);
                 this.setLayout(layout);
                 layout.setHorizontalGroup(
                         layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                        .add(repositoryPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .add(progressPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(layout.createSequentialGroup()
+                                .add(tunnelLabel)
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                                .add(tunnelCommandTextField))
+                        .add(layout.createSequentialGroup()
+                                .add(tunnelCommandLabel)
+                                .add(0, 0, 0))
+                        .add(tunnelHelpLabel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 );
                 layout.setVerticalGroup(
                         layout.createParallelGroup(org.jdesktop.layout.GroupLayout.LEADING)
-                        .add(org.jdesktop.layout.GroupLayout.TRAILING, layout.createSequentialGroup()
-                                .add(repositoryPanel, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .add(layout.createSequentialGroup()
+                                .add(tunnelCommandLabel)
                                 .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
-                                .add(progressPanel, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                                .add(layout.createParallelGroup(org.jdesktop.layout.GroupLayout.BASELINE)
+                                        .add(tunnelLabel)
+                                        .add(tunnelCommandTextField, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE, org.jdesktop.layout.GroupLayout.DEFAULT_SIZE, org.jdesktop.layout.GroupLayout.PREFERRED_SIZE))
+                                .addPreferredGap(org.jdesktop.layout.LayoutStyle.RELATED)
+                                .add(tunnelHelpLabel))
                 );
+
+                getAccessibleContext().setAccessibleDescription(org.openide.util.NbBundle.getMessage(SvnSSHCliPanel.class, "ACSD_RepositoryPanel")); // NOI18N
         }// </editor-fold>//GEN-END:initComponents
     
     
         // Variables declaration - do not modify//GEN-BEGIN:variables
-        final javax.swing.JPanel progressPanel = new PlaceholderPanel();
-        final javax.swing.JPanel repositoryPanel = new PlaceholderPanel();
+        final javax.swing.JLabel tunnelCommandLabel = new javax.swing.JLabel();
+        final javax.swing.JTextField tunnelCommandTextField = new javax.swing.JTextField();
+        final javax.swing.JLabel tunnelHelpLabel = new javax.swing.JLabel();
+        final javax.swing.JLabel tunnelLabel = new javax.swing.JLabel();
         // End of variables declaration//GEN-END:variables
         
 }

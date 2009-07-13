@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -60,9 +60,6 @@ import org.netbeans.modules.subversion.Subversion;
  * Abstract wizard panel with <codE>valid</code>
  * and <codE>errorMessage</code> bound properties.
  *
- * <p>Components use 3:2 (60x25 chars) size mode
- * to avoid wizard resizing after [next>].
- *
  * @author Petr Kuzel
  */
 public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
@@ -71,15 +68,8 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
     private boolean valid;
     private JComponent panel;
     private volatile boolean underConstruction;
-    private String errorMessage;
-    private boolean applyStandaloneLayout;
-
-    /**
-     * If called before getComponent it disables 3:2 size mode.
-     */
-    public void applyStandaloneLayout() {
-        applyStandaloneLayout = true;
-    }
+    private WizardMessage errorMessage;
+    private boolean isInfo;
 
     /**
      * Calls to createComponent. Noramalizes size nad assigns
@@ -91,12 +81,6 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
                 underConstruction = true;
                 panel = createComponent();
                 HelpCtx.setHelpIDString(panel, getClass().getName());
-                if (applyStandaloneLayout == false) {
-                    JTextArea template = new JTextArea();
-                    template.setColumns(60);
-                    template.setRows(25);
-                    panel.setPreferredSize(template.getPreferredSize());
-                }
             } catch (RuntimeException ex) {
                 Subversion.LOG.log(Level.SEVERE, null, ex);
             } finally {
@@ -131,19 +115,19 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
      * Valid with error message that can be corrected
      * by external change.
      */
-    protected final void valid(String extErrorMessage) {
-        setValid(true, extErrorMessage);
+    protected final void valid(WizardMessage msg) {
+        setValid(true, msg);
     }
 
-    protected final void invalid(String message) {
-        setValid(false, message);
+    protected final void invalid(WizardMessage msg) {
+        setValid(false, msg);
     }
 
     public final boolean isValid() {
         return valid;
     }
 
-    public final String getErrorMessage() {
+    public final WizardMessage getErrorMessage() {
         return errorMessage;
     }
 
@@ -153,8 +137,8 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
         if (isValid() == false || errorMessage != null) {
             throw new WizardValidationException (
                 panel,
-                errorMessage,
-                errorMessage
+                errorMessage.getMessage(),
+                errorMessage.getMessage()
             );
         }
     }
@@ -177,11 +161,13 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
         }
     }
 
-    private void setValid(boolean valid, String errorMessage) {
+    private void setValid(boolean valid, WizardMessage msg) {
         boolean fire = AbstractStep.this.valid != valid;
-        fire |= errorMessage != null && (errorMessage.equals(this.errorMessage) == false);
+        fire |= ((msg != null && errorMessage == null)  ||
+                 (msg == null && errorMessage != null)) ||
+                 (msg != null && errorMessage !=null && !msg.getMessage().equals(errorMessage.getMessage())) ;
         AbstractStep.this.valid = valid;
-        this.errorMessage = errorMessage;
+        errorMessage = msg;
         if (fire) {
             fireChange();
         }
@@ -198,6 +184,21 @@ public abstract class AbstractStep implements WizardDescriptor.ValidatingPanel {
         while (it.hasNext()) {
             ChangeListener listener = it.next();
             listener.stateChanged(event);
+        }
+    }
+
+    public class WizardMessage {
+        private final boolean info;
+        private final String msg;
+        public WizardMessage(String msg, boolean isInfo) {
+            this.info = isInfo;
+            this.msg = msg;
+        }
+        public boolean isInfo() {
+            return info;
+        }
+        public String getMessage() {
+            return msg;
         }
     }
 

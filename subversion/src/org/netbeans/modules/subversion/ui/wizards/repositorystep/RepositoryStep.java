@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.subversion.ui.wizards.repositorystep;
 
-import java.awt.BorderLayout;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.net.MalformedURLException;
@@ -57,6 +56,7 @@ import org.netbeans.modules.subversion.client.WizardStepProgressSupport;
 import org.netbeans.modules.subversion.ui.repository.Repository;
 import org.netbeans.modules.subversion.ui.repository.RepositoryConnection;
 import org.netbeans.modules.subversion.ui.wizards.AbstractStep;
+import org.netbeans.modules.subversion.util.SvnUtils;
 import org.openide.WizardDescriptor;
 import org.openide.util.HelpCtx;
 import org.openide.util.NbBundle;
@@ -108,7 +108,6 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
             repository = new Repository(repositoryModeMask, title); 
             repository.addPropertyChangeListener(this);
             panel = new RepositoryStepPanel();            
-            panel.repositoryPanel.setLayout(new BorderLayout());
             panel.repositoryPanel.add(repository.getPanel());
             valid();
         }                        
@@ -155,7 +154,7 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
         try {
             return repository.getSelectedRC();
         } catch (Exception ex) {
-            invalid(ex.getLocalizedMessage()); 
+            invalid(new AbstractStep.WizardMessage(ex.getLocalizedMessage(), false));
             return null;
         }
     }                       
@@ -163,9 +162,9 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
     public void propertyChange(PropertyChangeEvent evt) {
         if(evt.getPropertyName().equals(Repository.PROP_VALID)) {
             if(repository.isValid()) {
-                valid(repository.getMessage());
+                valid(new AbstractStep.WizardMessage(repository.getMessage(), false));
             } else {
-                invalid(repository.getMessage());
+                invalid(new AbstractStep.WizardMessage(repository.getMessage(), false));
             }
         }
     }
@@ -187,20 +186,22 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
             if (rc == null) {
                 return;
             }
-            String invalidMsg = null;
+            storeHistory();
+            AbstractStep.WizardMessage invalidMsg = null;
             try {
-                invalid(null);                
+                invalid(null);
 
                 SvnClient client;
                 SVNUrl url = rc.getSvnUrl();
                 try {
                     int handledExceptions = (SvnClientExceptionHandler.EX_DEFAULT_HANDLED_EXCEPTIONS) ^ // the default without
-                                            (SvnClientExceptionHandler.EX_NO_HOST_CONNECTION |        // host connection errors (misspeled host or proxy urls, ...)
-                                             SvnClientExceptionHandler.EX_AUTHENTICATION) ;           // authentication errors 
+                                            (SvnClientExceptionHandler.EX_NO_HOST_CONNECTION |          // host connection errors (misspeled host or proxy urls, ...)
+                                             SvnClientExceptionHandler.EX_AUTHENTICATION |              // authentication errors
+                                             SvnClientExceptionHandler.EX_SSL_NEGOTIATION_FAILED);      // client cert errors
                     client = Subversion.getInstance().getClient(url, rc.getUsername(), rc.getPassword(), handledExceptions);
                 } catch (SVNClientException ex) {
                     SvnClientExceptionHandler.notifyException(ex, true, true);
-                    invalidMsg = org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Invalid", rc.getUrl()); 
+                    invalidMsg = new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Invalid", rc.getUrl()), false);
                     return;
                 }
                     
@@ -211,16 +212,14 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
                     info = client.getInfo(url);
                 } catch (SVNClientException ex) {
                     annotate(ex);
-                    invalidMsg = SvnClientExceptionHandler.parseExceptionMessage(ex);
+                    invalidMsg = new AbstractStep.WizardMessage(SvnClientExceptionHandler.parseExceptionMessage(ex), false);
                 } 
                 if(isCanceled()) {
                     return;
                 }
 
                 if(info != null) {
-                    // XXX convert to repositoryConnection                    
-
-                    SVNUrl repositoryUrl = info.getRepository();
+                    SVNUrl repositoryUrl = SvnUtils.decode(info.getRepository());
                     if(repositoryUrl==null) {
                         // XXX see issue #72810 and #72921. workaround!
                         repositoryUrl = rc.getSvnUrl();
@@ -235,17 +234,16 @@ public class RepositoryStep extends AbstractStep implements WizardDescriptor.Asy
 
                     repositoryFile = new RepositoryFile(repositoryUrl, repositoryFolder, revision);
                 } else {
-                    invalidMsg = org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Invalid", rc.getUrl()); // NOI18N
+                    invalidMsg = new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Invalid", rc.getUrl()), false); // NOI18N
                     return;
                 }
             } catch (MalformedURLException ex) {
                 Subversion.LOG.log(Level.INFO, null, ex); // should not happen
             } finally {
                 if(isCanceled()) {
-                    valid(org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Canceled")); // NOI18N
+                    valid(new AbstractStep.WizardMessage(org.openide.util.NbBundle.getMessage(RepositoryStep.class, "CTL_Repository_Canceled"), false)); // NOI18N
                 } else if(invalidMsg == null) {
                   valid();
-                  storeHistory();
                 } else {
                   valid(invalidMsg);
                 }                
