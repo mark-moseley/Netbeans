@@ -95,6 +95,11 @@ public class ChildrenKeysTest extends NbTestCase {
     }
 
     @Override
+    protected int timeOut() {
+        return 400000;
+    }
+
+    @Override
     protected void setUp() throws Exception {
         LOG = Logger.getLogger("test." + getName());
     }
@@ -164,6 +169,7 @@ public class ChildrenKeysTest extends NbTestCase {
      * getNodes() by another thread callig getNodes.
      * Other thread
      */
+    @RandomlyFails // NB-Core-Build #1643, in ChildrenLazyKeysTest
     public void testGetNodesFromWriteAccess() throws Exception {
         final String[] keys = { "Nenik", "Tulach" };
         Keys o = new Keys (lazy(), keys);
@@ -254,6 +260,32 @@ public class ChildrenKeysTest extends NbTestCase {
 
         assertSame("First node the same", now[0].getName(), after[0].getName());
         assertSame("Last node the same", now[2].getName(), after[1].getName());
+    }
+
+    public void testGetNodesOptimal() throws Exception {
+        class KOpt extends Keys {
+
+            KOpt() {
+                super(lazy());
+            }
+            int cnt;
+
+            @Override
+            public Node[] getNodes(boolean optimal) {
+                assertTrue("Only calling with true", optimal);
+                cnt++;
+                return super.getNodes(optimal);
+            }
+        }
+
+        KOpt k = new KOpt();
+        k.keys("1", "2", "3");
+        Node n = createNode(k);
+
+        Node[] arr = n.getChildren().getNodes(true);
+        assertEquals("3 nodes", 3, arr.length);
+        assertEquals("Calling cnt once", 1, k.cnt);
+
     }
 
     public void testRefreshOnFavoritesAdding() throws Exception {
@@ -507,6 +539,7 @@ public class ChildrenKeysTest extends NbTestCase {
         l.assertNoEvents("No next events");
     }
 
+    @RandomlyFails // OOME from ChildrenFilterAsKeysTest in NB-Core-Build #1687, and anyway uses sleep a lot
     public void testSlowRemoveNotify () throws Throwable {
         class K extends Keys {
             int addNotify;
@@ -588,6 +621,7 @@ public class ChildrenKeysTest extends NbTestCase {
         }
     }
 
+    @RandomlyFails // expected due to use of Thread.sleep
     public void testGarbageCollectProblemsWithFilterNodes () throws Throwable {
         class K extends Keys {
             int addNotify;
@@ -649,7 +683,7 @@ public class ChildrenKeysTest extends NbTestCase {
             fail("Should not be GCed: " + k.created);
         }
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             if (k.removeNotify != 0) {
                 break;
             }
@@ -664,7 +698,7 @@ public class ChildrenKeysTest extends NbTestCase {
 
         waitActiveReferenceQueue();
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 3; i++) {
             arr = k.getNodes();
             assertEquals("Still one node", 1, arr.length);
             assertEquals("Still named right", "A", arr[0].getName());
@@ -729,6 +763,8 @@ public class ChildrenKeysTest extends NbTestCase {
         assertNull ("Garbage collected nodes are not notified", k.arr);
         l.assertNoEvents("GC does not generate events");
 
+        List<Node> snapshot = node.getChildren().snapshot();
+        assertEquals("Count remains one", 1, snapshot.size());
         assertEquals("Count remains one", 1, node.getChildren().getNodesCount());
         // emptied
         k.keys();
@@ -1670,6 +1706,7 @@ public class ChildrenKeysTest extends NbTestCase {
         assertEquals("a3", snapshot.get(2).getName());
     }
 
+    @RandomlyFails // from ChildrenFilterAsKeysTest in NB-Core-Build #2180
     public void testSnapshotSize() {
         class K extends Keys {
 
@@ -1777,11 +1814,21 @@ public class ChildrenKeysTest extends NbTestCase {
             }
         }
 
+        class HoldingListener extends Listener {
+            List<Node> hold = new ArrayList<Node>();
+
+            @Override
+            public void childrenAdded(NodeMemberEvent ev) {
+                super.childrenAdded(ev);
+                hold.addAll(ev.getSnapshot());
+            }
+        }
+
         K ch = new K(lazy(), "a", "b", "c");
         Node root = createNode(ch);
         List<Node> snapshot = root.getChildren().snapshot();
         assertEquals(3, snapshot.size());
-        Listener listener = new Listener();
+        Listener listener = new HoldingListener();
 
         root.addNodeListener(listener);
         ch.app = "_2";
@@ -1848,11 +1895,13 @@ public class ChildrenKeysTest extends NbTestCase {
         Node[] nodes = root.getChildren().getNodes();
         WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
         nodes = null;
+        /* too slow:
         try {
             assertGC("", ref);
         } catch (Error ex) {
             // OK
         }
+         */
         awtBlock.unblock();
         ch.keys("c");
         awtBlock.clearQueue();
@@ -1908,14 +1957,9 @@ public class ChildrenKeysTest extends NbTestCase {
 
         WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
         nodes = null;
-        try {
-            assertGC("", ref);
-        } catch (Error ex) {
-            if (lazy()) {
-                fail("Lazy node should be GCed");
-            }
-            // OK, default (eager) are GCed only before removeNotify()
-        }
+        if (lazy()) {
+            assertGC("Lazy node should be GCed", ref);
+        } // else OK, default (eager) are GCed only before removeNotify()
         ch.keys("b");
         assertEquals(1, listener.cnt);
     }
@@ -1956,14 +2000,9 @@ public class ChildrenKeysTest extends NbTestCase {
         Node[] nodes = root.getChildren().getNodes();
         WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
         nodes = null;
-        try {
-            assertGC("", ref);
-        } catch (Error ex) {
-            if (lazy()) {
-                fail("Lazy node should be GCed");
-            }
-            // OK, default (eager) are GCed only before removeNotify()
-        }
+        if (lazy()) {
+            assertGC("Lazy node should be GCed", ref);
+        } // else OK, default (eager) are GCed only before removeNotify()
         if (ch.removeNot) {
             fail("Original snapshot should be held by FilterNode to prevent removeNotify");
         }
@@ -2028,6 +2067,84 @@ public class ChildrenKeysTest extends NbTestCase {
         root.addNodeListener(l1);
         root.addNodeListener(l2);
         ch.keys("a1", "a2", "-a3");
+    }
+
+    public void testGetSnapshotWhileAddNotify() {
+        final CountDownLatch l1 = new CountDownLatch(1);
+        final CountDownLatch l2 = new CountDownLatch(1);
+        class K extends Keys {
+
+            public K(boolean lazy, String... args) {
+                super(lazy(), args);
+            }
+
+            @Override
+            protected void addNotify() {
+                try {
+                    l1.countDown();
+                    l2.await();
+                } catch (InterruptedException ex) {
+                    Exceptions.printStackTrace(ex);
+                }
+                super.addNotify();
+            }
+        }
+
+        Keys ch = new K(lazy(), "a1", "a2");
+        final Node root = createNode(ch);
+
+        class Listener extends NodeAdapter {
+
+            List<Node> snapshot;
+
+            public Listener(List<Node> snapshot) {
+                this.snapshot = snapshot;
+            }
+
+            @Override
+            public void childrenAdded(NodeMemberEvent ev) {
+                snapshot = ev.getSnapshot();
+            }
+
+            @Override
+            public void childrenRemoved(NodeMemberEvent ev) {
+                List<Node> prevSnapshot = ev.getPrevSnapshot();
+                if (lazy()) {
+                    EntrySupport.Lazy.LazySnapshot ls = (EntrySupport.Lazy.LazySnapshot) snapshot;
+                    EntrySupport.Lazy.LazySnapshot pls = (EntrySupport.Lazy.LazySnapshot) prevSnapshot;
+                    assertEquals(ls.entries, pls.entries);
+                } else {
+                    assertEquals(snapshot, prevSnapshot);
+                }
+                snapshot = ev.getSnapshot();
+            }
+        }
+        Thread t1 = new Thread() {
+            @Override
+            public void run() {
+                root.getChildren().getNodes();
+            }
+        };
+        t1.start();
+        try {
+            l1.await();
+        } catch (InterruptedException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        try {
+            Children.PR.enterReadAccess();
+            Listener l = new Listener(root.getChildren().snapshot());
+            root.addNodeListener(l);
+        } finally {
+            Children.PR.exitReadAccess();
+        }
+        l2.countDown();
+        try {
+            t1.join();
+        } catch (InterruptedException ex) {
+            Exceptions.printStackTrace(ex);
+        }
+        ch.keys("a3", "a4");
     }
 
     public void testEventSnapshotConsistencyAfterSetChildrenToSameLaziness() {
@@ -2113,7 +2230,7 @@ public class ChildrenKeysTest extends NbTestCase {
             }
         }
 
-        final Children ch = new K(lazy(), "a1", "a2");
+        final K ch = new K(lazy(), "a1", "a2");
         final Node root = createNode(ch);
         Node[] nodes = null;
         try {
@@ -2124,14 +2241,9 @@ public class ChildrenKeysTest extends NbTestCase {
         assertEquals("Should be only 1", 1, nodes.length);
         assertEquals("a2", nodes[0].getName());
 
-        /*WeakReference<Node> ref = new WeakReference<Node>(nodes[0]);
-        nodes = null;
-        assertGC("should be GCed", ref);
-
+        ch.keys("c1");
         nodes = root.getChildren().getNodes();
-        assertEquals("Should be 2", 2, nodes.length);
-        assertEquals("a1", nodes[0].getName());
-        assertEquals("a2", nodes[1].getName());*/
+        assertEquals("c1", nodes[0].getName());
     }
 
     @RandomlyFails // assumed to suffer from same random problem as testGetNodesFromTwoThreads57769; see Thread.sleep
