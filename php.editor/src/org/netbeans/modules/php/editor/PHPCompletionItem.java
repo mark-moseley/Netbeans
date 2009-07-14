@@ -44,20 +44,23 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import javax.swing.ImageIcon;
-import org.netbeans.modules.gsf.api.CompilationInfo;
-import org.netbeans.modules.gsf.api.CompletionProposal;
-import org.netbeans.modules.gsf.api.ElementHandle;
-import org.netbeans.modules.gsf.api.ElementKind;
-import org.netbeans.modules.gsf.api.HtmlFormatter;
-import org.netbeans.modules.gsf.api.Modifier;
+import org.netbeans.modules.csl.api.CompletionProposal;
+import org.netbeans.modules.csl.api.ElementHandle;
+import org.netbeans.modules.csl.api.ElementKind;
+import org.netbeans.modules.csl.api.HtmlFormatter;
+import org.netbeans.modules.csl.api.Modifier;
+import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.php.editor.CompletionContextFinder.KeywordCompletionType;
 import org.netbeans.modules.php.editor.index.IndexedClass;
 import org.netbeans.modules.php.editor.index.IndexedConstant;
 import org.netbeans.modules.php.editor.index.IndexedElement;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
 import org.netbeans.modules.php.editor.index.IndexedInterface;
+import org.netbeans.modules.php.editor.index.IndexedNamespace;
 import org.netbeans.modules.php.editor.index.PHPIndex;
 import org.netbeans.modules.php.editor.index.PredefinedSymbolElement;
+import org.netbeans.modules.php.editor.model.QualifiedName;
+import org.netbeans.modules.php.editor.model.nodes.NamespaceDeclarationInfo;
 import org.netbeans.modules.php.editor.parser.PHPParseResult;
 import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
@@ -146,7 +149,7 @@ public abstract class PHPCompletionItem implements CompletionProposal {
             return formatter.getText();
         } else if (element instanceof IndexedElement) {
             IndexedElement ie = (IndexedElement) element;
-            if (ie.getFile().isPlatform()){
+            if (ie.isPlatform()){
                 return NbBundle.getMessage(PHPCompletionItem.class, "PHPPlatform");
             }
 
@@ -303,6 +306,41 @@ public abstract class PHPCompletionItem implements CompletionProposal {
         }
     }
 
+    static class NamespaceItem extends PHPCompletionItem {
+
+        NamespaceItem(IndexedNamespace namespace, CompletionRequest request) {
+            super(namespace, request);
+        }
+
+        @Override public String getLhsHtml(HtmlFormatter formatter) {
+            IndexedNamespace namespace = ((IndexedNamespace)getElement());
+            formatter.name(getKind(), true);
+
+            if (namespace.isResolved()){
+                formatter.emphasis(true);
+                formatter.appendText(getName());
+                formatter.emphasis(false);
+            } else {
+                formatter.appendText(getName());
+            }
+
+            formatter.name(getKind(), false);
+
+            return formatter.getText();
+        }
+
+        public ElementKind getKind() {
+            return ElementKind.PACKAGE;
+        }
+
+        @Override
+        public String getRhsHtml(HtmlFormatter formatter) {
+            return null;
+        }
+
+
+    }
+
     static class ConstantItem extends PHPCompletionItem {
         private IndexedConstant constant = null;
 
@@ -351,14 +389,25 @@ public abstract class PHPCompletionItem implements CompletionProposal {
         public String getCustomInsertTemplate() {
             if (endWithDoubleColon) {
                 StringBuilder builder = new StringBuilder();
-                builder.append(getName());
+                ElementHandle element = getElement();
+                if (element instanceof IndexedClass) {
+                    String namespaceName = ((IndexedClass) element).getNamespaceName();
+                    if (namespaceName != null && !NamespaceDeclarationInfo.DEFAULT_NAMESPACE_NAME.equals(namespaceName)) {
+                        QualifiedName qn = QualifiedName.create(namespaceName);
+                        qn = qn.append(QualifiedName.createUnqualifiedName(getName())).toFullyQualified();
+                        builder.append(qn.toString());
+
+                    } else {
+                        builder.append(getName());
+                    }
+                } else {
+                    builder.append(getName());
+                }
                 builder.append("::${cursor}"); //NOI18N
                 return builder.toString();
             }
             return super.getCustomInsertTemplate();
         }
-
-
     }
 
     public static ImageIcon getInterfaceIcon() {
@@ -382,6 +431,27 @@ public abstract class PHPCompletionItem implements CompletionProposal {
             }
             return INTERFACE_ICON;
         }
+
+        @Override
+        public String getCustomInsertTemplate() {
+            StringBuilder builder = new StringBuilder();
+            ElementHandle element = getElement();
+            if (element instanceof IndexedInterface) {
+                String namespaceName = ((IndexedInterface) element).getNamespaceName();
+                if (namespaceName != null && !NamespaceDeclarationInfo.DEFAULT_NAMESPACE_NAME.equals(namespaceName)) {
+                    QualifiedName qn = QualifiedName.create(namespaceName);
+                    qn = qn.append(QualifiedName.createUnqualifiedName(getName())).toFullyQualified();
+                    builder.append(qn.toString());
+
+                } else {
+                    builder.append(getName());
+                }
+            } else {
+                builder.append(getName());
+            }
+            return builder.toString();
+        }
+    
 
         @Override
         public ImageIcon getIcon() {
@@ -544,6 +614,21 @@ public abstract class PHPCompletionItem implements CompletionProposal {
         }
 
         @Override
+        public String getRhsHtml(HtmlFormatter formatter) {
+            if (getElement() instanceof IndexedFunction && getElement().getIn() != null) {
+                String namespaceName = ((IndexedFunction)getElement()).getNamespaceName();
+                if (namespaceName != null && !NamespaceDeclarationInfo.DEFAULT_NAMESPACE_NAME.equals(namespaceName)) {
+                    QualifiedName qn = QualifiedName.create(namespaceName);
+                    qn = qn.append(QualifiedName.createUnqualifiedName(getElement().getIn())).toFullyQualified();
+                    formatter.appendText(qn.toString());
+                    return formatter.getText();
+                }
+            } 
+            return super.getRhsHtml(formatter);
+        }
+
+
+        @Override
         public String getName() {
             String in = getElement().getIn();
             return (in != null) ? in : super.getName();
@@ -573,7 +658,20 @@ public abstract class PHPCompletionItem implements CompletionProposal {
         @Override
         public String getCustomInsertTemplate() {
             StringBuilder template = new StringBuilder();
-            template.append(getName());
+            ElementHandle element = getElement();
+            if (element instanceof IndexedFunction) {
+                String namespaceName = ((IndexedFunction)element).getNamespaceName();
+                if (namespaceName != null && !NamespaceDeclarationInfo.DEFAULT_NAMESPACE_NAME.equals(namespaceName)) {
+                    QualifiedName qn = QualifiedName.create(namespaceName);
+                    qn = qn.append(QualifiedName.createUnqualifiedName(getName())).toFullyQualified();
+                    template.append(qn.toString());
+
+                } else {
+                    template.append(getName());
+                }
+            } else {
+                template.append(getName());
+            }
             template.append("("); //NOI18N
 
             List<String> params = getInsertParams();
@@ -583,6 +681,9 @@ public abstract class PHPCompletionItem implements CompletionProposal {
                 template.append("${php-cc-"); //NOI18N
                 template.append(Integer.toString(i));
                 template.append(" default=\""); // NOI18N
+                if (param.startsWith("&")) {//NOI18N
+                    param = param.substring(1);
+                }
                 template.append(param);
                 template.append("\"}"); //NOI18N
 
@@ -672,6 +773,9 @@ public abstract class PHPCompletionItem implements CompletionProposal {
             for (int i = 0; i < parameters.length; i++) {
                 if (!paramsToSkip[i]) {
                     String param = parameters[i];
+                    if (param.startsWith("&")) {//NOI18N
+                        param = param.substring(1);
+                    }
 
                     if (firstParam) {
                         firstParam = false;
@@ -691,9 +795,9 @@ public abstract class PHPCompletionItem implements CompletionProposal {
         }
     }
 
-    static class FunctionDeclarationItem extends FunctionItem {
+    public static class FunctionDeclarationItem extends FunctionItem {
         private boolean isIface;
-        public FunctionDeclarationItem(IndexedFunction function, CompletionRequest request, int optionalArgCount,boolean isIface) {
+            public FunctionDeclarationItem(IndexedFunction function, CompletionRequest request, int optionalArgCount,boolean isIface) {
             super(function, request, optionalArgCount);
             this.isIface = isIface;
         }
@@ -730,7 +834,7 @@ public abstract class PHPCompletionItem implements CompletionProposal {
                 template.append("${cursor};\n");//NOI18N
             } else {
                 String functionSignature = getFunction().getFunctionSignature();
-                template.append("${cursor}parent::"+ functionSignature +";\n");//NOI18N
+                template.append("${cursor}parent::"+ functionSignature.replace("&$", "$") +";\n");//NOI18N
             }
             return template.toString();
         }
@@ -761,7 +865,7 @@ public abstract class PHPCompletionItem implements CompletionProposal {
     static class CompletionRequest {
         public  int anchor;
         public  PHPParseResult result;
-        public  CompilationInfo info;
+        public  ParserResult info;
         public  String prefix;
         public  String currentlyEditedFileURL;
         PHPIndex index;
