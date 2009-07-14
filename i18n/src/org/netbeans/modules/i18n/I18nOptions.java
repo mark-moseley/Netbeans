@@ -44,22 +44,22 @@ package org.netbeans.modules.i18n;
 
 
 import java.io.File;
-import java.io.File;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.prefs.Preferences;
+import org.netbeans.api.java.classpath.ClassPath;
+import org.netbeans.api.java.queries.SourceForBinaryQuery;
 
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
-import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.util.HelpCtx;
 import org.openide.loaders.DataObjectNotFoundException;
-import org.openide.nodes.BeanNode;
 import org.openide.util.NbPreferences;
 
 /**
@@ -97,8 +97,6 @@ public class I18nOptions {
     public static final String PROP_LAST_RESOURCE2 = "lastResource2"; // NOI18N
 
     
-    /** Provided due exeternaliazation only. 
-     * Don't create this object directly use superclass <code>findObject</code> method instead. */
     private I18nOptions() {}
 
     public static I18nOptions getDefault() {
@@ -108,11 +106,6 @@ public class I18nOptions {
     private  static Preferences getPreferences() {
         return NbPreferences.forModule(I18nOptions.class);
     }    
-    
-    /** Implements superclass abstract method. */
-    public String displayName() {
-        return I18nUtil.getBundle().getString("LBL_Internationalization");
-    }
     
     /** Getter for init java code property. */
     public String getInitJavaCode() {
@@ -175,11 +168,20 @@ public class I18nOptions {
         getPreferences().putBoolean(PROP_REPLACE_RESOURCE_VALUE,
                                     replaceResourceValue);
     }
-    
+
     /** Getter for last resource property. */
+    @Deprecated
     public DataObject getLastResource2() {
+        return getLastResource2(null);
+    }
+
+    /** Getter for last resource property. */
+    public DataObject getLastResource2(DataObject srcDataObject) {
         String path = getPreferences().get(PROP_LAST_RESOURCE2,null);
-        FileObject f = (path != null) ? findFileObject(path) : null;
+        if(path == null) {
+            return null;
+        }
+        FileObject f = (srcDataObject != null) ? findFileObject(srcDataObject, path) : findFileObject(path);
         if ((f != null) && !f.isFolder() && f.isValid()) {
             try {
                 return DataObject.find(f);
@@ -224,6 +226,7 @@ public class I18nOptions {
         return retval.toArray(new FileSystem[retval.size()]);
     }
     
+    @Deprecated
     private static FileObject findFileObject(String path) {
         for (FileSystem fileSystem : getFileSystems()) {
             FileObject retval = fileSystem.findResource(path);
@@ -234,7 +237,47 @@ public class I18nOptions {
         return null;
     }
 
-    private static BeanNode createViewNode() throws java.beans.IntrospectionException {
-        return new BeanNode(I18nOptions.getDefault());
-    }             
+    private static FileObject findFileObject(DataObject srcDataObject, String path) {
+        FileObject pfo = srcDataObject.getPrimaryFile();
+        ClassPath cp = ClassPath.getClassPath(pfo, ClassPath.EXECUTE);
+
+        for(FileObject fo : getRoots(cp)) {
+            try {
+                FileSystem fs = fo.getFileSystem();
+                if (fs != null) {
+                    FileObject retval = fs.findResource(path);
+                    if (retval != null) {
+                        return retval;
+                    }
+                }
+            } catch (FileStateInvalidException ex) {
+                Logger.getLogger(I18nOptions.class.getName()).log(Level.INFO, null, ex);
+            }
+        }
+        
+        return null;
+    }
+
+
+    private static List<FileObject> getRoots(ClassPath cp) {
+        ArrayList<FileObject> l = new ArrayList<FileObject>(cp.entries().size());
+        for (ClassPath.Entry e : cp.entries()) {
+
+            // try to map it to sources
+            URL url = e.getURL();
+            SourceForBinaryQuery.Result r= SourceForBinaryQuery.findSourceRoots(url);
+            FileObject [] fos = r.getRoots();
+            if (fos.length > 0) {
+                for (FileObject fo : fos) {
+                    l.add(fo);
+                }
+            } else {
+                if (e.getRoot()!=null) 
+                    l.add(e.getRoot()); // add the class-path location
+                                        // directly
+            }
+        }
+
+        return l;
+    }    
 }
