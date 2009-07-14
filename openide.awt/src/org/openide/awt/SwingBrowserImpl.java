@@ -58,6 +58,7 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 
@@ -66,6 +67,7 @@ import java.util.Vector;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.JEditorPane;
+import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
@@ -94,6 +96,7 @@ final class SwingBrowserImpl extends HtmlBrowser.Impl implements Runnable {
     private PropertyChangeSupport pcs;
     private String statusMessage = ""; // NOI18N
     private SwingBrowser swingBrowser;
+    private final JScrollPane scroll;
 
     /** list of accessed URLs for back/fwd navigation */
     private Vector<Object> historyList;
@@ -111,6 +114,7 @@ final class SwingBrowserImpl extends HtmlBrowser.Impl implements Runnable {
     SwingBrowserImpl() {
         pcs = new PropertyChangeSupport(this);
         swingBrowser = new SwingBrowser();
+        scroll = new JScrollPane(swingBrowser);
         historyList = new Vector<Object>(5, 3);
         historyIndex = -1;
         swingBrowser.addPropertyChangeListener(
@@ -163,7 +167,7 @@ final class SwingBrowserImpl extends HtmlBrowser.Impl implements Runnable {
     * @return visual component of html browser.
     */
     public java.awt.Component getComponent() {
-        return swingBrowser;
+        return scroll;
     }
 
     /**
@@ -534,12 +538,19 @@ final class SwingBrowserImpl extends HtmlBrowser.Impl implements Runnable {
         protected InputStream getStream(URL page) throws IOException {
             SwingUtilities.invokeLater(SwingBrowserImpl.this);
 
-            // #53207: pre-read encoding from loaded URL
-            String charset = findEncodingFromURL(page.openStream());
-            LOG.log(Level.FINE, "Url " + page + " has charset " + charset); // NOI18N
+            try {
+                // #53207: pre-read encoding from loaded URL
+                String charset = findEncodingFromURL(page.openStream());
+                LOG.log(Level.FINE, "Url " + page + " has charset " + charset); // NOI18N
 
-            if (charset != null) {
-                putClientProperty("charset", charset);
+                if (charset != null) {
+                    putClientProperty("charset", charset);
+                }
+            } catch( IllegalArgumentException iaE ) {
+                //#165266 - empty url
+                MalformedURLException e = new MalformedURLException();
+                e.initCause(iaE);
+                throw e;
             }
 
             // XXX debugger ought to set this temporarily
@@ -575,6 +586,13 @@ final class SwingBrowserImpl extends HtmlBrowser.Impl implements Runnable {
 
                 lastPaintException = true;
             }
+        }
+
+        @Override
+        public void scrollToReference(String reference) {
+            if( !isShowing() || null == getParent() || getWidth() < 1 || getHeight() < 1 )
+                return;
+            super.scrollToReference(reference);
         }
 
         /**

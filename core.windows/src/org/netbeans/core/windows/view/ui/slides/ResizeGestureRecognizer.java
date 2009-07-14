@@ -51,7 +51,9 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import javax.swing.JComponent;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JRootPane;
 import javax.swing.SwingUtilities;
 import org.netbeans.core.windows.Constants;
@@ -173,6 +175,10 @@ public class ResizeGestureRecognizer implements AWTEventListener {
             return;
         }
         MouseEvent evt = (MouseEvent)aWTEvent;
+        //#162118: When mouse is over main menu ignore event
+        if ((evt.getSource() instanceof JPopupMenu) || (evt.getSource() instanceof JMenuItem)) {
+            return;
+        }
         if (evt.getID() == MouseEvent.MOUSE_MOVED) {
             boolean noModif = evt.getModifiersEx() == 0;
             if (noModif && isInResizeArea(evt)) {
@@ -182,6 +188,10 @@ public class ResizeGestureRecognizer implements AWTEventListener {
                     JRootPane pane = SwingUtilities.getRootPane(comp);
                     oldGlass = pane.getGlassPane();
                     glass.setCursor(side);
+                    comp.setCursor(Constants.BOTTOM.equals(side) ?
+                      Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR) :
+                      Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR));
+
                     pane.setGlassPane(glass);
                     glass.setVisible(true);
                 }
@@ -235,6 +245,8 @@ public class ResizeGestureRecognizer implements AWTEventListener {
                 pane.setGlassPane(oldGlass);
             }
         }
+        if( null != comp )
+            comp.setCursor(null);
         oldGlass = null;
         startPoint = null;
     }
