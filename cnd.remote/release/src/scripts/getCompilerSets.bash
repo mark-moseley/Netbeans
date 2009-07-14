@@ -38,7 +38,7 @@
 # Version 2 license, then the option applies only if the new code is
 # made subject to such option by the copyright holder.
 
-VERSION=0.95
+VERSION=0.96
 
 # Prepend /usr/bin and /bin so we're ensured that standard Unix commands
 # don't get replaced by a non-standard version
@@ -153,10 +153,10 @@ do
 	then
 	    line="$line;dmake"
 	fi
-        gdb=$(type -p gdb)
-        if [ -n "$gdb" ]
+        dbx=$(type -p dbx)
+        if [ -n "$dbx" ]
         then
-            line="$line;gdb=$gdb"
+            line="$line;dbx=$dbx"
         fi
     elif [ -x "$f/gcc" -o -x "$f/g++" ]
     then
@@ -207,7 +207,7 @@ do
     then
 	found=
 	len=${#flavor}
-	for ((j=0; $j<$i; j=$j+1))
+	j=0; while [ $j -lt $i ];
 	do
 	    # check the flavor of ${cset[$j]} and skip if its a duplicate
 	    cpart="${cset[$j]}"
@@ -216,7 +216,7 @@ do
 		found=true
 		break
 	    fi
-	done
+	j=`expr $j + 1`; done
 	if [ -z "$found" ]
 	then
 	    cset[$i]=$line
@@ -228,8 +228,8 @@ done
 # Print the set of compiler collections, one per line
 if [ -n "${cset[*]}" ]
 then
-    for ((j=0; $j<$i; j=$j+1))
+    j=0; while [ $j -lt $i ];
     do
 	echo "${cset[$j]}"
-    done
+    j=$((j+1)); done
 fi
