@@ -52,7 +52,6 @@ import org.netbeans.jellytools.EditorOperator;
 import org.netbeans.jellytools.NewProjectWizardOperator;
 import org.netbeans.jellytools.NewWebProjectNameLocationStepOperator;
 import org.netbeans.jellytools.NewWebProjectServerSettingsStepOperator;
-import org.netbeans.jellytools.nodes.SourcePackagesNode;
 import org.netbeans.jemmy.EventTool;
 import org.netbeans.jemmy.JemmyException;
 import org.netbeans.jemmy.JemmyProperties;
@@ -62,7 +61,6 @@ import org.netbeans.jellytools.ProjectsTabOperator;
 import org.netbeans.jellytools.WizardOperator;
 import org.netbeans.jellytools.actions.RedeployProjectAction;
 import org.netbeans.jellytools.modules.j2ee.nodes.J2eeServerNode;
-import org.netbeans.jellytools.modules.web.nodes.WebPagesNode;
 import org.netbeans.jemmy.operators.JRadioButtonOperator;
 import org.netbeans.jemmy.operators.JTextFieldOperator;
 import org.netbeans.junit.NbModuleSuite;
@@ -71,14 +69,6 @@ import org.netbeans.junit.ide.ProjectSupport;
 /**
  */
 public class WebProjectValidationEE5 extends WebProjectValidation {
-
-    private static ProjectHelper phelper = new ProjectHelper() {
-
-        public Node getSourceNode() {
-            return new SourcePackagesNode(PROJECT_NAME);
-        }
-    };
-    
 
     static {
         PROJECT_NAME = "WebJ2EE5Project"; // NOI18N
@@ -100,13 +90,13 @@ public class WebProjectValidationEE5 extends WebProjectValidation {
         NbModuleSuite.Configuration conf = NbModuleSuite.createConfiguration(WebProjectValidationEE5.class);
         conf = addServerTests(Server.GLASSFISH, conf, 
               "testPreconditions", "testNewWebProject", "testRedeployProject",
-              "testNewJSP", "testNewJSP2", /*"testJSPNavigator",*/ "testNewServlet", "testNewServlet2",
+              "testNewJSP", "testNewJSP2", "testNewServlet", "testNewServlet2",
               "testCompileAllJSP", "testCompileJSP",
               "testCleanAndBuildProject", "testRunProject", "testRunJSP", "testViewServlet",
               "testRunServlet", "testCreateTLD", "testCreateTagHandler", "testRunTag",
-              "testNewHTML", /*"testHTMLNavigator",*/ "testRunHTML", "testNewSegment", "testNewDocument",
+              "testNewHTML", "testRunHTML", "testNewSegment", "testNewDocument",
               "testStopServer", "testStartServer", "testBrowserSettings", "testFinish"
-               /*"testJSPNavigator", "testHTMLNavigator" */);
+               );
         conf = conf.enableModules(".*").clusters(".*");
         return NbModuleSuite.create(conf); 
     }
@@ -177,7 +167,7 @@ public class WebProjectValidationEE5 extends WebProjectValidation {
         nameStep.next();
         NewWebProjectServerSettingsStepOperator serverStep = new NewWebProjectServerSettingsStepOperator();
         serverStep.selectServer(getServerNode(Server.GLASSFISH).getText());
-        serverStep.selectJavaEEVersion(org.netbeans.jellytools.Bundle.getString("org.netbeans.modules.j2ee.common.project.ui.Bundle", "JavaEESpecLevel_50"));
+        serverStep.selectJavaEEVersion(JAVA_EE_5);
         serverStep.next();
         NewWebProjectJSFFrameworkStepOperator frameworkStep = new NewWebProjectJSFFrameworkStepOperator();
         frameworkStep.finish();
