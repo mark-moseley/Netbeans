@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -44,6 +44,7 @@ package org.netbeans.modules.subversion.ui.update;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.ArrayList;
 import java.util.logging.Level;
 import org.netbeans.modules.subversion.*;
 import org.netbeans.modules.subversion.Subversion;
@@ -90,13 +91,31 @@ public class RevertModificationsAction extends ContextAction {
             return;
         }
         final Context ctx = getContext(nodes);
-        final File root = ctx.getRootFiles()[0];
+        File[] roots = ctx.getRootFiles();
+        // filter managed roots
+        List<File> l = new ArrayList<File>();
+        for (File file : roots) {
+            if(SvnUtils.isManaged(file)) {
+                l.add(file);
+            }
+        }
+        roots = l.toArray(new File[l.size()]);
+
+        if(roots == null || roots.length == 0) return;
+
+        File interestingFile;
+        if(roots.length == 1) {
+            interestingFile = roots[0];
+        } else {
+            interestingFile = SvnUtils.getPrimaryFile(roots[0]);
+        }
+
         final SVNUrl rootUrl;
         final SVNUrl url;
         
         try {
-            rootUrl = SvnUtils.getRepositoryRootUrl(root);
-            url = SvnUtils.getRepositoryUrl(root);
+            rootUrl = SvnUtils.getRepositoryRootUrl(interestingFile);
+            url = SvnUtils.getRepositoryUrl(interestingFile);
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
             return;
@@ -145,12 +164,15 @@ public class RevertModificationsAction extends ContextAction {
                             return;
                         }
                         SVNUrl url = SvnUtils.getRepositoryUrl(files[i]);
-                        revisions = recountStartRevision(client, url, revisions);
+                        RevertModifications.RevisionInterval targetInterval = recountStartRevision(client, url, revisions);
                         if(files[i].exists()) {
-                            client.merge(url, revisions.endRevision, url, revisions.startRevision, files[i], false, recursive);
+                            client.merge(url, targetInterval.endRevision,
+                                         url, targetInterval.startRevision,
+                                         files[i], false, recursive);
                         } else {
-                            assert revisions.startRevision instanceof SVNRevision.Number : "The revision has to be a Number when trying to undelete file!";
-                            client.copy(url, files[i], revisions.startRevision);
+                            assert targetInterval.startRevision instanceof SVNRevision.Number
+                                   : "The revision has to be a Number when trying to undelete file!";
+                            client.copy(url, files[i], targetInterval.startRevision);
                         }
                     }
                 } else {
@@ -164,12 +186,18 @@ public class RevertModificationsAction extends ContextAction {
                             deletedFiles.addAll(getDeletedParents(file));
                         }                        
                                 
-                        client.revert(files, recursive);
+                        // XXX JAVAHL client.revert(files, recursive);
+                        for (File file : files) {
+                            client.revert(file, recursive);
+                        }
                         
                         // revert also deleted parent folders
                         // for all undeleted files
                         if(deletedFiles.size() > 0) {
-                            client.revert(deletedFiles.toArray(new File[deletedFiles.size()]), false);   
+                            // XXX JAVAHL client.revert(deletedFiles.toArray(new File[deletedFiles.size()]), false);
+                            for (File file : deletedFiles) {
+                                client.revert(file, false);
+                            }    
                         }                        
                     }
                 }
@@ -212,16 +240,21 @@ public class RevertModificationsAction extends ContextAction {
     }
     
     private static RevertModifications.RevisionInterval recountStartRevision(SvnClient client, SVNUrl repository, RevertModifications.RevisionInterval ret) throws SVNClientException {
-        if(ret.startRevision.equals(SVNRevision.HEAD)) {
+        SVNRevision currStartRevision = ret.startRevision;
+        SVNRevision currEndRevision = ret.endRevision;
+
+        if(currStartRevision.equals(SVNRevision.HEAD)) {
             ISVNInfo info = client.getInfo(repository);
-            ret.startRevision = info.getRevision();
+            currStartRevision = info.getRevision();
         }
-        long start = Long.parseLong(ret.startRevision.toString());
-        if(start > 0) {
-            start = start - 1;
-        }
-        ret.startRevision = new SVNRevision.Number(start);
-        return ret;
+
+        long currStartRevNum = Long.parseLong(currStartRevision.toString());
+        long newStartRevNum = (currStartRevNum > 0) ? currStartRevNum - 1
+                                                    : currStartRevNum;
+
+        return new RevertModifications.RevisionInterval(
+                                         new SVNRevision.Number(newStartRevNum),
+                                         currEndRevision);
     }
 
 }
