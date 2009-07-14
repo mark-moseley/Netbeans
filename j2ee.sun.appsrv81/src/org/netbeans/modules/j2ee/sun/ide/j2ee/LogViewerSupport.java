@@ -43,9 +43,11 @@ package org.netbeans.modules.j2ee.sun.ide.j2ee;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -118,9 +120,6 @@ public final class LogViewerSupport extends Thread {
             logViewer.sampleInterval = sampleInterval;
             logViewer.startAtBeginning = startAtBeginning;
             Deployment.getDefault().addInstanceListener(new InstanceListener() {
-
-                public void changeDefaultInstance(String oldServerInstanceID, String newServerInstanceID) {
-                }
 
                 public void instanceAdded(String serverInstanceID) {
                 }
@@ -213,7 +212,7 @@ public final class LogViewerSupport extends Thread {
             }
             
             if(logfile.exists()) {
-                reader = new BufferedReader(new FileReader(logfile));
+                reader = new BufferedReader(new InputStreamReader(new FileInputStream(logfile), "UTF-8"));
                 int c;
                 String line;
 
@@ -323,7 +322,7 @@ public final class LogViewerSupport extends Thread {
                         }
                         
                         if(logfile.exists()) {
-                            reader = new BufferedReader(new FileReader(logfile));
+                            reader = new BufferedReader(new InputStreamReader(new FileInputStream(logfile), "UTF-8"));
                             currentIndex = 0;
                             needToRotate = false;
                         } else {
