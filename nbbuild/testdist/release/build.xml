@@ -40,18 +40,12 @@ However, if you add GPL Version 2 code and therefore, elected the GPL
 Version 2 license, then the option applies only if the new code is
 made subject to such option by the copyright holder.
 -->
-<!DOCTYPE api-answers PUBLIC "-//NetBeans//DTD Arch Answers//EN" "../../../../../..//antsrc/org/netbeans/nbbuild/Arch.dtd" [
-  <!ENTITY api-questions SYSTEM "../../../../../../antsrc/org/netbeans/nbbuild/Arch-api-questions.xml">
-]>
-
-<api-answers
-  question-version="1.29"
-  author="rmatous@netbeans.org"
->
-  &api-questions;
- <answer id="resources-preferences">
-    <api group="preferences" type="import" name="test-import" category="stable">
-        answer-read-preferences
-    </api>
- </answer>
-</api-answers>
+<project name="Test Distribution" default="all" basedir=".">
+    <property name="test.required.modules" value=""/>
+    <property name="test.types" value="unit:qa-functional"/>
+    <target name="all" description="Run all tests">
+        <subant genericantfile="all-tests.xml" buildpath="${test.types}">
+            <property name="test.required.modules" value="${test.required.modules}"/>
+        </subant>
+    </target>
+</project>

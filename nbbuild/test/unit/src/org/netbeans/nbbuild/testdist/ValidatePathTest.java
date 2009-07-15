@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -39,67 +39,60 @@
  * made subject to such option by the copyright holder.
  */
 
+package org.netbeans.nbbuild.testdist;
 
-package org.netbeans.modules.i18n;
-
-
-import java.awt.Image;
-import java.beans.BeanDescriptor;
-import java.beans.BeanInfo;
-import java.beans.IntrospectionException;
-import java.beans.SimpleBeanInfo;
-import java.beans.PropertyDescriptor;
-import java.util.ResourceBundle;
-
-import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
-
+import org.netbeans.nbbuild.testdist.ValidatePath;
+import java.io.File;
+import org.apache.tools.ant.BuildException;
+import org.apache.tools.ant.Project;
+import org.apache.tools.ant.types.Path;
+import org.netbeans.junit.NbTestCase;
 
 /**
- * Bean info for <code>I18nOptions</code> class.
- *
- * @author  Peter Zavadsky
+ * It tests ValidatePath ant tasks
+ * @author pzajac, Jesse Glick
  */
-public class I18nOptionsBeanInfo extends SimpleBeanInfo {
-    
-    /**
-     */
-    public BeanDescriptor getBeanDescriptor() {
-        BeanDescriptor descr = new BeanDescriptor(I18nOptions.class);
-        descr.setDisplayName(
-                NbBundle.getMessage(I18nOptions.class,
-                                    "LBL_Internationalization"));       //NOI18N
-        return descr;
+public class ValidatePathTest extends NbTestCase {
+
+    public ValidatePathTest(String name) {
+        super(name);
     }
 
-    /** Overrides superclass method. */
-    public PropertyDescriptor[] getPropertyDescriptors() {
+    private ValidatePath vp;
+    private Path path;
+
+    protected void setUp() throws Exception {
+        super.setUp();
+        clearWorkDir();
+        Project prj = new Project();
+        prj.setBaseDir(getWorkDir());
+        path = new Path(prj);
+        vp = new ValidatePath();
+        vp.setPath(path);
+    }
+
+    public void testEmptyPath() throws Exception {
+        vp.execute();
+    }
+
+    public void testValidFile() throws Exception {
+        File f = new File(getWorkDir(),"file1");
+        assertTrue("Cannot create temporary file",f.createNewFile());
+        path.setPath(f.getAbsolutePath());
+        vp.execute();
+    }
+
+    public void testValidPlusInvalidFile() throws Exception {
+        File f = new File(getWorkDir(),"file1");
+        assertTrue("Cannot create temporary file",f.createNewFile());
+        File f2 = new File(getWorkDir(),"file2");
+        path.setPath(f.getAbsolutePath() + ":" + f2.getAbsolutePath());
         try {
-            PropertyDescriptor replaceValuePD = new PropertyDescriptor(I18nOptions.PROP_REPLACE_RESOURCE_VALUE, I18nOptions.class);
-
-            ResourceBundle bundle = NbBundle.getBundle(I18nOptionsBeanInfo.class);
-            
-            // Set display names.
-            replaceValuePD.setDisplayName(bundle.getString("TXT_ReplaceResourceValue"));
-
-            // Set short descriptions.
-            replaceValuePD.setShortDescription(bundle.getString("TXT_ReplaceResourceValueDesc"));
-            
-            return new PropertyDescriptor[] {
-                replaceValuePD,
-            };
-        } catch(IntrospectionException ie) {
-            return null;
+            vp.execute();
+            fail("File " + f2.getPath() + " doesn't exist but task passed");
+        } catch (BuildException be) {
+            // ok
         }
     }
 
-    /** Overrides superclass method. */
-    public Image getIcon(int type) {
-        if ((type == BeanInfo.ICON_COLOR_16x16) || (type == BeanInfo.ICON_MONO_16x16)) {
-	    return Utilities.loadImage("org/netbeans/modules/i18n/i18nAction.gif"); // NOI18N
-        } else { // 32
-            return Utilities.loadImage("org/netbeans/modules/properties/propertiesKey32.gif"); // NOI18N
-        }
-    }
-    
 }
