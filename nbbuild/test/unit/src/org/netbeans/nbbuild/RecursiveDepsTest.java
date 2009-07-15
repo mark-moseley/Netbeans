@@ -57,16 +57,17 @@ public class RecursiveDepsTest extends NbTestCase {
     public RecursiveDepsTest(java.lang.String testName) {
         super(testName);
     }
-    
-    public static void main(java.lang.String[] args) {
-        junit.textui.TestRunner.run(suite());
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        clearWorkDir();
+        String prop = System.getProperty("nb_all");
+        assertNotNull("${nb_all} defined", prop);
+        File nball = new File(prop);
+        new File(nball, "nbbuild/nbproject/private/scan-cache-full.ser").delete();
+        new File(nball, "nbbuild/nbproject/private/scan-cache-standard.ser").delete();
     }
-    
-    public static Test suite() {
-        TestSuite suite = new NbTestSuite(RecursiveDepsTest.class);
-        return suite;
-    }
-    
     
     public void testDepsTest () throws Exception {
       // create test
