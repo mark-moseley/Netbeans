@@ -40,7 +40,6 @@ package org.netbeans.modules.dlight.visualizers.threadmap;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Rectangle;
 import java.io.Serializable;
@@ -53,20 +52,22 @@ import javax.swing.table.TableCellRenderer;
 import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState;
 
 /**
- * @author Alexander Simon
+ * @author Jiri Sedlacek
+ * @author Alexander Simon (adapted for CND)
  */
-public class ThreadSummaryCellRenderer extends JPanel implements TableCellRenderer, Serializable {
+public class ThreadStateCellRenderer extends JPanel implements TableCellRenderer, Serializable {
     private Color unselectedBackground;
     private Color unselectedForeground;
     private ThreadStateColumnImpl threadData;
     private ThreadsPanel viewManager; // view manager for this cell
-    private long threadTime;
-    private long threadRunningTime;
-    private long threadRunningRatio;
+    private long dataEnd;
+    private long dataStart;
+    private long viewEnd;
+    private long viewStart;
     private Map<String, AtomicInteger> map = new LinkedHashMap<String, AtomicInteger>();
 
     /** Creates a new instance of ThreadStateCellRenderer */
-    public ThreadSummaryCellRenderer(ThreadsPanel viewManager) {
+    public ThreadStateCellRenderer(ThreadsPanel viewManager) {
         this.viewManager = viewManager;
         map.put(ThreadState.ShortThreadState.Running.name(), new AtomicInteger());
         map.put(ThreadState.ShortThreadState.Blocked.name(), new AtomicInteger());
@@ -134,6 +135,11 @@ public class ThreadSummaryCellRenderer extends JPanel implements TableCellRender
             threadData = (ThreadStateColumnImpl) value;
         }
 
+        viewStart = viewManager.getViewStart();
+        viewEnd = viewManager.getViewEnd();
+        dataStart = viewManager.getDataStart();
+        dataEnd = viewManager.getDataEnd();
+
         return this;
     }
 
@@ -147,62 +153,28 @@ public class ThreadSummaryCellRenderer extends JPanel implements TableCellRender
     @Override
     public void paint(Graphics g) {
         super.paint(g);
-        int count = 0;
-        for (AtomicInteger i : map.values()) {
-            i.set(0);
-        }
-        for(int i = 0; i < threadData.size(); i++){
-            if (threadData.isAlive(i)) {
-                count++;
-                ThreadState state = threadData.getThreadStateAt(i);
-                for (int j = 0; j < state.size(); j++){
-                    String name = state.getStateName(j);
-                    AtomicInteger v = map.get(name);
-                    if (v != null) {
-                        v.set(v.get()+state.getState(j));
-                    } else {
-                        v = new AtomicInteger(state.getState(j));
-                        map.put(name, v);
+        paintTimeMarks(g);
+
+        if (threadData != null) {
+            int index = getFirstVisibleDataUnit();
+
+            if (index != -1) {
+                int width = getWidth();
+
+                if ((viewEnd - viewStart) > 0) {
+                    float factor = (float) width / (float) (viewEnd - viewStart);
+
+                    while ((index < threadData.size()) && (threadData.getThreadStateAt(index).getTimeStamp() <= viewEnd)) {
+                        // Thread alive
+                        if (threadData.isAlive(index)) {
+                            paintThreadState(g, index, threadData.getThreadStateAt(index), factor, width);
+                        }
+
+                        index++;
                     }
                 }
             }
         }
-        threadTime = count;
-        threadRunningTime = map.get(ThreadState.ShortThreadState.Running.name()).intValue();
-        int height = getHeight() - ThreadsPanel.THREAD_LINE_TOP_BOTTOM_MARGIN * 2;
-        if (count > 0) {
-            int rest = 0;
-            int oldRest = 0;
-            for (Map.Entry<String, AtomicInteger> entry : map.entrySet()){
-                AtomicInteger value = entry.getValue();
-                oldRest = rest;
-                rest = (value.get()+oldRest)%count;
-                value.set((value.get()+oldRest)/count);
-            }
-            rest = 100/2;
-            oldRest = 0;
-            int y = 6;
-            int ThreadWidth = ThreadsPanel.MIN_SUMMARY_COLUMN_WIDTH - 12;
-            for (Map.Entry<String, AtomicInteger> entry : map.entrySet()){
-                AtomicInteger value = entry.getValue();
-                oldRest = rest;
-                rest = (value.get()*ThreadWidth+oldRest)%100;
-                int d = (value.get()*ThreadWidth+oldRest)/100;
-                if (d > 0) {
-                    g.setColor(ThreadStateColumnImpl.getThreadStateColor(entry.getKey()));
-                    g.fillRect(y, ThreadsPanel.THREAD_LINE_TOP_BOTTOM_MARGIN, d, height);
-                }
-                y += d;
-            }
-        }
-        threadRunningRatio = map.get(ThreadState.ShortThreadState.Running.name()).intValue();
-        g.setColor(getBackground());
-        String s = ""+(threadRunningRatio/10)+"%"; // NOI18N
-        Font summary = new Font(null, Font.BOLD, height-2);
-        g.setFont(summary);
-        int y = getHeight() - ThreadsPanel.THREAD_LINE_TOP_BOTTOM_MARGIN - 2;
-        g.drawString(s, 6 + 3, y);
-        threadData.setSummary((int)threadRunningRatio/10);
     }
 
     /**
@@ -249,5 +221,104 @@ public class ThreadSummaryCellRenderer extends JPanel implements TableCellRender
      */
     @Override
     protected void firePropertyChange(String propertyName, Object oldValue, Object newValue) {
+    }
+
+    private int getFirstVisibleDataUnit() {
+        for (int i = 0; i < threadData.size(); i++) {
+            long timestamp = threadData.getThreadStateAt(i).getTimeStamp();
+
+            if ((timestamp <= viewEnd) && (i == (threadData.size() - 1))) {
+                return i; // last data unit before viewEnd
+            }
+
+            if (timestamp <= viewStart) {
+                if (threadData.getThreadStateAt(i+1).getTimeStamp() > viewStart) {
+                    return i; // data unit ends between viewStart and viewEnd
+                }
+            } else {
+                if (timestamp <= viewEnd) {
+                    return i; // data unit begins between viewStart and viewEnd
+                }
+            }
+        }
+
+        return -1;
+    }
+
+    private void paintThreadState(Graphics g, int index, ThreadState threadStateColor, float factor, int width) {
+        int x; // Begin of rectangle
+        int xx; // End of rectangle
+
+        x = Math.max((int) ((float) (threadData.getThreadStateAt(index).getTimeStamp() - viewStart) * factor), 0);
+
+        if (index < (threadData.size() - 1)) {
+            xx = Math.min((int) ((float) (threadData.getThreadStateAt(index + 1).getTimeStamp() - viewStart) * factor), width);
+        } else {
+            xx = Math.min((int) ((dataEnd - viewStart) * factor), width + 1);
+        }
+
+        int size = threadStateColor.size();
+        int delta = getHeight() - ThreadsPanel.THREAD_LINE_TOP_BOTTOM_MARGIN * 2;
+
+        for (AtomicInteger i : map.values()) {
+            i.set(0);
+        }
+        for(int i = 0; i < size; i++) {
+            map.get(threadStateColor.getStateName(i)).set(threadStateColor.getState(i));
+        }
+
+        int y = 0;
+        int rest = 100/2;
+        int oldRest = 0;
+        for (Map.Entry<String, AtomicInteger> entry : map.entrySet()){
+            int v = entry.getValue().get();
+            Color c = ThreadStateColumnImpl.getThreadStateColor(entry.getKey());
+            oldRest = rest;
+            rest = (v*delta+oldRest)%100;
+            int d = (v*delta+oldRest)/100;
+            y += d;
+            if (d > 0) {
+                g.setColor(c);
+                g.fillRect(x, ThreadsPanel.THREAD_LINE_TOP_BOTTOM_MARGIN + delta - y, xx - x, d);
+                //g.fillRect(x, 6, xx - x, getHeight() - 12);
+            }
+        }
+    }
+
+    private void paintTimeMarks(Graphics g) {
+        if ((viewEnd - viewStart) > 0) {
+            int firstValue = (int) (viewStart - dataStart);
+            int lastValue = (int) (viewEnd - dataStart);
+            float factor = (float) getWidth() / (float) (viewEnd - viewStart);
+            int optimalUnits = TimeLineUtils.getOptimalUnits(factor);
+
+            int firstMark = Math.max((int) (Math.ceil((double) firstValue / optimalUnits) * optimalUnits), 0);
+
+            int currentMark = firstMark - optimalUnits;
+
+            while (currentMark <= (lastValue + optimalUnits)) {
+                if (currentMark >= 0) {
+                    float currentMarkRel = currentMark - firstValue;
+                    int markPosition = (int) (currentMarkRel * factor);
+                    paintTimeTicks(g, (int) (currentMarkRel * factor), (int) ((currentMarkRel + optimalUnits) * factor),
+                            TimeLineUtils.getTicksCount(optimalUnits));
+                    g.setColor(TimeLineUtils.MAIN_TIMELINE_COLOR);
+                    g.drawLine(markPosition, 0, markPosition, getHeight() - 1);
+                }
+
+                currentMark += optimalUnits;
+            }
+        }
+    }
+
+    private void paintTimeTicks(Graphics g, int startPos, int endPos, int count) {
+        float factor = (float) (endPos - startPos) / (float) count;
+
+        g.setColor(TimeLineUtils.TICK_TIMELINE_COLOR);
+
+        for (int i = 1; i < count; i++) {
+            int x = startPos + (int) (i * factor);
+            g.drawLine(x, 0, x, getHeight() - 1);
+        }
     }
 }
