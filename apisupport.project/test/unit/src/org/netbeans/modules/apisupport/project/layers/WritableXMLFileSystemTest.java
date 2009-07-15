@@ -52,6 +52,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import org.netbeans.modules.apisupport.project.TestBase;
+import org.netbeans.modules.apisupport.project.layers.LayerUtils.SavableTreeEditorCookie;
+import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
@@ -107,9 +109,46 @@ public class WritableXMLFileSystemTest extends LayerTestBase {
         x = fs.findResource("x");
         assertNotNull(x);
         assertEquals("more stuff", TestBase.slurp(x));
-        // XXX check that using a nbres: or nbresloc: URL protocol works here too (if we specify a classpath)
     }
-    
+
+    // check that nbres: and nbresloc: URL protocols work here too (with a classpath)
+    public void testNBResLocURL() throws Exception {
+        Map<String, String> files = new HashMap<String, String>();
+        files.put("org/test/x.txt", "stuff");
+        files.put("org/test/resources/y.txt", "more stuff");
+        Layer orig = new Layer("<file name='x' url='nbres:/org/test/x.txt'/><file name='y' url='nbresloc:/org/test/resources/y.txt'/>", files);
+        FileObject orgTest = FileUtil.createFolder(new File(orig.folder, "org/test"));
+        FileObject lf = orig.f.copy(orgTest, "layer", "xml");
+        SavableTreeEditorCookie cookie = LayerUtils.cookieForFile(lf);
+        FileSystem fs = new WritableXMLFileSystem(lf.getURL(), cookie, 
+                ClassPathSupport.createClassPath(new FileObject[] { FileUtil.toFileObject(orig.folder) } ));
+        FileObject x = fs.findResource("x");
+        assertNotNull(x);
+        assertTrue(x.isData());
+        assertEquals(5L, x.getSize());
+        assertEquals("stuff", TestBase.slurp(x));
+
+        FileObject y = fs.findResource("y");
+        assertNotNull(y);
+        assertTrue(y.isData());
+        assertEquals(10L, y.getSize());
+        assertEquals("more stuff", TestBase.slurp(y));
+    }
+
+    /** #150902 - test spaces in url attribute are escaped to get valid URL. */
+    public void testURLAttr() throws Exception {
+        FileSystem fs = new Layer("<file name='x' url='A B C.txt'/>", Collections.singletonMap("A B C.txt", "stuff")).read();
+        FileObject x = null;
+        try {
+            x = fs.findResource("x");
+            assertNotNull(x);
+            assertEquals(5L, x.getSize());
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail("url attribute with spaces in path wrongly handled.");
+        }
+    }
+
     public void testSimpleAttributeReads() throws Exception {
         FileSystem fs = new Layer("<file name='x'><attr name='a' stringvalue='v'/> <attr name='b' urlvalue='file:/nothing'/></file> " +
                 "<folder name='y'> <file name='ignore'/><attr name='a' boolvalue='true'/><!--ignore--></folder>").read();
@@ -344,6 +383,93 @@ public class WritableXMLFileSystemTest extends LayerTestBase {
                 "        <attr name=\"nv\" newvalue=\"org.foo.Clazz\"/>\n" +
                 "    </file>\n",
                 l.write());
+
+
+        String  txt = TestBase.slurp(l.f);
+        if (txt.indexOf("-//NetBeans//DTD Filesystem 1.1//EN") == -1) {
+            fail("Enough to use DTD 1.1: " + txt);
+        }
+
+        if (txt.indexOf("http://www.netbeans.org/dtds/filesystem-1_1.dtd") == -1) {
+            fail("Enough2 to use DTD 1.1: " + txt);
+        }
+    }
+
+    public void testBundleValueAttributeWrites() throws Exception {
+        Layer l = new Layer("");
+        FileSystem fs = l.read();
+        FileObject x = fs.getRoot().createData("x");
+        x.setAttribute("bv", "bundlevalue:org.netbeans.modules.apisupport.project.layers#AHOJ");
+        assertEquals("special attrs written to XML",
+                "    <file name=\"x\">\n" +
+                "        <attr name=\"bv\" bundlevalue=\"org.netbeans.modules.apisupport.project.layers#AHOJ\"/>\n" +
+                "    </file>\n",
+                l.write());
+
+        Object lit = x.getAttribute("literal:bv");
+        assertEquals("Literal value is returned prefixed with bundle", "bundle:org.netbeans.modules.apisupport.project.layers#AHOJ", lit);
+
+        Object value = x.getAttribute("bv");
+        // not working:
+        //assertEquals("value is returned localized", "Hello", value);
+        // currently returns null:
+        assertNull("Current behaviour. Improve. XXX", value);
+
+        String  txt = TestBase.slurp(l.f);
+        if (txt.indexOf("-//NetBeans//DTD Filesystem 1.2//EN") == -1) {
+            fail("Wrong DTD: " + txt);
+        }
+
+        if (txt.indexOf("http://www.netbeans.org/dtds/filesystem-1_2.dtd") == -1) {
+            fail("Wrong DTD2: " + txt);
+        }
+    }
+
+    public void testCommentIsFirst() throws Exception {
+        String HEADER =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                "<!--\n" +
+                "text\n" +
+                "-->\n" +
+                "<!DOCTYPE filesystem PUBLIC \"-//NetBeans//DTD Filesystem 1.1//EN\" \"http://www.netbeans.org/dtds/filesystem-1_1.dtd\">\n" +
+                "<filesystem>\n";
+        String FOOTER =
+                "</filesystem>\n";
+
+        Layer l = new Layer(
+            HEADER +
+            "    <file name=\"x\">\n" +
+            "    </file>\n" +
+            FOOTER,
+            false
+        );
+        FileSystem fs = l.read();
+        FileObject x = fs.findResource("x");
+        assertNotNull("File x found", x);
+        x.setAttribute("bv", "bundlevalue:org.netbeans.modules.apisupport.project.layers#AHOJ");
+        assertEquals("special attrs written to XML",
+                "    <file name=\"x\">\n" +
+                "        <attr name=\"bv\" bundlevalue=\"org.netbeans.modules.apisupport.project.layers#AHOJ\"/>\n" +
+                "    </file>\n",
+                l.write(HEADER, FOOTER));
+
+        Object lit = x.getAttribute("literal:bv");
+        assertEquals("Literal value is returned prefixed with bundle", "bundle:org.netbeans.modules.apisupport.project.layers#AHOJ", lit);
+
+        Object value = x.getAttribute("bv");
+        // not working:
+        //assertEquals("value is returned localized", "Hello", value);
+        // currently returns null:
+        assertNull("Current behaviour. Improve. XXX", value);
+
+        String  txt = TestBase.slurp(l.f);
+        if (txt.indexOf("-//NetBeans//DTD Filesystem 1.2//EN") == -1) {
+            fail("Wrong DTD: " + txt);
+        }
+
+        if (txt.indexOf("http://www.netbeans.org/dtds/filesystem-1_2.dtd") == -1) {
+            fail("Wrong DTD2: " + txt);
+        }
     }
     
     public void testFolderOrder() throws Exception {
@@ -554,8 +680,11 @@ public class WritableXMLFileSystemTest extends LayerTestBase {
          * you should use 4-space indents and a newline after every element.
          */
         public Layer(String xml) throws Exception {
+            this(xml, true);
+        }
+        Layer(String xml, boolean wrapWithHeader) throws Exception {
             folder = makeFolder();
-            f = makeLayer(xml);
+            f = makeLayer(xml, wrapWithHeader);
         }
         /**
          * Create a layer from XML plus external file contents.
@@ -584,9 +713,13 @@ public class WritableXMLFileSystemTest extends LayerTestBase {
                 "<!DOCTYPE filesystem PUBLIC \"-//NetBeans//DTD Filesystem 1.1//EN\" \"http://www.netbeans.org/dtds/filesystem-1_1.dtd\">\n" +
                 "<filesystem>\n";
         private final String FOOTER = "</filesystem>\n";
-        private FileObject makeLayer(String xml) throws Exception {
+        private FileObject makeLayer(String xml, boolean wrapWithHeader) throws Exception {
             File file = new File(folder, "layer.xml");
-            TestBase.dump(file, HEADER + xml + FOOTER);
+            if (wrapWithHeader) {
+                TestBase.dump(file, HEADER + xml + FOOTER);
+            } else {
+                TestBase.dump(file, xml);
+            }
             return FileUtil.toFileObject(file);
         }
         /**
@@ -601,11 +734,21 @@ public class WritableXMLFileSystemTest extends LayerTestBase {
          * The header and footer are removed for you, but not other whitespace.
          */
         public String write() throws Exception {
+            return write(HEADER, FOOTER);
+        }
+        String write(String head, String foot) throws Exception {
             cookie.save();
             String raw = TestBase.slurp(f);
-            assertTrue("unexpected header in '" + raw + "'", raw.startsWith(HEADER));
-            assertTrue("unexpected footer in '" + raw + "'", raw.endsWith(FOOTER));
-            return raw.substring(HEADER.length(), raw.length() - FOOTER.length());
+
+            for (int i = 1; i <= 2; i++) {
+                String header = new String(head).replace("1_1", "1_"+ i).replace("1.1", "1."+ i);
+                String footer = new String(foot).replace("1_1", "1_"+ i).replace("1.1", "1."+ i);
+                if (raw.startsWith(header) && raw.endsWith(footer)) {
+                    return raw.substring(head.length(), raw.length() - foot.length());
+                }
+            }
+            fail("unexpected header or footer in:\n" + raw);
+            return null;
         }
         /**
          * Edit the text of the layer.
