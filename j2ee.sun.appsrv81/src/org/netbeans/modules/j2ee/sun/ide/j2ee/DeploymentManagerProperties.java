@@ -114,6 +114,11 @@ public class DeploymentManagerProperties {
      **/
     public static final String DRIVER_DEPLOYMENT_ATTR = "DriverDeploymentEnabled";
     
+    /**
+     * Start of Java DB database on or off
+     */
+    public static final String DATABASE_START_ATTR = "DatabaseStartEnabled"; //NOI18N
+    
     private static final String PROP_SOURCES       = "sources";         // NOI18N
     private static final String PROP_JAVADOCS      = "javadocs";        // NOI18N
     
@@ -336,7 +341,7 @@ public class DeploymentManagerProperties {
         if (path == null) {
             ArrayList<URL> list = new ArrayList<URL>();
             try {
-                File j2eeDoc = InstalledFileLocator.getDefault().locate("docs/javaee5-doc-api.zip", null, false); // NOI18N
+                File j2eeDoc = InstalledFileLocator.getDefault().locate("docs/javaee6-doc-api.zip", null, false); // NOI18N
                 if (j2eeDoc != null) {
                     list.add(fileToUrl(j2eeDoc));
                 }
@@ -481,4 +486,32 @@ public class DeploymentManagerProperties {
         instanceProperties.setProperty(DRIVER_DEPLOYMENT_ATTR, Boolean.toString(driverEnabled));
     }
     
+    /**
+     * return true if Java DB database should be started on server start
+     * true by default
+     ** @return 
+     */
+    public boolean isDatabaseStartEnabled() {
+        if (instanceProperties == null){
+            return true;//true by default
+        }
+        String s = instanceProperties.getProperty(DATABASE_START_ATTR);
+        if (s == null){
+            instanceProperties.setProperty(DATABASE_START_ATTR, "true"); //NOI18N
+            s = instanceProperties.getProperty(DATABASE_START_ATTR);
+        }
+        return Boolean.valueOf(s).booleanValue();
+    }
+    
+    /**
+     * 
+     * @param startEnabled
+     */
+    public void setDatabaseStartEnabled(boolean startEnabled) {
+        instanceProperties.setProperty(DATABASE_START_ATTR, Boolean.toString(startEnabled));
+    }
+    
+    public SunDeploymentManagerInterface getSunDeploymentManager(){
+        return sunDM;
+    }
 }

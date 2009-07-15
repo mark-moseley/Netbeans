@@ -27,7 +27,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -43,22 +43,27 @@ made subject to such option by the copyright holder.
 -->
 <!DOCTYPE library PUBLIC "-//NetBeans//DTD Library Declaration 1.0//EN" "http://www.netbeans.org/dtds/library-declaration-1_0.dtd">
 <library version="1.0">
-    <name>jstl11</name>
+    <name>jsf12</name>
     <type>j2se</type>
-    <localizing-bundle>org/netbeans/modules/web/jstl11/Bundle</localizing-bundle>
+    <localizing-bundle>org/netbeans/modules/web/jsf12/Bundle</localizing-bundle>
     <volume>
         <type>classpath</type>
-        <resource>jar:nbinst://org.netbeans.modules.web.jstl11/modules/ext/standard.jar!/</resource>
-        <resource>jar:nbinst://org.netbeans.modules.web.jstl11/modules/ext/jstl.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12ri/modules/ext/jsf-1_2/commons-beanutils.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12ri/modules/ext/jsf-1_2/commons-collections.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12ri/modules/ext/jsf-1_2/commons-digester.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12ri/modules/ext/jsf-1_2/commons-logging.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12/modules/ext/jsf-1_2/jsf-api.jar!/</resource>
+	<resource>jar:nbinst://org.netbeans.modules.web.jsf12ri/modules/ext/jsf-1_2/jsf-impl.jar!/</resource>
     </volume>
     <volume>
         <type>javadoc</type>
         <resource>jar:nbinst:///docs/javaee6-doc-api.zip!/</resource>
     </volume>
     <volume>
-        <type>maven-pom</type>
         <!-- please check with mkleint@netbeans.org before/after updating this or "classpath" section -->
-        <resource>http://repo1.maven.org/maven2/javax/servlet/jstl/1.1.2/jstl-1.1.2.pom</resource>
-        <resource>http://repo1.maven.org/maven2/taglibs/standard/1.1.2/standard-1.1.2.pom</resource>
+        <type>maven-pom</type>
+        <resource>http://download.java.net/maven/1/javax.faces/poms/jsf-api-1.2_04-p01.pom</resource>
+        <resource>http://download.java.net/maven/1/javax.faces/poms/jsf-impl-1.2_04-p01.pom</resource>
+        <resource>http://repo1.maven.org/maven2/commons-digester/commons-digester/1.5/commons-digester-1.5.pom</resource>
     </volume>
 </library>

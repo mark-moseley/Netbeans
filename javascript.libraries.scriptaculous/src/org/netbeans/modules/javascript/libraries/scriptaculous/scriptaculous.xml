@@ -3,7 +3,7 @@
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
-Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
 
 
 The contents of this file are subject to the terms of either the GNU
@@ -27,7 +27,7 @@ your own identifying information:
 Contributor(s):
 
 The Original Software is NetBeans. The Initial Developer of the Original
-Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
 Microsystems, Inc. All Rights Reserved.
 
 If you wish your version of this file to be governed by only the CDDL
@@ -43,22 +43,11 @@ made subject to such option by the copyright holder.
 -->
 <!DOCTYPE library PUBLIC "-//NetBeans//DTD Library Declaration 1.0//EN" "http://www.netbeans.org/dtds/library-declaration-1_0.dtd">
 <library version="1.0">
-    <name>jstl11</name>
-    <type>j2se</type>
-    <localizing-bundle>org/netbeans/modules/web/jstl11/Bundle</localizing-bundle>
+    <name>scriptaculous</name>
+    <type>javascript</type>
+    <localizing-bundle>org/netbeans/modules/javascript/libraries/scriptaculous/Bundle</localizing-bundle>
     <volume>
-        <type>classpath</type>
-        <resource>jar:nbinst://org.netbeans.modules.web.jstl11/modules/ext/standard.jar!/</resource>
-        <resource>jar:nbinst://org.netbeans.modules.web.jstl11/modules/ext/jstl.jar!/</resource>
-    </volume>
-    <volume>
-        <type>javadoc</type>
-        <resource>jar:nbinst:///docs/javaee6-doc-api.zip!/</resource>
-    </volume>
-    <volume>
-        <type>maven-pom</type>
-        <!-- please check with mkleint@netbeans.org before/after updating this or "classpath" section -->
-        <resource>http://repo1.maven.org/maven2/javax/servlet/jstl/1.1.2/jstl-1.1.2.pom</resource>
-        <resource>http://repo1.maven.org/maven2/taglibs/standard/1.1.2/standard-1.1.2.pom</resource>
+        <type>scriptpath</type>
+	<resource>jar:nbinst:///modules/ext/javascript/scriptaculous-js-1.8.2.zip!/</resource>
     </volume>
 </library>
