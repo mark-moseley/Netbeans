@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.editor.settings.storage;
 
+import java.beans.PropertyChangeEvent;
 import org.netbeans.modules.editor.settings.storage.keybindings.KeyBindingSettingsImpl;
 import org.netbeans.modules.editor.settings.storage.fontscolors.ColoringStorage;
 import org.netbeans.modules.editor.settings.storage.fontscolors.FontColorSettingsImpl;
@@ -61,8 +62,7 @@ import org.netbeans.modules.editor.settings.storage.api.FontColorSettingsFactory
 import org.netbeans.modules.editor.settings.storage.api.KeyBindingSettingsFactory;
 import org.netbeans.modules.editor.settings.storage.keybindings.KeyMapsStorage;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.FileUtil;
 
 /**
  * This class contains access methods for editor settings like font & colors
@@ -110,6 +110,10 @@ public class EditorSettingsImpl extends EditorSettings {
     // ------------------------------------------------------
     // Mime types
     // ------------------------------------------------------
+
+    public void notifyMimeTypesChange(Object old, Object nue) {
+        pcs.firePropertyChange(new PropertyChangeEvent(this, PROP_MIME_TYPES, old, nue));
+    }
 
     public Set<String> getAllMimeTypes () {
         return MimeTypesTracker.get(null, EDITORS_FOLDER).getMimeTypes();
@@ -174,10 +178,12 @@ public class EditorSettingsImpl extends EditorSettings {
      */
     public String getCurrentFontColorProfile () {
         if (currentFontColorProfile == null) {
-            FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-            FileObject fo = fs.findResource (EDITORS_FOLDER);
+            FileObject fo = FileUtil.getConfigFile(EDITORS_FOLDER);
             if (fo != null) {
-                currentFontColorProfile = (String) fo.getAttribute(FATTR_CURRENT_FONT_COLOR_PROFILE);
+                Object o = fo.getAttribute(FATTR_CURRENT_FONT_COLOR_PROFILE);
+                if (o instanceof String) {
+                    currentFontColorProfile = (String) o;
+                }
             }
             if (currentFontColorProfile == null) {
                 currentFontColorProfile = DEFAULT_PROFILE;
@@ -201,8 +207,7 @@ public class EditorSettingsImpl extends EditorSettings {
         currentFontColorProfile = profile;
         
         // Persist the change
-	FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-	FileObject fo = fs.findResource (EDITORS_FOLDER);
+	FileObject fo = FileUtil.getConfigFile (EDITORS_FOLDER);
         if (fo != null) {
             try {
                 fo.setAttribute (FATTR_CURRENT_FONT_COLOR_PROFILE, profile);
@@ -254,7 +259,7 @@ public class EditorSettingsImpl extends EditorSettings {
     }
     
     private final Map<String, Map<String, AttributeSet>> highlightings = new HashMap<String, Map<String, AttributeSet>>();
-    private final StorageImpl<String, AttributeSet> highlightingsStorage = new StorageImpl<String, AttributeSet>(new ColoringStorage(false));
+    private final StorageImpl<String, AttributeSet> highlightingsStorage = new StorageImpl<String, AttributeSet>(new ColoringStorage(false), null);
     
     /**
      * Returns highlighting properties for given profile or null, if the 
@@ -404,11 +409,16 @@ public class EditorSettingsImpl extends EditorSettings {
      */
     public String getCurrentKeyMapProfile () {
         if (currentKeyMapProfile == null) {
-            FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-            FileObject fo = fs.findResource (KEYMAPS_FOLDER);
-            currentKeyMapProfile = fo == null ? null : (String) fo.getAttribute (FATTR_CURRENT_KEYMAP_PROFILE);
-            if (currentKeyMapProfile == null)
+            FileObject fo = FileUtil.getConfigFile (KEYMAPS_FOLDER);
+            if (fo != null) {
+                Object o = fo.getAttribute (FATTR_CURRENT_KEYMAP_PROFILE);
+                if (o instanceof String) {
+                    currentKeyMapProfile = (String) o;
+                }
+            }
+            if (currentKeyMapProfile == null) {
                 currentKeyMapProfile = DEFAULT_PROFILE;
+            }
         }
         return currentKeyMapProfile;
     }
@@ -426,10 +436,9 @@ public class EditorSettingsImpl extends EditorSettings {
         
         // Persist the change
         try {
-            FileSystem fs = Repository.getDefault ().getDefaultFileSystem ();
-            FileObject fo = fs.findResource (KEYMAPS_FOLDER);
+            FileObject fo = FileUtil.getConfigFile (KEYMAPS_FOLDER);
             if (fo == null) {
-                fo = fs.getRoot ().createFolder (KEYMAPS_FOLDER);
+                fo = FileUtil.getConfigRoot ().createFolder (KEYMAPS_FOLDER);
             }
             fo.setAttribute (FATTR_CURRENT_KEYMAP_PROFILE, keyMapName);
         } catch (IOException ex) {
