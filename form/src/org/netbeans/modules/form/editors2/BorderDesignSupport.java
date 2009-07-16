@@ -96,8 +96,8 @@ public class BorderDesignSupport implements FormDesignValue
         throws Exception
     {
         this(borderDesignSupport.getBorderClass());
+        setPropertyContext(propertyContext);
         createProperties();
-        setPropertyContext(propertyContext);        
         int copyMode = FormUtils.CHANGED_ONLY | FormUtils.DISABLE_CHANGE_FIRING;
             
         FormUtils.copyProperties(borderDesignSupport.getProperties(),
@@ -108,9 +108,8 @@ public class BorderDesignSupport implements FormDesignValue
     // --------------------------
 
     public FormDesignValue copy(FormProperty formProperty) {
-        FormModel formModel = formProperty.getPropertyContext().getFormModel();
         try {
-            return new BorderDesignSupport(this, new FormPropertyContext.EmptyImpl()); //BorderEditor.createFormPropertyContext(formModel));    
+            return new BorderDesignSupport(this, new FormPropertyContext.SubProperty(formProperty));
         } catch (Exception ex) {
             ErrorManager.getDefault().notify(ErrorManager.INFORMATIONAL, ex);
         }
@@ -181,6 +180,14 @@ public class BorderDesignSupport implements FormDesignValue
     }
 
     private void createProperties() {
+        FormLAF.executeWithLookAndFeel(propertyContext.getFormModel(), new Runnable() {
+            public void run() {
+                createPropertiesInLAFBlock();
+            }
+        });
+    }
+
+    private void createPropertiesInLAFBlock() {
         BeanInfo bInfo;
         try {
             bInfo = FormUtils.getBeanInfo(theBorder.getClass());
@@ -260,7 +267,11 @@ public class BorderDesignSupport implements FormDesignValue
     }
 
     public Object getDesignValue(Object target) {
-        return null;
+        if (FormLAF.getUsePreviewDefaults()) {
+            return copy((FormProperty)propertyContext.getOwner()).getDesignValue();
+        } else {
+            return null;
+        }
     }
 
     public String getDescription() {
@@ -293,7 +304,35 @@ public class BorderDesignSupport implements FormDesignValue
             if (canReadFromTarget()) {
                 try {
                     defaultValue = getTargetValue();
+                    if ((theBorder instanceof TitledBorder) && canWriteToTarget()) {
+                        // TitledBorder doesn't remember its default values.
+                        // We have to set them explicitly because otherwise
+                        // it will start to return other "default" values
+                        // when we leave the LAF block
+                        setTargetValue(defaultValue);
+                    }
                 } catch (Exception ex) {}
+            }
+        }
+        
+        @Override
+        public void setValue(Object value) throws IllegalAccessException, IllegalArgumentException, InvocationTargetException {
+            super.setValue(value);
+            if (MatteBorder.class.equals(getBorderClass())) {
+                // Issue 145316 - MatteBorder cannot have both titleIcon
+                // and matteColor specified.
+                String propName = null;
+                if ("matteColor".equals(getName())) { // NOI18N
+                    propName = "tileIcon"; // NOI18N
+                } else if ("tileIcon".equals(getName())) { // NOI18N
+                    propName = "matteColor"; // NOI18N
+                }
+                if (propName != null) {
+                    Node.Property prop = getPropertyOfName(propName);
+                    // Restore default value doesn't call setValue()
+                    // So, there is no danger of infinite loop
+                    prop.restoreDefaultValue();
+                }
             }
         }
 
