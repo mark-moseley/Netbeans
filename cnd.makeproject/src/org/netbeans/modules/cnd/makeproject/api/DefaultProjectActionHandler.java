@@ -50,10 +50,8 @@ import org.netbeans.modules.cnd.api.compilers.PlatformTypes;
 import org.netbeans.modules.cnd.api.execution.ExecutionListener;
 import org.netbeans.modules.cnd.api.execution.NativeExecutor;
 import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
-import org.netbeans.modules.cnd.api.remote.PathMap;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.api.utils.PlatformInfo;
-import org.netbeans.modules.cnd.makeproject.MakeActionProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
@@ -68,11 +66,30 @@ import org.openide.windows.InputOutput;
 public class DefaultProjectActionHandler implements ProjectActionHandler, ExecutionListener {
 
     private ProjectActionEvent pae;
-    private ExecutorTask executorTask;
+    private volatile ExecutorTask executorTask;
     private List<ExecutionListener> listeners = new ArrayList<ExecutionListener>();
 
-    public void init(ProjectActionEvent pae) {
+    // VK: this is just to tie two pieces of logic together:
+    // first is in determining the type of console for remote;
+    // second is in canCancel
+    private static final boolean RUN_REMOTE_IN_OUTPUT_WINDOW = true;
+
+    public void init(ProjectActionEvent pae, ProjectActionEvent[] paes) {
         this.pae = pae;
+    }
+
+    /**
+     * Will be called to get arguments for the action. Can be overridden.
+     */
+    public String getArguments() {
+        return pae.getProfile().getArgsFlat();
+    }
+
+    /**
+     * Will be called to get the environment for the action. Can be overridden.
+     */
+    public String[] getEnvironment() {
+        return pae.getProfile().getEnvironment().getenv();
     }
 
     public void execute(InputOutput io) {
@@ -81,38 +98,15 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
                 pae.getType() == ProjectActionEvent.Type.BUILD ||
                 pae.getType() == ProjectActionEvent.Type.CLEAN) {
             String exe = IpeUtils.quoteIfNecessary(pae.getExecutable());
-            String args = pae.getProfile().getArgsFlat();
-            String[] env = pae.getProfile().getEnvironment().getenv();
+            String args = getArguments();
+            String[] env = getEnvironment();
             boolean showInput = pae.getType() == ProjectActionEvent.Type.RUN;
-            MakeConfiguration conf = (MakeConfiguration) pae.getConfiguration();
+            MakeConfiguration conf = pae.getConfiguration();
             ExecutionEnvironment execEnv = conf.getDevelopmentHost().getExecutionEnvironment();
 
             String runDirectory = pae.getProfile().getRunDirectory();
 
-            if (!conf.getDevelopmentHost().isLocalhost()) {
-                // Make sure the project root is visible remotely
-                String basedir = pae.getProfile().getBaseDir();
-                if (MakeActionProvider.useRsync) {
-//                        ProjectInformation info = pae.getProject().getLookup().lookup(ProjectInformation.class);
-//                        final String projectName = info.getDisplayName();
-//                        runDirectory = MakeActionProvider.REMOTE_BASE_PATH + "/" + projectName;
-
-
-                } else {
-                    PathMap mapper = HostInfoProvider.getDefault().getMapper(execEnv);
-                    if (!mapper.isRemote(basedir, true)) {
-//                        mapper.showUI();
-//                        if (!mapper.isRemote(basedir)) {
-//                            DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
-//                                    NbBundle.getMessage(DefaultProjectActionHandler.class, "Err_CannotRunLocalProjectRemotely")));
-                        return;
-//                        }
-                    }
-                }
-            //CompilerSetManager rcsm = CompilerSetManager.getDefault(key);
-            }
-
-            PlatformInfo pi = PlatformInfo.getDefault(conf.getDevelopmentHost().getName());
+            PlatformInfo pi = PlatformInfo.getDefault(conf.getDevelopmentHost().getExecutionEnvironment());
 
             boolean unbuffer = false;
             if (pae.getType() == ProjectActionEvent.Type.RUN) {
@@ -128,16 +122,18 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
                     conType = RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW;
                 }
                 if (!conf.getDevelopmentHost().isLocalhost()) {
-                    //TODO: only output window for remote for now
-                    conType = RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW;
+                    if (RUN_REMOTE_IN_OUTPUT_WINDOW) {
+                        //TODO: only output window for remote for now
+                        conType = RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW;
+                    }
                 }
                 if (conType == RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW) {
-                    if (HostInfoProvider.getDefault().getPlatform(execEnv) == PlatformTypes.PLATFORM_WINDOWS) {
+                    if (HostInfoProvider.getPlatform(execEnv) == PlatformTypes.PLATFORM_WINDOWS) {
                         // we need to run the application under cmd on windows
                         exe = "cmd.exe"; // NOI18N
                         // exe path naturalization is needed for cmd on windows, see issue 149404
                         args = "/c " + IpeUtils.quoteIfNecessary(FilePathAdaptor.naturalize(pae.getExecutable())) // NOI18N
-                                + " " + pae.getProfile().getArgsFlat(); // NOI18N
+                                + " " + getArguments(); // NOI18N
                     } else if (conf.getDevelopmentHost().isLocalhost()) {
                         exe = IpeUtils.toAbsolutePath(pae.getProfile().getBaseDir(), pae.getExecutable());
                     }
@@ -168,8 +164,8 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
                             args2 = "";
                         }
                         if (pae.getType() == ProjectActionEvent.Type.RUN &&
-                                ((MakeConfiguration)pae.getConfiguration()).isApplicationConfiguration() &&
-                                HostInfoProvider.getDefault().getPlatform(execEnv) == PlatformTypes.PLATFORM_WINDOWS &&
+                                pae.getConfiguration().isApplicationConfiguration() &&
+                                HostInfoProvider.getPlatform(execEnv) == PlatformTypes.PLATFORM_WINDOWS &&
                                 !exe.endsWith(".exe")) { // NOI18N
                             exe = exe + ".exe"; // NOI18N
                         }
@@ -182,7 +178,7 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
                 CompilerSet cs = conf.getCompilerSet().getCompilerSet();
                 if (cs != null) {
                     String csdirs = cs.getDirectory();
-                    String commands = cs.getCompilerFlavor().getCommandFolder(conf.getPlatform().getValue());
+                    String commands = cs.getCompilerFlavor().getCommandFolder(conf.getDevelopmentHost().getBuildPlatform());
                     if (commands != null && commands.length() > 0) {
                         // Also add msys to path. Thet's where sh, mkdir, ... are.
                         csdirs = csdirs + pi.pathSeparator() + commands;
@@ -206,7 +202,7 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
             } else { // Build or Clean
                 String[] env1 = new String[env.length + 1];
                 String csdirs = conf.getCompilerSet().getCompilerSet().getDirectory();
-                String commands = conf.getCompilerSet().getCompilerSet().getCompilerFlavor().getCommandFolder(conf.getPlatform().getValue());
+                String commands = conf.getCompilerSet().getCompilerSet().getCompilerFlavor().getCommandFolder(conf.getDevelopmentHost().getBuildPlatform());
                     if (commands != null && commands.length()>0) {
                     // Also add msys to path. Thet's where sh, mkdir, ... are.
                     csdirs = csdirs + pi.pathSeparator() + commands;
@@ -244,6 +240,7 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
             try {
                 executorTask = projectExecutor.execute(io);
             } catch (java.io.IOException ioe) {
+                ioe.printStackTrace();
             }
         } else {
             assert false;
@@ -264,6 +261,11 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
         if (pae.getType() != ProjectActionEvent.Type.RUN) {
             return true;
         } else {
+            if (RUN_REMOTE_IN_OUTPUT_WINDOW) {
+                if (!pae.getConfiguration().getDevelopmentHost().isLocalhost()) {
+                    return true;
+                }
+            }
             int consoleType = pae.getProfile().getConsoleType().getValue();
             if (consoleType == RunProfile.CONSOLE_TYPE_DEFAULT) {
                 consoleType = RunProfile.getDefaultConsoleType();
@@ -273,12 +275,15 @@ public class DefaultProjectActionHandler implements ProjectActionHandler, Execut
     }
 
     public void cancel() {
-        executorTask.stop();
+        ExecutorTask et = executorTask;
+        if (et != null) {
+            executorTask.stop();
+        }
     }
 
-    public void executionStarted() {
+    public void executionStarted(int pid) {
         for (ExecutionListener l : listeners) {
-            l.executionStarted();
+            l.executionStarted(pid);
         }
     }
 
