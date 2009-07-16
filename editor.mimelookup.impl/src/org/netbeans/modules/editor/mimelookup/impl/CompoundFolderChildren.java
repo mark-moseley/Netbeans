@@ -45,17 +45,22 @@ import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.filesystems.FileAttributeEvent;
 import org.openide.filesystems.FileChangeListener;
 import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.MultiFileSystem;
-import org.openide.filesystems.Repository;
+import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 
 /**
  *
@@ -110,16 +115,21 @@ public final class CompoundFolderChildren implements FileChangeListener {
         synchronized (LOCK) {
             List<FileObject> folders = new ArrayList<FileObject>(prefixes.size());
             List<FileSystem> layers = new ArrayList<FileSystem>(prefixes.size());
-            FileSystem sfs = Repository.getDefault().getDefaultFileSystem();
             for (final String prefix : prefixes) {
-                FileObject layer = sfs.findResource(prefix);
+                FileObject layer = FileUtil.getConfigFile(prefix);
                 if (layer != null && layer.isFolder()) {
                     folders.add(layer);
-                    layers.add(new MultiFileSystem(new FileSystem[] {sfs}) {
-                        protected @Override FileObject findResourceOn(FileSystem fs, String res) {
-                            return fs.findResource(prefix + res);
-                        }
-                    });
+                    try {
+                        layers.add(new MultiFileSystem(new FileSystem[]{layer.getFileSystem()}) {
+
+                            @Override
+                            protected FileObject findResourceOn(FileSystem fs, String res) {
+                                return fs.findResource(prefix + res);
+                            }
+                        });
+                    } catch (FileStateInvalidException ex) {
+                        Exceptions.printStackTrace(ex);
+                    }
                 } else {
                     // Listen to nearest enclosing parent, in case it is created.
                     // XXX would be simpler to use FileChangeSupport but that is in ant/project for now.
@@ -127,7 +137,7 @@ public final class CompoundFolderChildren implements FileChangeListener {
                     while (true) {
                         assert parentPath.length() > 0;
                         parentPath = parentPath.substring(0, Math.max(0, parentPath.lastIndexOf('/')));
-                        FileObject parent = sfs.findResource(parentPath);
+                        FileObject parent = FileUtil.getConfigFile(parentPath);
                         if (parent != null) {
                             parent.removeFileChangeListener(weakFCL);
                             parent.addFileChangeListener(weakFCL);
@@ -162,6 +172,11 @@ public final class CompoundFolderChildren implements FileChangeListener {
                 event = new PropertyChangeEvent(this, PROP_CHILDREN, children, sorted);
             }
             children = sorted;
+
+            if (LOG.isLoggable(Level.FINE)) {
+                rebuildCnt++;
+                LOG.log(Level.FINE, "{0} rebuilt {1} times", new Object [] { this, rebuildCnt });
+            }
         }
         if (event != null) {
             pcs.firePropertyChange(event);
@@ -190,8 +205,48 @@ public final class CompoundFolderChildren implements FileChangeListener {
 
     public void fileAttributeChanged(FileAttributeEvent fe) {
         if (FileUtil.affectsOrder(fe)) {
-            rebuild();
+            if (!filterEvents(fe)) {
+                rebuild();
+            } else {
+                rebuildTask.schedule(DELAY);
+            }
         }
     }
 
+    // ignoring loads of fileAttributeChanged events fired when installing plugins
+    // see issue #161201 and #168536
+    private static final int DELAY = 1000; // milliseconds
+    private final RequestProcessor.Task rebuildTask = RequestProcessor.getDefault().create(new Runnable() {
+        public void run() {
+            synchronized (times) {
+                times.clear();
+            }
+            rebuild();
+        }
+    });
+    private final Map<String, Long> times = new HashMap<String, Long>();
+    private long rebuildCnt = 0;
+    private boolean filterEvents(FileEvent event) {
+        // filter out duplicate events
+        synchronized (times) {
+            Long timestamp = times.get(event.getFile().getPath());
+            times.put(event.getFile().getPath(), event.getTime());
+            boolean filterOut = timestamp != null && Math.abs(event.getTime() - timestamp) < DELAY;
+            if (LOG.isLoggable(Level.FINER)) {
+                if (filterOut) {
+                    LOG.fine("Filtering out filesystem event: [" + printEvent(event) + "]"); //NOI18N
+                } else {
+                    LOG.fine("Processing filesystem event: [" + printEvent(event) + "]"); //NOI18N
+                }
+            }
+            return filterOut;
+
+        }
+    }
+
+    private static String printEvent(FileEvent event) {
+        return event.getClass().getSimpleName() + "@" + Integer.toHexString(System.identityHashCode(event)) //NOI18N
+                + ", ts=" + event.getTime() //NOI18N
+                + ", path=" + event.getFile().getPath(); //NOI18N
+    }
 }
