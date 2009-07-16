@@ -78,7 +78,7 @@ public class FileCommandActionTest extends NbTestCase {
     private TestSupport.TestProject project1;
     private TestSupport.TestProject project2;
 
-    protected void setUp() throws Exception {
+    protected @Override void setUp() throws Exception {
         super.setUp();
         MockServices.setServices(TestSupport.TestProjectFactory.class);
         clearWorkDir();
@@ -104,16 +104,11 @@ public class FileCommandActionTest extends NbTestCase {
         
     }
     
-    protected void tearDown() throws Exception {
-        clearWorkDir();
-        super.tearDown();
-    }
-    
-    public boolean runInEQ () {
+    public @Override boolean runInEQ() {
         return true;
     }
     
-    public void testCommandEnablement() {
+    public void testCommandEnablement() throws Exception {
         TestSupport.ChangeableLookup lookup = new TestSupport.ChangeableLookup();
         FileCommandAction action = new FileCommandAction( "COMMAND", "TestFileCommandAction", (Icon)null, lookup );
         
