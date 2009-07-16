@@ -73,7 +73,6 @@ import org.openide.awt.StatusDisplayer;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
-import org.openide.util.Utilities;
 
 /**
  * This class collects various static methods for examining the layout.
@@ -180,7 +179,7 @@ public class LayoutTestUtils implements LayoutConstants {
                 testFO = primaryFile.getParent().createData(testClassName, "java"); //NOI18N
                 
                 //Rename the class in template to correct class name
-                String output = Utilities.replaceString(template.toString(), "${CLASS_NAME}", testFO.getName()); //NOI18N
+                String output = template.toString().replace("${CLASS_NAME}", testFO.getName()); //NOI18N
 
                 //Write the file to disc
                 fw = new FileWriter(FileUtil.toFile(testFO));
@@ -208,7 +207,7 @@ public class LayoutTestUtils implements LayoutConstants {
                                 Collections.<TypeParameterTree>emptyList(),
                                 Collections.<VariableTree>emptyList(),
                                 Collections.<ExpressionTree>emptyList(),
-                                code.toString(),
+                                "{\n" + code.toString() + "}", // NOI18N
                                 null
                                 );
                         ClassTree classCopy = make.addClassMember(classTree, method);
@@ -249,7 +248,7 @@ public class LayoutTestUtils implements LayoutConstants {
 	    FileObject fo = targetFolder.createData(formFO.getName() + "Test-ExpectedEndModel" + Integer.toString(fd.getLayoutDesigner().getModelCounter()), "txt"); //NOI18N
 	    fw = new FileWriter(FileUtil.toFile(fo));
 	    fw.write(lm.dump(idToNameMap));
-	    StatusDisplayer.getDefault().setStatusText("The test was successfully written: " + fo.getPath()); // NOI18N
+	    StatusDisplayer.getDefault().setStatusText("The test was successfully written: " + FileUtil.getFileDisplayName(fo)); // NOI18N
 	} catch (IOException ex) {
 	    ex.printStackTrace();
 	    return;

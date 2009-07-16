@@ -45,7 +45,6 @@ import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 import javax.accessibility.Accessible;
 import javax.accessibility.AccessibleContext;
-import org.openide.*;
 import org.openide.nodes.*;
 import org.openide.nodes.Node.*;
 import org.openide.util.*;
@@ -74,6 +73,8 @@ import javax.swing.plaf.basic.BasicSplitPaneUI;
 import javax.swing.plaf.metal.*;
 
 import org.netbeans.modules.openide.explorer.UIException;
+import org.openide.DialogDisplayer;
+import org.openide.NotifyDescriptor;
 
 
 /** A few utility methods useful to implementors of Inplace Editors.
@@ -222,6 +223,8 @@ final class PropUtils {
     /** Foreground color for expando sets when selected */
     private static Color selectedSetForegroundColor = null;
 
+    private static final Logger LOG = Logger.getLogger(PropUtils.class.getName());
+
     /** Painting the custom editor button is the most expensive thing
      * we do on XP and Aqua; if this flag is set, the button panel
      * will build a bitmap and blit it (this isn't appropriate for
@@ -256,6 +259,7 @@ final class PropUtils {
                 return s1.compareToIgnoreCase(s2);
             }
 
+        @Override
             public String toString() {
                 return "Type comparator"; //NOI18N
             }
@@ -270,6 +274,7 @@ final class PropUtils {
                 return String.CASE_INSENSITIVE_ORDER.compare(s1, s2);
             }
 
+        @Override
             public String toString() {
                 return "Name comparator"; //NOI18N
             }
@@ -296,7 +301,7 @@ final class PropUtils {
      * are displayed. */
     static boolean useOptimizedCustomButtonPainting() {
         if (useOptimizedCustomButtonPainting == null) {
-            if ("com.sun.java.swing.plaf.WindowsLookAndFeel".equals(UIManager.getLookAndFeel())) { //NOI18N
+            if ("Windows".equals(UIManager.getLookAndFeel().getID())) { //NOI18N
                 useOptimizedCustomButtonPainting = Boolean.valueOf(isXPTheme());
             } else {
                 useOptimizedCustomButtonPainting = Boolean.valueOf("Aqua".equals(UIManager.getLookAndFeel().getID()));
@@ -343,7 +348,7 @@ final class PropUtils {
 
     static void focusEventToString(FocusEvent fe, final StringBuffer sb) {
         Component target = (Component) fe.getSource();
-        Component opposite = (Component) fe.getOppositeComponent();
+        Component opposite = fe.getOppositeComponent();
         sb.append(" focus "); //NOI18N
         sb.append((fe.getID() == FocusEvent.FOCUS_GAINED) ? " gained by " : " lost by "); //NOI18N
         compToString(target, sb);
@@ -525,7 +530,7 @@ final class PropUtils {
         if (o instanceof Exception) {
             if( o instanceof InvocationTargetException )
                 o = ((InvocationTargetException)o).getTargetException();
-            processThrowable((Exception) o, title, newValue);
+            processThrowable((Throwable) o, title, newValue);
         }
 
         boolean result = (o instanceof Boolean) ? ((Boolean) o).booleanValue() : false;
@@ -587,7 +592,15 @@ final class PropUtils {
 
         try {
             if (value instanceof String) {
-                ed.setAsText((String) value);
+                try {
+                    ed.setAsText((String) value);
+                } catch( IllegalArgumentException iaE ) {
+                    //#137706 - always treat iae from setAsText as a an invalid
+                    //user input instead of broken code and display nice error message to the user
+                    if( null == Exceptions.findLocalizedMessage(iaE) )
+                        Exceptions.attachLocalizedMessage(iaE, NbBundle.getMessage(PropUtils.class, "MSG_SetAsText_InvalidValue", value));
+                    result = iaE;
+                }
             } else {
                 ed.setValue(value);
             }
@@ -669,7 +682,9 @@ final class PropUtils {
                                      null, null);
         }
 
-        Exceptions.printStackTrace(throwable);
+        String msg = Exceptions.findLocalizedMessage(throwable);
+        NotifyDescriptor d = new NotifyDescriptor.Message(msg, NotifyDescriptor.INFORMATION_MESSAGE);
+        DialogDisplayer.getDefault().notifyLater(d);
     }
 
     /** Fetches a localized message for an exception that may be displayed to
@@ -844,7 +859,7 @@ final class PropUtils {
                             result = new Boolean3WayEditor();
                         }
 
-                        if (updateEditor) {
+                        if (updateEditor || null == result.getValue()) {
                             updateEdFromProp(p, result, p.getDisplayName());
                         }
                     } catch (ProxyNode.DifferentValuesException dve) {
@@ -1010,26 +1025,25 @@ final class PropUtils {
                 UIManager.getLookAndFeel().getClass().getName()
             );
 
-        boolean aqua = "Aqua".equals(UIManager.getLookAndFeel().getID());
+        boolean nimbus = "Nimbus".equals(UIManager.getLookAndFeel().getID());
+
+        boolean gtk = "GTK".equals(UIManager.getLookAndFeel().getID());
 
         setRendererColor = UIManager.getColor(KEY_SETBG); //NOI18N
         selectedSetRendererColor = UIManager.getColor(KEY_SELSETBG); //NOI18N
 
-        if (setRendererColor == null) {
-            if (aqua) {
-                setRendererColor = new Color(225, 235, 240);
-            } else {
-                if (setRendererColor == null) {
-                    red = adjustColorComponent(controlColor.getRed(), -25, -25);
-                    green = adjustColorComponent(controlColor.getGreen(), -25, -25);
-                    blue = adjustColorComponent(controlColor.getBlue(), -25, -25);
-                    setRendererColor = new Color(red, green, blue);
-                }
-            }
+        if( nimbus || gtk ) {
+            setRendererColor = UIManager.getColor( "Menu.background" );//NOI18N
+            selectedSetRendererColor = UIManager.getColor("Tree.selectionBackground"); //NOI18N
         }
 
-        if (aqua) {
-            selectedSetRendererColor = UIManager.getColor("Table.selectionBackground");
+        if (setRendererColor == null) {
+            if (setRendererColor == null) {
+                red = adjustColorComponent(controlColor.getRed(), -25, -25);
+                green = adjustColorComponent(controlColor.getGreen(), -25, -25);
+                blue = adjustColorComponent(controlColor.getBlue(), -25, -25);
+                setRendererColor = new Color(red, green, blue);
+            }
         }
 
         if (selectedSetRendererColor == null) {
@@ -1053,6 +1067,9 @@ final class PropUtils {
         }
 
         setForegroundColor = UIManager.getColor(KEY_SETFG);
+
+        if( nimbus || gtk )
+            setForegroundColor = new Color( UIManager.getColor( "Menu.foreground" ).getRGB() ); //NOI18N
 
         if (setForegroundColor == null) {
             setForegroundColor = UIManager.getColor("Table.foreground"); //NOI18N
@@ -1092,8 +1109,9 @@ final class PropUtils {
 
         Icon collapsedIcon = getCollapsedIcon();
             
-        int iconSize = collapsedIcon.getIconWidth();
+        int iconSize = 9;
         if (collapsedIcon != null) {
+            iconSize = collapsedIcon.getIconWidth();
             marginWidth = Math.max(14, iconSize - 2);
         } else {
             //on the off chance a L&F doesn't provide this
@@ -1129,7 +1147,9 @@ final class PropUtils {
      * same icon the look and feel supplies for trees */
     static Icon getExpandedIcon() {
         Icon expandedIcon = UIManager.getIcon(isGtk ? "Tree.gtk_expandedIcon" : "Tree.expandedIcon"); //NOI18N
-        assert expandedIcon != null: "no Tree.expandedIcon found";
+        if (expandedIcon == null) {
+            LOG.info("no Tree.expandedIcon found");
+        }
         return expandedIcon;
     }
     
@@ -1137,7 +1157,9 @@ final class PropUtils {
      * icon the look and feel supplies for trees */
     static Icon getCollapsedIcon() {
         Icon collapsedIcon = UIManager.getIcon(isGtk ? "Tree.gtk_collapsedIcon" : "Tree.collapsedIcon"); //NOI18N
-        assert collapsedIcon != null: "no Tree.collapsedIcon found";
+        if (collapsedIcon == null) {
+            LOG.info("no Tree.collapsedIcon found");
+        }
         return collapsedIcon;
     }
 
@@ -1378,9 +1400,9 @@ final class PropUtils {
             if (!wasHtml) {
                 // HTML-ize only non-html values. HTML values should already
                 // contain correct HTML strings.
-                a = Utilities.replaceString(a, "&", "&amp;"); //NOI18N
-                a = Utilities.replaceString(a, "<", "&lt;"); //NOI18N
-                a = Utilities.replaceString(a, ">", "&gt;"); //NOI18N
+                a = a.replace("&", "&amp;"); //NOI18N
+                a = a.replace("<", "&lt;"); //NOI18N
+                a = a.replace(">", "&gt;"); //NOI18N
             }
 
             charCount += a.length();
@@ -1703,11 +1725,13 @@ final class PropUtils {
     }
 
     private static class CleanSplitPaneUI extends BasicSplitPaneUI {
+        @Override
         protected void installDefaults() {
             super.installDefaults();
             divider.setBorder(new SplitBorder());
         }
         
+        @Override
         public BasicSplitPaneDivider createDefaultDivider() {
             return new CleanSplitPaneDivider(this);
         }
@@ -1719,9 +1743,11 @@ final class PropUtils {
         public CleanSplitPaneDivider( BasicSplitPaneUI ui ) {
             super( ui );
         }
+        @Override
         public AccessibleContext getAccessibleContext() {
             if( null == accessibleContext ) {
                 accessibleContext = new AccessibleAWTComponent() {
+                    @Override
                             public AccessibleRole getAccessibleRole() {
                                 return AccessibleRole.SPLIT_PANE;
                             }

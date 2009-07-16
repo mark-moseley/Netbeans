@@ -41,7 +41,6 @@
 
 package org.netbeans.modules.apisupport.refactoring;
 
-import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -58,8 +57,6 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
-import javax.swing.text.AttributeSet;
-import javax.swing.text.StyleConstants;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.project.JavaProjectConstants;
 import org.netbeans.api.java.source.ClassIndex;
@@ -74,8 +71,6 @@ import org.netbeans.api.project.SourceGroup;
 import org.netbeans.api.project.ui.OpenProjects;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.Lookup;
-import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Utilities;
 
@@ -88,8 +83,8 @@ public class RetoucheUtils {
     private static final String JAVA_MIME_TYPE = "text/x-java";
     
     public static String htmlize(String input) {
-        String temp = org.openide.util.Utilities.replaceString(input, "<", "&lt;"); // NOI18N
-        temp = org.openide.util.Utilities.replaceString(temp, ">", "&gt;"); // NOI18N
+        String temp = input.replace("<", "&lt;"); // NOI18N
+        temp = temp.replace(">", "&gt;"); // NOI18N
         return temp;
     }
     
@@ -148,42 +143,6 @@ public class RetoucheUtils {
     public static boolean isJavaFile(FileObject f) {
         return JAVA_MIME_TYPE.equals(f.getMIMEType()); //NOI18N
     }
-    
-
-    private static String color(String string, AttributeSet set) {
-        if (set==null)
-            return string;
-        if (string.trim().length() == 0) {
-            return Utilities.replaceString(Utilities.replaceString(string, " ", "&nbsp;"), "\n", "<br>"); //NOI18N
-        } 
-        StringBuffer buf = new StringBuffer(string);
-        if (StyleConstants.isBold(set)) {
-            buf.insert(0,"<b>"); //NOI18N
-            buf.append("</b>"); //NOI18N
-        }
-        if (StyleConstants.isItalic(set)) {
-            buf.insert(0,"<i>"); //NOI18N
-            buf.append("</i>"); //NOI18N
-        }
-        if (StyleConstants.isStrikeThrough(set)) {
-            buf.insert(0,"<s>");
-            buf.append("</s>");
-        }
-        buf.insert(0,"<font color=" + getHTMLColor(StyleConstants.getForeground(set)) + ">"); //NOI18N
-        buf.append("</font>"); //NOI18N
-        return buf.toString();
-    }
-    
-    private static String getHTMLColor(Color c) {
-        String colorR = "0" + Integer.toHexString(c.getRed()); //NOI18N
-        colorR = colorR.substring(colorR.length() - 2); 
-        String colorG = "0" + Integer.toHexString(c.getGreen()); //NOI18N
-        colorG = colorG.substring(colorG.length() - 2);
-        String colorB = "0" + Integer.toHexString(c.getBlue()); //NOI18N
-        colorB = colorB.substring(colorB.length() - 2);
-        String html_color = "#" + colorR + colorG + colorB; //NOI18N
-        return html_color;
-    }
 
     public static boolean isFromLibrary(Element element, ClasspathInfo info) {
         SourceUtils.getFile(element, info);
@@ -203,12 +162,7 @@ public class RetoucheUtils {
     public static boolean isFileInOpenProject(FileObject file) {
         assert file != null;
         Project p = FileOwnerQuery.getOwner(file);
-        Project[] opened = OpenProjects.getDefault().getOpenProjects();
-        for (int i = 0; i<opened.length; i++) {
-            if (p==opened[i])
-                return true;
-        }
-        return false;
+        return OpenProjects.getDefault().isProjectOpen(p);
     }
     
     public static boolean isOnSourceClasspath(FileObject fo) {
@@ -216,7 +170,7 @@ public class RetoucheUtils {
         if (p==null) return false;
         Project[] opened = OpenProjects.getDefault().getOpenProjects();
         for (int i = 0; i<opened.length; i++) {
-            if (p==opened[i]) {
+            if (p.equals(opened[i]) || opened[i].equals(p)) {
                 SourceGroup[] gr = ProjectUtils.getSources(p).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
                 for (int j = 0; j < gr.length; j++) {
                     if (fo==gr[j].getRootFolder()) return true;

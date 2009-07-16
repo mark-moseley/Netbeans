@@ -47,6 +47,7 @@ import java.lang.reflect.Method;
 import java.util.Hashtable;
 import javax.swing.Action;
 import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import org.openide.awt.Actions;
 import org.openide.cookies.EditorCookie;
@@ -89,8 +90,8 @@ public abstract class JavaRefactoringGlobalAction extends NodeAction {
     }
     
     private static String trim(String arg) {
-        arg = org.openide.util.Utilities.replaceString(arg, "&", ""); // NOI18N
-        return org.openide.util.Utilities.replaceString(arg, "...", ""); // NOI18N
+        arg = arg.replace("&", ""); // NOI18N
+        return arg.replace("...", ""); // NOI18N
     }
     
     public org.openide.util.HelpCtx getHelpCtx() {
@@ -202,7 +203,9 @@ public abstract class JavaRefactoringGlobalAction extends NodeAction {
 
                 return JavaRefactoringGlobalAction.this.getToolbarPresenter();
             } else {
-                return new Actions.ToolbarButton(this);
+                final JButton button = new JButton();
+                Actions.connect(button, this);
+                return button;
             }
         }
 

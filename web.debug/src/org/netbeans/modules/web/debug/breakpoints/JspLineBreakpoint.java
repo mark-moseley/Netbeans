@@ -45,7 +45,6 @@ import org.netbeans.api.debugger.*;
 import org.netbeans.api.debugger.jpda.*;
 
 import org.netbeans.modules.web.debug.util.Utils;
-import java.util.*;
 import org.openide.util.NbBundle;
 
 
@@ -91,7 +90,7 @@ public class JspLineBreakpoint extends Breakpoint {
         this.url = url;
         this.lineNumber = lineNumber;
         String pt = NbBundle.getMessage(JspLineBreakpoint.class, "CTL_Default_Print_Text");
-        this.printText = org.openide.util.Utilities.replaceString(pt, "{jspName}", Utils.getJspName(url));  
+        this.printText = pt.replace("{jspName}", Utils.getJspName(url));
         
         DebuggerManager d = DebuggerManager.getDebuggerManager();
         
@@ -109,6 +108,10 @@ public class JspLineBreakpoint extends Breakpoint {
         javalb.setPrintText(printText);
         
         String context = Utils.getContextPath(url);
+
+        // FIXME: determine 'real' context path for web app based on used application server
+        // See issues 146793, 161026, 162286 and 162715 (new API request)
+        
         String condition = "request.getContextPath().equals(\"" + context + "\")"; // NOI18N
         javalb.setCondition(condition);
         Utils.log("condition: " + condition);

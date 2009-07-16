@@ -46,6 +46,7 @@ import java.beans.PropertyChangeListener;
 import java.lang.reflect.Method;
 import javax.swing.Action;
 import javax.swing.Icon;
+import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import org.openide.awt.Actions;
 import org.openide.cookies.EditorCookie;
@@ -87,8 +88,8 @@ public abstract class RefactoringGlobalAction extends NodeAction {
     }
     
     private static String trim(String arg) {
-        arg = org.openide.util.Utilities.replaceString(arg, "&", ""); // NOI18N
-        return org.openide.util.Utilities.replaceString(arg, "...", ""); // NOI18N
+        arg = arg.replace("&", ""); // NOI18N
+        return arg.replace("...", ""); // NOI18N
     }
     
     public org.openide.util.HelpCtx getHelpCtx() {
@@ -110,9 +111,9 @@ public abstract class RefactoringGlobalAction extends NodeAction {
 
     
     protected static EditorCookie getTextComponent(Node n) {
-        DataObject dobj = (DataObject) n.getCookie(DataObject.class);
+        DataObject dobj = n.getCookie(DataObject.class);
         if (dobj != null) {
-            EditorCookie ec = (EditorCookie) dobj.getCookie(EditorCookie.class);
+            EditorCookie ec = dobj.getCookie(EditorCookie.class);
             if (ec != null) {
                 TopComponent activetc = TopComponent.getRegistry().getActivated();
                 if (activetc instanceof Pane) {
@@ -199,7 +200,9 @@ public abstract class RefactoringGlobalAction extends NodeAction {
 
                 return RefactoringGlobalAction.this.getToolbarPresenter();
             } else {
-                return new Actions.ToolbarButton(this);
+                final JButton button = new JButton();
+                Actions.connect(button, this);
+                return button;
             }
         }
 
