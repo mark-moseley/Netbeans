@@ -41,6 +41,10 @@
 
 package org.netbeans.modules.cnd.dwarfdump.dwarf;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.ATTR;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.TAG;
 import org.netbeans.modules.cnd.dwarfdump.section.DwarfAttribute;
@@ -108,15 +112,19 @@ public class DwarfAbbriviationTableEntry {
         out.println("Abbrev Number: " + index + " (" + getKind() + ") " + " : " + (hasChildren ? "[has children]" : "[no children]")); // NOI18N
         
         if (dwarfEntry != null) {
-            String qname = dwarfEntry.getQualifiedName();
-            if (qname != null) {
-                out.println("\tQualified Name: " + qname); // NOI18N
+            try {
+                String qname = dwarfEntry.getQualifiedName();
+                if (qname != null) {
+                    out.println("\tQualified Name: " + qname); // NOI18N
+                }
+            } catch (IOException ex) {
+                Logger.getLogger(DwarfAbbriviationTableEntry.class.getName()).log(Level.SEVERE, null, ex);
             }
+            dumpAttributes(out, dwarfEntry.getValues());
         }
         
-        dumpAttributes(out, dwarfEntry.getValues());
     }
-    
+
     public TAG getKind() {
         return TAG.get((int)tag);
     }
@@ -129,5 +137,17 @@ public class DwarfAbbriviationTableEntry {
                 getAttribute(i).dump(out, values.get(i));
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return toString(null);
+    }
+
+    public String toString(DwarfEntry dwarfEntry) {
+        ByteArrayOutputStream st = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(st);
+        dump(out, dwarfEntry);
+        return st.toString();
     }
 }
