@@ -60,6 +60,7 @@ import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.netbeans.modules.subversion.ui.wizards.ImportWizard;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.subversion.util.SvnUtils;
+import org.netbeans.modules.versioning.util.Utils;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
 
@@ -87,9 +88,9 @@ public final class ImportAction extends NodeAction {
             FileStatusCache cache = Subversion.getInstance().getStatusCache();
             File dir = lookupImportDirectory(nodes[0]);
             if (dir != null && dir.isDirectory()) {
-                FileInformation status = cache.getStatus(dir);
+                FileInformation status = cache.getCachedStatus(dir);
                 // mutually exclusive enablement logic with commit
-                if ((status.getStatus() & FileInformation.STATUS_MANAGED) == 0) {
+                if (!SvnUtils.isManaged(dir) && (status == null || (status.getStatus() & FileInformation.STATUS_MANAGED) == 0)) {
                     // do not allow to import partial/nonatomic project, all must lie under imported common root
                     FileObject fo = FileUtil.toFileObject(dir);
                     Project p = FileOwnerQuery.getOwner(fo);
@@ -113,7 +114,9 @@ public final class ImportAction extends NodeAction {
         if(!Subversion.getInstance().checkClientAvailable()) {            
             return;
         }
-    
+
+        Utils.logVCSActionEvent("SVN");
+
         if (nodes.length == 1) {
             final File importDirectory = lookupImportDirectory(nodes[0]);
             if (importDirectory != null) {
@@ -137,7 +140,7 @@ public final class ImportAction extends NodeAction {
                                final String message)
     {                        
         SVNUrl repository;
-        try {            
+        try {
             repository = SvnUtils.getRepositoryRootUrl(context.getRootFiles()[0]);
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);

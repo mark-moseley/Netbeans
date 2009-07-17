@@ -74,6 +74,7 @@ import java.util.*;
 import java.text.MessageFormat;
 import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
+import org.netbeans.modules.versioning.util.Utils;
 
 /**
  * Imports folder into CVS repository. It's enabled on Nodes that represent:
@@ -120,14 +121,14 @@ public final class AddToRepositoryAction extends NodeAction implements ChangeLis
         return null;
     }
 
-    protected boolean enable(Node[] nodes) {
+    protected boolean enable(Node[] nodes) {        
         if (nodes.length == 1) {
             FileStatusCache cache = CvsVersioningSystem.getInstance().getStatusCache();
             File dir = lookupImportDirectory(nodes[0]);
             if (dir != null && dir.isDirectory()) {
-                FileInformation status = cache.getStatus(dir);
+                FileInformation status = cache.getCachedStatus(dir);
                 // mutually exclusive enablement logic with commit
-                if ((status.getStatus() & FileInformation.STATUS_MANAGED) == 0) {
+                if (!CvsVersioningSystem.isManaged(dir) && (status == null || (status.getStatus() & FileInformation.STATUS_MANAGED) == 0)) {
                     // do not allow to import partial/nonatomic project, all must lie under imported common root
                     FileObject fo = FileUtil.toFileObject(dir);
                     Project p = FileOwnerQuery.getOwner(fo);
@@ -143,6 +144,7 @@ public final class AddToRepositoryAction extends NodeAction implements ChangeLis
     }
 
     protected void performAction(Node[] nodes) {
+        Utils.logVCSActionEvent("CVS");        
         if (nodes.length == 1) {
             final File importDirectory = lookupImportDirectory(nodes[0]);
             if (importDirectory != null) {
@@ -205,15 +207,15 @@ public final class AddToRepositoryAction extends NodeAction implements ChangeLis
 
                 wizardIterator = panelIterator(prefRoot, prefModule, importDirectory.getAbsolutePath());
                 wizard = new WizardDescriptor(wizardIterator);
-                wizard.putProperty("WizardPanel_contentData",  // NOI18N
+                wizard.putProperty(WizardDescriptor.PROP_CONTENT_DATA,  // NOI18N
                         new String[] {
                             NbBundle.getMessage(AddToRepositoryAction.class, "BK0015"),
                             NbBundle.getMessage(AddToRepositoryAction.class, "BK0014")
                         }
                 );
-                wizard.putProperty("WizardPanel_contentDisplayed", Boolean.TRUE);  // NOI18N
-                wizard.putProperty("WizardPanel_autoWizardStyle", Boolean.TRUE);  // NOI18N
-                wizard.putProperty("WizardPanel_contentNumbered", Boolean.TRUE);  // NOI18N
+                wizard.putProperty(WizardDescriptor.PROP_CONTENT_DISPLAYED, Boolean.TRUE);  // NOI18N
+                wizard.putProperty(WizardDescriptor.PROP_AUTO_WIZARD_STYLE, Boolean.TRUE);  // NOI18N
+                wizard.putProperty(WizardDescriptor.PROP_CONTENT_NUMBERED, Boolean.TRUE);  // NOI18N
                 wizard.setTitleFormat(new MessageFormat("{0}"));  // NOI18N
                 String title = NbBundle.getMessage(AddToRepositoryAction.class, "BK0007");
                 wizard.setTitle(title);
@@ -330,7 +332,7 @@ public final class AddToRepositoryAction extends NodeAction implements ChangeLis
                 WizardDescriptor.Panel ret = super.current();
                 for (int i = 0; i<panels.length; i++) {
                     if (panels[i] == ret) {
-                        wizard.putProperty("WizardPanel_contentSelectedIndex", new Integer(i));  // NOI18N
+                        wizard.putProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, new Integer(i));  // NOI18N
                     }
                 }
                 return ret;
@@ -341,7 +343,7 @@ public final class AddToRepositoryAction extends NodeAction implements ChangeLis
 
     private void setErrorMessage(String msg) {
         if (wizard != null) {
-            wizard.putProperty("WizardPanel_errorMessage", msg); // NOI18N
+            wizard.putProperty(WizardDescriptor.PROP_ERROR_MESSAGE, msg); // NOI18N
         }
     }
 
