@@ -65,10 +65,9 @@ public class J2MEClassPathProvider implements ClassPathProvider {
     private FileObject srcDir;
     
     protected final AntProjectHelper helper;
-    
-    /** Do nothing */
-    public J2MEClassPathProvider(AntProjectHelper helper) {
-        this.helper = helper;
+
+    public J2MEClassPathProvider(AntProjectHelper helpers) {
+        this.helper = helpers;
     }
     
     public ClassPath findClassPath(final FileObject file, final String type) {

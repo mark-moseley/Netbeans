@@ -55,9 +55,9 @@ import java.beans.PropertyChangeSupport;
 import java.net.MalformedURLException;
 import java.io.File;
 import java.net.URL;
+import org.netbeans.api.project.ProjectManager;
 import org.netbeans.spi.project.support.ant.PropertyUtils;
 import org.openide.filesystems.FileUtil;
-import org.openide.util.RequestProcessor;
 
 public abstract class ProjectClassPathImplementation implements ClassPathImplementation, AntProjectListener, Runnable {
     
@@ -125,7 +125,7 @@ public abstract class ProjectClassPathImplementation implements ClassPathImpleme
     
     public void propertiesChanged(@SuppressWarnings("unused")
 	final AntProjectEvent ev) {
-        RequestProcessor.getDefault().post(this);
+        ProjectManager.mutex().postWriteRequest(this);
     }
     
     public void run() {
@@ -156,11 +156,19 @@ public abstract class ProjectClassPathImplementation implements ClassPathImpleme
                     URL entry = f.toURI().toURL();
                     if (FileUtil.isArchiveFile(entry)) {
                         entry = FileUtil.getArchiveRoot(entry);
-                    } else if (!f.exists()) {
+                    }
+                    else if (!f.exists()) {
                         // if file does not exist (e.g. build/classes folder
                         // was not created yet) then corresponding File will
                         // not be ended with slash. Fix that.
                         assert !entry.toExternalForm().endsWith("/") : f; // NOI18N
+                        entry = new URL(entry.toExternalForm() + "/"); // NOI18N
+                    }
+                    else if ( !entry.toExternalForm().endsWith("/")) { // NOI18N
+                        /* Possible fix for #156890 - IllegalArgumentException: URL must be a folder URL (append '/' if necessary):
+                         * This will fix an the issue in any case. But possibly
+                         * this "else" will never work .
+                         */
                         entry = new URL(entry.toExternalForm() + "/"); // NOI18N
                     }
                     result.add(ClassPathSupport.createResource(entry));
