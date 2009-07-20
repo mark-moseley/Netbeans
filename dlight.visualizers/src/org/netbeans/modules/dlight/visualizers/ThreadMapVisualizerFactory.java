@@ -36,20 +36,37 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.spi.impl;
+package org.netbeans.modules.dlight.visualizers;
 
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapDataQuery;
+import org.netbeans.modules.dlight.spi.impl.ThreadMapDataProvider;
+import org.netbeans.modules.dlight.visualizers.threadmap.ThreadMapVisualizer;
+import org.netbeans.modules.dlight.spi.visualizer.Visualizer;
 import org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProvider;
+import org.netbeans.modules.dlight.spi.visualizer.VisualizerFactory;
+import org.netbeans.modules.dlight.visualizers.api.ThreadMapVisualizerConfiguration;
+import org.netbeans.modules.dlight.visualizers.api.impl.VisualizerConfigurationIDsProvider;
+import org.openide.util.lookup.ServiceProvider;
 
 /**
  *
  * @author Alexander Simon
  */
-public interface ThreadMapDataProvider extends VisualizerDataProvider {
+@ServiceProvider(service = org.netbeans.modules.dlight.spi.visualizer.VisualizerFactory.class)
+public class ThreadMapVisualizerFactory implements VisualizerFactory<ThreadMapVisualizerConfiguration> {
 
-    /**
-     * @param metadata define needed time selection and aggregation.
-     * @return list threads data about all threads that alive in selected time period.
-     */
-    ThreadMapData queryData(ThreadMapDataQuery query);
+    public String getID() {
+        return VisualizerConfigurationIDsProvider.THREAD_MAP_VISUALIZER;
+    }
+
+    public Visualizer<ThreadMapVisualizerConfiguration> create(ThreadMapVisualizerConfiguration configuration, VisualizerDataProvider provider) {
+        if (!(provider instanceof ThreadMapDataProvider)) {
+            return null;
+        }
+
+        ThreadMapVisualizer result = new ThreadMapVisualizer((ThreadMapDataProvider) provider, configuration);
+
+        result.init();
+
+        return result;
+    }
 }

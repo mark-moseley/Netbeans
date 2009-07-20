@@ -36,20 +36,19 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.spi.impl;
+package org.netbeans.modules.dlight.api.storage.types;
 
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapDataQuery;
-import org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProvider;
+import java.util.concurrent.TimeUnit;
 
-/**
- *
- * @author Alexander Simon
- */
-public interface ThreadMapDataProvider extends VisualizerDataProvider {
+public class TimeDuration {
 
-    /**
-     * @param metadata define needed time selection and aggregation.
-     * @return list threads data about all threads that alive in selected time period.
-     */
-    ThreadMapData queryData(ThreadMapDataQuery query);
+    private final long value;
+
+    public TimeDuration(TimeUnit timeUnit, long value) {
+        this.value = timeUnit.toNanos(value);
+    }
+
+    public long getValueIn(TimeUnit unit) {
+        return unit.convert(value, TimeUnit.NANOSECONDS);
+    }
 }
