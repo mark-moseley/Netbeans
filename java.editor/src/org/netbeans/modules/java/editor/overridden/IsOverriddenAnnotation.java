@@ -59,15 +59,18 @@ import org.openide.util.NbBundle;
  *
  * @author Jan Lahoda
  */
-class IsOverriddenAnnotation extends Annotation {
+public class IsOverriddenAnnotation extends Annotation {
     
-    private StyledDocument document;
-    private Position pos;
-    private String shortDescription;
-    private AnnotationType type;
-    private List<ElementDescription> declarations;
+    private final StyledDocument document;
+    private final Position pos;
+    private final String shortDescription;
+    private final AnnotationType type;
+    private final List<ElementDescription> declarations;
     
     public IsOverriddenAnnotation(StyledDocument document, Position pos, AnnotationType type, String shortDescription, List<ElementDescription> declarations) {
+        //#166351 -- null pos for some reason
+        assert pos != null;
+
         this.document = document;
         this.pos = pos;
         this.type = type;
@@ -133,6 +136,14 @@ class IsOverriddenAnnotation extends Annotation {
         SwingUtilities.convertPointToScreen(position, c);
         
         performGoToAction(type, declarations, position, shortDescription);
+    }
+
+    public AnnotationType getType() {
+        return type;
+    }
+
+    public List<ElementDescription> getDeclarations() {
+        return declarations;
     }
     
     static void performGoToAction(AnnotationType type, List<ElementDescription> declarations, Point position, String shortDescription/*XXX*/) {
