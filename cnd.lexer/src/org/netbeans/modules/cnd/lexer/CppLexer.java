@@ -53,6 +53,7 @@
 package org.netbeans.modules.cnd.lexer;
 
 import org.netbeans.api.lexer.Token;
+import org.netbeans.cnd.api.lexer.CndLexerUtilities;
 import org.netbeans.cnd.api.lexer.CppTokenId;
 import org.netbeans.cnd.api.lexer.Filter;
 import org.netbeans.spi.lexer.LexerRestartInfo;
@@ -67,7 +68,7 @@ public class CppLexer extends CndLexer {
     @SuppressWarnings("unchecked")
     public CppLexer(Filter<CppTokenId> defaultFilter, LexerRestartInfo<CppTokenId> info) {
         super(info);
-        Filter<CppTokenId> filter = (Filter<CppTokenId>) info.getAttributeValue("lexer-filter"); // NOI18N
+        Filter<CppTokenId> filter = (Filter<CppTokenId>) info.getAttributeValue(CndLexerUtilities.LEXER_FILTER); // NOI18N
         this.lexerFilter = filter != null ? filter : defaultFilter;
     }
         
@@ -87,10 +88,19 @@ public class CppLexer extends CndLexer {
                     skipLiteral(false);
                     break;
                 case '/':
-                    if (read(true) == '*') { // block or doxygen comment
-                        skipComment();
-                    } else {
-                        backup(1);
+                    switch (read(true)) {
+                        case '/':
+                            skipLineComment();
+                            break;
+                        case '*': // block or doxygen comment
+                            skipBlockComment();
+                            break;
+                        case '\r':
+                            consumeNewline();
+                        // nobreak
+                        case '\n':
+                        case EOF:
+                            return token(CppTokenId.PREPROCESSOR_DIRECTIVE);
                     }
                     break;
                 case '\r': 
@@ -103,10 +113,14 @@ public class CppLexer extends CndLexer {
         }
     }
 
-    private void skipComment() {
-        super.finishComment(false);
+    private void skipBlockComment() {
+        super.finishBlockComment(false);
     }
     
+    private void skipLineComment() {
+        super.finishLineComment(false);
+    }
+
     @SuppressWarnings("fallthrough")
     private void skipLiteral(boolean endDblQuote) {
         while (true) { // string literal
