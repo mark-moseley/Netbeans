@@ -36,25 +36,21 @@
  *
  * Portions Copyrighted 2009 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.dlight.spi.impl;
+package org.netbeans.modules.dlight.api.stack;
 
-import org.netbeans.modules.dlight.api.stack.StackTrace;
+import java.util.List;
 import org.netbeans.modules.dlight.api.storage.threadmap.ThreadInfo;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadMapDataQuery;
-import org.netbeans.modules.dlight.api.storage.threadmap.ThreadState.MSAState;
-import org.netbeans.modules.dlight.spi.visualizer.VisualizerDataProvider;
 
-/**
- *
- * @author Alexander Simon
- */
-public interface ThreadMapDataProvider extends VisualizerDataProvider {
+public interface StackTrace {
 
-    /**
-     * @param metadata define needed time selection and aggregation.
-     * @return list threads data about all threads that alive in selected time period.
-     */
-    ThreadMapData queryData(ThreadMapDataQuery query);
+    List<Stack> getStackTrace();
 
-    StackTrace getStackTrace(long timestamp, ThreadInfo threadInfo, MSAState threadState);
+    long getTimeStamp();
+
+    public interface Stack {
+
+        List<FunctionCall> getStack();
+
+        ThreadInfo getThreadInfo();
+    }
 }
