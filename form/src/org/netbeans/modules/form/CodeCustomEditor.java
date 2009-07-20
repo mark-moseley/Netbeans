@@ -41,6 +41,7 @@
 
 package org.netbeans.modules.form;
 
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
@@ -51,10 +52,12 @@ import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.UIManager;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import org.jdesktop.layout.GroupLayout;
 import org.netbeans.api.editor.guards.SimpleSection;
+import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
 /**
@@ -94,6 +97,9 @@ class CodeCustomEditor extends javax.swing.JPanel implements DocumentListener, R
         this.propertyEditor = propertyEditor;
         
         codePane = new JEditorPane();
+        codePane.getAccessibleContext().setAccessibleName(
+            NbBundle.getBundle(CodeCustomEditor.class).getString("ACSN_CustomCode_EditorPane")); //NOI18N
+        headerLabel.setLabelFor(codePane);
         jScrollPane.setViewportView(codePane);
         
         resetLayout();
@@ -132,6 +138,10 @@ class CodeCustomEditor extends javax.swing.JPanel implements DocumentListener, R
         typeField.setEditable(false);
         typeField.setFont(codePane.getFont());
         typeField.setText(Utilities.getClassName(property.getValueType()));
+        if (UIManager.getLookAndFeel().getID().equals("Nimbus")) { // NOI18N
+            // We have to "clone" the Color because Nimbus ignores ColorUIResources
+            typeField.setBackground(new Color(getBackground().getRGB()));
+        }
 
         codePane.getDocument().addDocumentListener(this);
 
