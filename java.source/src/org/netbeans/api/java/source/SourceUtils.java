@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2008 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -49,7 +49,6 @@ import java.net.URL;
 import java.util.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.*;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
@@ -69,32 +68,43 @@ import com.sun.tools.javac.code.Symbol.*;
 import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.code.Types;
 import com.sun.tools.javac.comp.Check;
+import com.sun.tools.javac.model.JavacElements;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.util.Context;
 import java.io.UnsupportedEncodingException;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.util.concurrent.Future;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.SwingUtilities;
 
+import org.netbeans.api.annotations.common.NonNull;
 import org.netbeans.api.java.classpath.ClassPath;
 import org.netbeans.api.java.lexer.JavaTokenId;
 import org.netbeans.api.java.classpath.GlobalPathRegistry;
 import org.netbeans.api.java.queries.JavadocForBinaryQuery;
+import org.netbeans.api.java.queries.JavadocForBinaryQuery.Result;
 import org.netbeans.api.java.queries.SourceForBinaryQuery;
 import org.netbeans.api.java.source.ClasspathInfo.PathKind;
 import org.netbeans.api.java.source.JavaSource.Phase;
-import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.api.lexer.TokenHierarchy;
-import org.netbeans.api.lexer.TokenId;
 import org.netbeans.api.lexer.TokenSequence;
 import org.netbeans.modules.java.JavaDataLoader;
+import org.netbeans.modules.java.source.indexing.JavaCustomIndexer;
+import org.netbeans.modules.java.source.indexing.JavaIndex;
+import org.netbeans.modules.java.source.parsing.ClasspathInfoProvider;
 import org.netbeans.modules.java.source.parsing.FileObjects;
-import org.netbeans.modules.java.source.usages.ClassFileUtil;
+import org.netbeans.modules.java.source.parsing.JavacParser;
 import org.netbeans.modules.java.source.usages.ClassIndexImpl;
 import org.netbeans.modules.java.source.usages.ClassIndexManager;
 import org.netbeans.modules.java.source.usages.ClasspathInfoAccessor;
-import org.netbeans.modules.java.source.usages.Index;
-import org.netbeans.modules.java.source.usages.RepositoryUpdater;
+import org.netbeans.modules.java.source.usages.ExecutableFilesIndex;
+import org.netbeans.modules.parsing.api.ParserManager;
+import org.netbeans.modules.parsing.api.ResultIterator;
+import org.netbeans.modules.parsing.api.UserTask;
+import org.netbeans.modules.parsing.api.indexing.IndexingManager;
+import org.netbeans.modules.parsing.impl.indexing.friendapi.IndexingController;
 import org.netbeans.spi.java.classpath.support.ClassPathSupport;
 
 import org.openide.filesystems.FileObject;
@@ -102,6 +112,8 @@ import org.openide.filesystems.FileStateInvalidException;
 import org.openide.filesystems.FileUtil;
 import org.openide.filesystems.URLMapper;
 import org.openide.util.Exceptions;
+import org.openide.util.Parameters;
+import org.openide.util.Utilities;
 
 /**
  *
@@ -154,31 +166,17 @@ public class SourceUtils {
     
     /**
      * Returns the type element within which this member or constructor
-     * is declared. Does not accept pakages
+     * is declared. Does not accept packages
      * If this is the declaration of a top-level type (a non-nested class
      * or interface), returns null.
      *
      * @return the type declaration within which this member or constructor
      * is declared, or null if there is none
      * @throws IllegalArgumentException if the provided element is a package element
+     * @deprecated use {@link ElementUtilities#enclosingTypeElement(javax.lang.model.element.Element)}
      */
-    public static TypeElement getEnclosingTypeElement( Element element ) throws IllegalArgumentException {
-	
-	if( element.getKind() == ElementKind.PACKAGE ) {
-	    throw new IllegalArgumentException();
-	}
-	
-        if (element.getEnclosingElement().getKind() == ElementKind.PACKAGE) {
-            //element is a top level class, returning null according to the contract:
-            return null;
-        }
-        
-	while( !(element.getEnclosingElement().getKind().isClass() || 
-	       element.getEnclosingElement().getKind().isInterface()) ) {
-	    element = element.getEnclosingElement();
-	}
-	
-	return (TypeElement)element.getEnclosingElement(); // Wrong
+    public static @Deprecated TypeElement getEnclosingTypeElement( Element element ) throws IllegalArgumentException {
+        return ElementUtilities.enclosingTypeElementImpl(element);
     }
     
     public static TypeElement getOutermostEnclosingTypeElement( Element element ) {
@@ -281,24 +279,26 @@ public class SourceUtils {
             SwingUtilities.invokeLater(new Runnable() {
                 public void run() {
                     try {
-                        info.getJavaSource().runModificationTask(new Task<WorkingCopy>() {
-
-                            public void run(WorkingCopy copy) throws Exception {
+                        ModificationResult.runModificationTask(Collections.singletonList(info.getSnapshot().getSource()), new UserTask() {
+                            @Override
+                            public void run(ResultIterator resultIterator) throws Exception {
+                                WorkingCopy copy = WorkingCopy.get(resultIterator.getParserResult());
                                 copy.toPhase(Phase.ELEMENTS_RESOLVED);
                                 copy.rewrite(copy.getCompilationUnit(), addImports(copy.getCompilationUnit(), Collections.singletonList(fqn), copy.getTreeMaker()));                                
                             }
                         }).commit();
-                    } catch (IOException ioe) {
-                        Exceptions.printStackTrace(ioe);
+                    } catch (Exception e) {
+                        Exceptions.printStackTrace(e);
                     }
                 }
             });
         }
         TypeElement te = info.getElements().getTypeElement(fqn);
         if (te != null) {
-            ((JCCompilationUnit) info.getCompilationUnit()).namedImportScope.enterIfAbsent((Symbol) te);
-        }
-        
+            JCCompilationUnit unit = (JCCompilationUnit) info.getCompilationUnit();
+            unit.namedImportScope = unit.namedImportScope.dupUnshared();
+            unit.namedImportScope.enterIfAbsent((Symbol) te);
+        }        
         return sName;
     }
     
@@ -347,80 +347,21 @@ public class SourceUtils {
      * 
      * @deprecated use {@link getFile(ElementHandle, ClasspathInfo)}
      */
-    public static FileObject getFile (Element element, ClasspathInfo cpInfo) {
-        try {
-        if (element == null || cpInfo == null) {
-            throw new IllegalArgumentException ("Cannot pass null as an argument of the SourceUtils.getFile");  //NOI18N
-        }
-        Element prev = null;
+    public static FileObject getFile (Element element, final ClasspathInfo cpInfo) {
+        Parameters.notNull("element", element); //NOI18N
+        Parameters.notNull("cpInfo", cpInfo);   //NOI18N
+        
+        Element prev = element.getKind() == ElementKind.PACKAGE ? element : null;
         while (element.getKind() != ElementKind.PACKAGE) {
             prev = element;
             element = element.getEnclosingElement();
         }
-        if (prev == null || (!prev.getKind().isClass() && !prev.getKind().isInterface()))
+        final ElementKind kind = prev.getKind();
+        if (prev == null || !(kind.isClass() || kind.isInterface() || kind == ElementKind.PACKAGE)) {
             return null;
-        ClassSymbol clsSym = (ClassSymbol)prev;
-        URI uri;
-        if (clsSym.completer != null)
-            clsSym.complete();
-        if (clsSym.sourcefile != null && (uri=clsSym.sourcefile.toUri())!= null && uri.isAbsolute()) {
-            return URLMapper.findFileObject(uri.toURL());
-        }
-        else {
-            if (clsSym.classfile == null)
-                return null;
-            uri = clsSym.classfile.toUri();
-            if (uri == null || !uri.isAbsolute()) {
-                return null;
-            }
-            FileObject classFo = URLMapper.findFileObject(uri.toURL());
-            if (classFo == null) {
-                return null;
-            }
-            ClassPath cp = ClassPathSupport.createProxyClassPath(
-                new ClassPath[] {
-                    createClassPath(cpInfo,ClasspathInfo.PathKind.BOOT),
-                    createClassPath(cpInfo,ClasspathInfo.PathKind.OUTPUT),
-                    createClassPath(cpInfo,ClasspathInfo.PathKind.COMPILE),
-            });
-            FileObject root = cp.findOwnerRoot(classFo);
-            if (root == null) {
-                return null;
-            }
-            String parentResName = cp.getResourceName(classFo.getParent(),'/',false);       //NOI18N
-            SourceForBinaryQuery.Result result = SourceForBinaryQuery.findSourceRoots(root.getURL());
-            FileObject[] sourceRoots = result.getRoots();
-            ClassPath sourcePath = ClassPathSupport.createClassPath(sourceRoots);
-            List<FileObject> folders = (List<FileObject>) sourcePath.findAllResources(parentResName);
-            boolean caseSensitive = isCaseSensitive ();
-            final String sourceFileName = getSourceFileName (classFo.getName());
-            for (FileObject folder : folders) {
-                FileObject[] children = folder.getChildren();
-                for (FileObject child : children) {
-                    if (((caseSensitive && child.getName().equals (sourceFileName)) ||
-                        (!caseSensitive && child.getName().equalsIgnoreCase (sourceFileName)))
-                        &&
-                    JavaDataLoader.JAVA_EXTENSION.equalsIgnoreCase(child.getExt())) {
-                        return child;
-                    }
-                }
-            }
-            FileObject foundFo;
-            String signature = ClassFileUtil.encodeClassNameOrArray(clsSym);
-            if (sourceRoots.length == 0) {
-                foundFo = findSource (signature,root);
-            }
-            else {
-                foundFo = findSource (signature,sourceRoots);
-            }
-            if (foundFo != null) {
-                return foundFo;
-            }
-        }
-        } catch (IOException e) {
-            Exceptions.printStackTrace(e);
-        }
-        return null;
+        }        
+        final ElementHandle<? extends Element> handle = ElementHandle.create(prev);
+        return getFile (handle, cpInfo);
     }
     
     /**
@@ -430,9 +371,8 @@ public class SourceUtils {
      * @return {@link FileObject} or null when the source file cannot be found
      */
     public static FileObject getFile (final ElementHandle<? extends Element> handle, final ClasspathInfo cpInfo) {
-        if (handle == null || cpInfo == null) {
-            throw new IllegalArgumentException ("Cannot pass null as an argument of the SourceUtils.getFile");  //NOI18N
-        }
+        Parameters.notNull("handle", handle);
+        Parameters.notNull("cpInfo", cpInfo);        
         try {
             boolean pkg = handle.getKind() == ElementKind.PACKAGE;
             String[] signature = handle.getSignature();
@@ -560,19 +500,23 @@ public class SourceUtils {
             pageName = PACKAGE_SUMMARY;
         }
         else {
-            Element prev = null;
-            Element enclosing = element;
-            while (enclosing.getKind() != ElementKind.PACKAGE) {
-                prev = enclosing;
-                enclosing = enclosing.getEnclosingElement();
+            Element e = element;
+            StringBuilder sb = new StringBuilder();
+            while(e.getKind() != ElementKind.PACKAGE) {
+                if (e.getKind().isClass() || e.getKind().isInterface()) {
+                    if (sb.length() > 0)
+                        sb.insert(0, '.');
+                    sb.insert(0, e.getSimpleName());
+                    if (clsSym == null)
+                        clsSym = (ClassSymbol)e;
+                }
+                e = e.getEnclosingElement();
             }
-            if (prev == null || (!prev.getKind().isClass() && !prev.getKind().isInterface())) {
+            if (clsSym == null)
                 return null;
-            }
-            clsSym = (ClassSymbol)prev;
-            pkgName = FileObjects.convertPackage2Folder(clsSym.getEnclosingElement().getQualifiedName().toString());
-            pageName = clsSym.getSimpleName().toString();
-            buildFragment = element != prev;
+            pkgName = FileObjects.convertPackage2Folder(((PackageElement)e).getQualifiedName().toString());
+            pageName = sb.toString();
+            buildFragment = element != clsSym;
         }
         
         if (clsSym.completer != null) {
@@ -590,7 +534,7 @@ public class SourceUtils {
                 }
                 if (fo != null) {
                     URL url = fo.getURL();
-                    sourceRoot = Index.getSourceRootForClassFolder(url);
+                    sourceRoot = JavaIndex.getSourceRootForClassFolder(url);
                     if (sourceRoot == null) {
                         binaries.add(url);
                     } else {
@@ -633,7 +577,14 @@ out:                    for (URL e : roots) {
                 }
             }
             for (URL binary : binaries) {
-                URL[] result = JavadocForBinaryQuery.findJavadoc(binary).getRoots();
+                Result javadocResult = JavadocForBinaryQuery.findJavadoc(binary);
+                URL[] result = javadocResult.getRoots();
+                for (int cntr = 0; cntr < result.length; cntr++) {
+                    if (!result[cntr].toExternalForm().endsWith("/")) { // NOI18N
+                        Logger.getLogger(SourceUtils.class.getName()).log(Level.WARNING, "JavadocForBinaryQuery.Result: {0} returned non-folder URL: {1}, ignoring", new Object[] {javadocResult.getClass(), result[cntr].toExternalForm()});
+                        result[cntr] = null;
+                    }
+                }
                 ClassPath cp = ClassPathSupport.createClassPath(result);
                 FileObject fo = cp.findResource(pkgName);
                 if (fo != null) {
@@ -717,7 +668,7 @@ out:                    for (URL e : roots) {
      * Tests whether the initial scan is in progress.
      */
     public static boolean isScanInProgress () {
-        return RepositoryUpdater.getDefault().isScanInProgress();
+        return IndexingManager.getDefault().isIndexing();
     }
 
     /**
@@ -727,7 +678,25 @@ out:                    for (URL e : roots) {
      * @deprecated use {@link JavaSource#runWhenScanFinished}
      */
     public static void waitScanFinished () throws InterruptedException {
-        RepositoryUpdater.getDefault().waitScanFinished();
+        try {
+            class T extends UserTask implements ClasspathInfoProvider {
+                private final ClassPath EMPTY_PATH = ClassPathSupport.createClassPath(new URL[0]);
+                private final ClasspathInfo cpinfo = ClasspathInfo.create(EMPTY_PATH, EMPTY_PATH, EMPTY_PATH);
+                @Override
+                public void run(ResultIterator resultIterator) throws Exception {
+                    // no-op
+                }
+
+                public ClasspathInfo getClasspathInfo() {
+                    return cpinfo;
+                }
+            }
+            Future<Void> f = ParserManager.parseWhenScanFinished(JavacParser.MIME_TYPE, new T());
+            if (!f.isDone()) {
+                f.get();
+            }
+        } catch (Exception ex) {
+        }
     }
     
     
@@ -736,12 +705,12 @@ out:                    for (URL e : roots) {
      * It returns all the open project source roots which have either
      * direct or transitive dependency on the given source root.
      * @param root to find the dependent roots for
-     * @return {@link Set} of {@link URL}s containinig at least the
-     * incomming root, never returns null.
+     * @return {@link Set} of {@link URL}s containing at least the
+     * incoming root, never returns null.
      * @since 0.10
      */
     public static Set<URL> getDependentRoots (final URL root) {
-        final Map<URL, List<URL>> deps = RepositoryUpdater.getDefault().getDependencies ();
+        final Map<URL, List<URL>> deps = IndexingController.getDefault().getRootDependencies();
         return getDependentRootsImpl (root, deps);
     }
     
@@ -809,7 +778,7 @@ out:                    for (URL e : roots) {
                 public void run(final CompilationController control) throws Exception {
                     if (control.toPhase(JavaSource.Phase.ELEMENTS_RESOLVED).compareTo (JavaSource.Phase.ELEMENTS_RESOLVED)>=0) {
                         new TreePathScanner<Void,Void> () {
-                           public Void visitMethod(MethodTree node, Void p) {
+                           public @Override Void visitMethod(MethodTree node, Void p) {
                                ExecutableElement method = (ExecutableElement) control.getTrees().getElement(getCurrentPath());
                                if (method != null && SourceUtils.isMainMethod(method) && isAccessible(method.getEnclosingElement())) {
                                    result.add (ElementHandle.create((TypeElement)method.getEnclosingElement()));
@@ -861,7 +830,7 @@ out:                    for (URL e : roots) {
             js.runUserActionTask(new Task<CompilationController>() {
 
                 public void run(CompilationController control) throws Exception {
-                    TypeElement type = control.getElements().getTypeElement(qualifiedName);
+                    TypeElement type = ((JavacElements)control.getElements()).getTypeElementByBinaryName(qualifiedName);
                     if (type == null) {
                         return;
                     }
@@ -924,16 +893,25 @@ out:                    for (URL e : roots) {
      */
     public static Collection<ElementHandle<TypeElement>> getMainClasses (final FileObject[] sourceRoots) {
         final List<ElementHandle<TypeElement>> result = new LinkedList<ElementHandle<TypeElement>> ();
-        for (FileObject root : sourceRoots) {
-            try {
+        for (final FileObject root : sourceRoots) {
+            try {               
+                final File rootFile = FileUtil.toFile(root);
                 ClassPath bootPath = ClassPath.getClassPath(root, ClassPath.BOOT);
                 ClassPath compilePath = ClassPath.getClassPath(root, ClassPath.COMPILE);
                 ClassPath srcPath = ClassPathSupport.createClassPath(new FileObject[] {root});
                 ClasspathInfo cpInfo = ClasspathInfo.create(bootPath, compilePath, srcPath);
-                final Set<ElementHandle<TypeElement>> classes = cpInfo.getClassIndex().getDeclaredTypes("", ClassIndex.NameKind.PREFIX, EnumSet.of(ClassIndex.SearchScope.SOURCE));
                 JavaSource js = JavaSource.create(cpInfo);
                 js.runUserActionTask(new Task<CompilationController>() {
                     public void run(CompilationController control) throws Exception {
+                        final URL rootURL = root.getURL();
+                        Iterable<? extends URL> mainClasses = ExecutableFilesIndex.DEFAULT.getMainClasses(rootURL);                        
+                        List<ElementHandle<TypeElement>> classes = new LinkedList<ElementHandle<TypeElement>>();
+                        for (URL mainClass : mainClasses) {
+                            File mainFo = new File (URI.create(mainClass.toExternalForm()));
+                            if (mainFo.exists()) {
+                                classes.addAll(JavaCustomIndexer.getRelatedTypes(mainFo, rootFile));
+                            }
+                        }
                         for (ElementHandle<TypeElement> cls : classes) {
                             TypeElement te = cls.resolve(control);
                             if (te != null) {
@@ -1001,4 +979,220 @@ out:                    for (URL e : roots) {
     
     // --------------- End of getFile () helper methods ------------------------------
 
+    private static final int MAX_LEN = 6;
+    /**
+     * Utility method for generating method parameter names based on incoming
+     * class name when source is unavailable.
+     * <p/>
+     * This method uses both subjective heuristics to follow common patterns
+     * for common JDK classes, acronym creation for bicapitalized names, and
+     * vowel and repeated character elision if that fails, to generate
+     * readable, programmer-friendly method names.
+     *
+     * @param typeName The fqn of the parameter class
+     * @param used A set of names that have already been used for parameters
+     * and should not be reused, to avoid creating uncompilable code
+     * @return A programmer-friendly parameter name (i.e. not arg0, arg1...)
+     */
+    static @NonNull String generateReadableParameterName (@NonNull String typeName, @NonNull Set<String> used) {
+        boolean arr = typeName.indexOf ("[") > 0 || typeName.endsWith("..."); //NOI18N
+        typeName = trimToSimpleName (typeName);
+        String result = typeName.toLowerCase();
+        //First, do some common, sane substitutions that are common java parlance
+        if ( typeName.endsWith ( "Listener" ) ) { //NOI18N
+            result = Character.toLowerCase(typeName.charAt(0)) + "l"; //NOI18N
+        } else if ( "Object".equals (typeName)) { //NOI18N
+            result = "o"; //NOI18N
+        } else if ("Class".equals(typeName)) { //NOI18N
+            result = "type"; //NOI18N
+        } else if ( "InputStream".equals(typeName)) { //NOI18N
+            result = "in"; //NOI18N
+        } else if ( "OutputStream".equals(typeName)) {
+            result = "out"; //NOI18N
+        } else if ( "Runnable".equals(typeName)) {
+            result = "r"; //NOI18N
+        } else if ( "Lookup".equals(typeName)) {
+            result = "lkp"; //NOI18N
+        } else if ( typeName.endsWith ( "Stream" )) { //NOI18N
+            result = "stream"; //NOI18N
+        } else if ( typeName.endsWith ("Writer")) { //NOI18N
+            result = "writer"; //NOI18N
+        } else if ( typeName.endsWith ("Reader")) { //NOI18N
+            result = "reader"; //NOI18N
+        } else if ( typeName.endsWith ( "Panel" )) { //NOI18N
+            result = "pnl"; //NOI18N
+        } else if ( typeName.endsWith ( "Action" )) { //NOI18N
+            result = "action"; //NOI18N
+        }
+        //Now see if we've made a large and unwieldy variable - people
+        //usually prefer reasonably short but legible arguments
+        if ( result.length () > MAX_LEN ) {
+            //See if we can turn, say, NoClassDefFoundError into "ncdfe"
+            result = tryToMakeAcronym ( typeName );
+            //No luck?  We've probably got one long word like Component or Runnable
+            if (result.length() > MAX_LEN) {
+                //First, strip out vowels - people easily figure out words
+                //missing vowels - common in abbreviations and spam mails
+                result = elideVowelsAndRepetitions(result);
+                if (result.length() > MAX_LEN) {
+                    //Still too long?  Give up and give them a 1 character var name
+                    result = new StringBuilder().append(
+                            result.charAt(0)).toString().toLowerCase();
+                }
+            }
+        }
+        //Make sure we haven't killed everything - if so, use a generic version
+        if ( result.trim ().length () == 0 ) {
+            result = "value"; //NOI18N
+        }
+        //If it's an array, pluralize it (english language style - but better than nothing)
+        if (arr) {
+            result += "s"; //NOI18N
+        }
+        //Now make sure it's legal;  if not, make it a single letter
+        if ( isPrimitiveTypeName ( result ) || !Utilities.isJavaIdentifier ( result ) ) {
+            StringBuilder sb = new StringBuilder();
+            sb.append (result.charAt(0));
+            result = sb.toString();
+        }
+        //Now make sure we're not duplicating a variable name we already used
+        String test = result;
+        int revs = 0;
+        while ( used.contains ( test ) ) {
+            revs++;
+            test = result + revs;
+        }
+        result = test;
+        used.add ( result );
+        return result;
+    }
+
+    /**
+     * Trims to the simple class name and removes and generics
+     *
+     * @param typeName The class name
+     * @return A simplified class name
+     */
+    private static String trimToSimpleName (String typeName) {
+        String result = typeName;
+        int ix = result.indexOf ("<"); //NOI18N
+        if (ix > 0 && ix != typeName.length() - 1) {
+            result = typeName.substring(0, ix);
+        }
+        if (result.endsWith ("...")) { //NOI18N
+            result = result.substring (0, result.length() - 3);
+        }
+        ix = result.lastIndexOf ("$"); //NOI18N
+        if (ix > 0 && ix != result.length() - 1) {
+            result = result.substring(ix + 1);
+        } else {
+            ix = result.lastIndexOf("."); //NOI18N
+            if (ix > 0 && ix != result.length() - 1) {
+                result = result.substring(ix + 1);
+            }
+        }
+        ix = result.indexOf ( "[" ); //NOI18N
+        if ( ix > 0 ) {
+            result = result.substring ( 0, ix );
+        }
+        return result;
+    }
+
+    /**
+     * Removes vowels and repeated letters.  This is used to generate names
+     * where the class name a single long word - e.g. abbreviate
+     * Runnable to rnbl
+     * @param name The name
+     * @return A shortened version of it
+     */
+    private static String elideVowelsAndRepetitions (String name) {
+        char[] chars = name.toCharArray();
+        StringBuilder sb = new StringBuilder();
+        char last = 0;
+        char lastUsed = 0;
+        for (int i = 0; i < chars.length; i++) {
+            char c = chars[i];
+            if (Character.isDigit(c)) {
+                continue;
+            }
+            if (i == 0 || Character.isUpperCase(c)) {
+                if (lastUsed != c) {
+                    sb.append (c);
+                    lastUsed = c;
+                }
+            } else if (c != last && !isVowel(c)) {
+                if (lastUsed != c) {
+                    sb.append (c);
+                    lastUsed = c;
+                }
+            }
+            last = c;
+        }
+        return sb.toString();
+    }
+
+    private static boolean isVowel(char c) {
+        return Arrays.binarySearch(VOWELS, c) >= 0;
+    }
+
+    /**
+     * Vowels in various indo-european-based languages
+     */
+    private static char[] VOWELS = new char[] {
+    //IMPORTANT:  This array is sorted.  If you add to it,
+    //add in the correct place or Arrays.binarySearch will break on it
+    '\u0061', '\u0065', '\u0069', '\u006f', '\u0075', '\u0079', '\u00e9', '\u00ea',  //NOI18N
+    '\u00e8', '\u00e1', '\u00e2', '\u00e6', '\u00e0', '\u03b1', '\u00e3',  //NOI18N
+    '\u00e5', '\u00e4', '\u00eb', '\u00f3', '\u00f4', '\u0153', '\u00f2',  //NOI18N
+    '\u03bf', '\u00f5', '\u00f6', '\u00ed', '\u00ee', '\u00ec', '\u03b9',  //NOI18N
+    '\u00ef', '\u00fa', '\u00fb', '\u00f9', '\u03d2', '\u03c5', '\u00fc',  //NOI18N
+    '\u0430', '\u043e', '\u044f', '\u0438', '\u0439', '\u0435', '\u044b',  //NOI18N
+    '\u044d', '\u0443', '\u044e', };
+
+    //PENDING:  The below would be much prettier;  whether it survives
+    //cross-platform encoding issues in hg is another question;  the hg diff generated
+    //was incorrect
+/*
+    'a', 'e', 'i', 'o', 'u', 'y', 'à', 'á', //NOI18N
+    'â', 'ã', 'ä', 'å', 'æ', 'è', 'é', //NOI18N
+    'ê', 'ë', 'ì', 'í', 'î', 'ï', 'ò', //NOI18N
+    'ó', 'ô', 'õ', 'ö', 'ù', 'ú', 'û', //NOI18N
+    'ü', 'œ', 'α', 'ι', 'ο', 'υ', 'ϒ', //NOI18N
+    'а', 'е', 'и', 'й', 'о', 'у', 'ы', //NOI18N
+    'э', 'ю', 'я'}; //NOI18N
+*/
+    /**
+     * Determine if a string matches a java primitive type.  Used in generating reasonable variable names.
+     */
+    private static boolean isPrimitiveTypeName (String typeName) {
+        return (
+                //Whoa, ascii art!
+                "void".equals ( typeName ) || //NOI18N
+                "int".equals ( typeName ) || //NOI18N
+                "long".equals ( typeName ) || //NOI18N
+                "float".equals ( typeName ) || //NOI18N
+                "double".equals ( typeName ) || //NOI18N
+                "short".equals ( typeName ) || //NOI18N
+                "char".equals ( typeName ) || //NOI18N
+                "boolean".equals ( typeName ) ); //NOI18N
+    }
+
+    /**
+     * Try to create an acronym-style variable name from a string - i.e.,
+     * "JavaDataObject" becomes "jdo".
+     */
+    private static String tryToMakeAcronym (String s) {
+        char[] c = s.toCharArray ();
+        StringBuilder sb = new StringBuilder ();
+        for ( int i = 0; i < c.length; i++ ) {
+            if ( Character.isUpperCase (c[i])) {
+                sb.append ( c[ i ] );
+            }
+        }
+        if ( sb.length () > 1 ) {
+            return sb.toString ().toLowerCase ();
+        } else {
+            return s.toLowerCase();
+        }
+    }
 }
