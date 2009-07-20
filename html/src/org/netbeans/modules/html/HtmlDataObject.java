@@ -54,8 +54,6 @@ import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
-import org.netbeans.api.project.FileOwnerQuery;
-import org.netbeans.api.project.Project;
 import org.netbeans.spi.queries.FileEncodingQueryImplementation;
 import org.openide.awt.HtmlBrowser;
 import org.openide.cookies.ViewCookie;
@@ -70,6 +68,7 @@ import org.openide.nodes.Children;
 import org.openide.nodes.CookieSet;
 import org.openide.nodes.Node;
 import org.openide.util.Lookup;
+import org.openide.util.UserCancelException;
 
 /** Object that represents one html file.
  *
@@ -83,7 +82,6 @@ public class HtmlDataObject extends MultiDataObject implements CookieSet.Factory
     
     //constants used when finding html document content type
     private static final String CHARSET_DECL = "CHARSET="; //NOI18N
-    private static final String HEAD_END_TAG_NAME = "</HEAD>"; //NOI18N
     
     private HtmlEditorSupport htmlEditorSupport;
     
@@ -100,7 +98,12 @@ public class HtmlDataObject extends MultiDataObject implements CookieSet.Factory
         set.assign(SaveAsCapable.class, new SaveAsCapable() {
             public void saveAs( FileObject folder, String fileName ) throws IOException {
                 HtmlEditorSupport es = getCookie( HtmlEditorSupport.class );
-                es.saveAs( folder, fileName );
+                try {
+                    es.updateEncoding();
+                    es.saveAs( folder, fileName );
+                } catch (UserCancelException e) {
+                    //ignore, just not save anything
+                }
             }
         });
 
@@ -231,24 +234,11 @@ public class HtmlDataObject extends MultiDataObject implements CookieSet.Factory
     
     private static int[] findEncodingOffsets(String txt) {
         int[] rslt = new int[0];
-        int headEndOffset = txt.indexOf(HEAD_END_TAG_NAME); // NOI18N
-        headEndOffset = headEndOffset == -1 ? txt.indexOf(HEAD_END_TAG_NAME.toLowerCase()) : headEndOffset;
-        
-        if (headEndOffset == -1){
-            return rslt;
-        }
-        
         TokenHierarchy hi = TokenHierarchy.create(txt, HTMLTokenId.language());
         TokenSequence ts = hi.tokenSequence();
         ts.moveStart();
         while(ts.moveNext()) {
             Token token = ts.token();
-            
-            //test we do not overlap </head>
-            if(token.offset(hi) >= headEndOffset) {
-                break;
-            }
-            
             if(token.id() == HTMLTokenId.VALUE) {
                 String tokenImage = token.text().toString();
                 int charsetOffset = tokenImage.indexOf(CHARSET_DECL);
