@@ -1,8 +1,8 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
- *
+ * 
  * Copyright 2008 Sun Microsystems, Inc. All rights reserved.
- *
+ * 
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
  * Development and Distribution License("CDDL") (collectively, the
@@ -20,7 +20,7 @@
  * License Header, with the fields enclosed by brackets [] replaced by
  * your own identifying information:
  * "Portions Copyrighted [year] [name of copyright owner]"
- *
+ * 
  * If you wish your version of this file to be governed by only the CDDL
  * or only the GPL Version 2, indicate your decision by adding
  * "[Contributor] elects to include this software in this distribution
@@ -31,12 +31,12 @@
  * However, if you add GPL Version 2 code and therefore, elected the GPL
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
- *
+ * 
  * Contributor(s):
- *
+ * 
  * Portions Copyrighted 2008 Sun Microsystems, Inc.
  */
-package org.netbeans.modules.php.editor.nav;
+package org.netbeans.modules.refactoring.php.findusages;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.Stack;
 import java.util.WeakHashMap;
@@ -58,15 +59,13 @@ import org.netbeans.api.annotations.common.CheckForNull;
 import org.netbeans.modules.csl.api.Modifier;
 import org.netbeans.modules.csl.spi.ParserResult;
 import org.netbeans.modules.parsing.spi.indexing.support.QuerySupport;
-import org.netbeans.modules.php.editor.CodeUtils;
 import org.netbeans.modules.php.editor.index.IndexedClass;
 import org.netbeans.modules.php.editor.index.IndexedClassMember;
 import org.netbeans.modules.php.editor.index.IndexedConstant;
 import org.netbeans.modules.php.editor.index.IndexedElement;
 import org.netbeans.modules.php.editor.index.IndexedFunction;
 import org.netbeans.modules.php.editor.index.PHPIndex;
-import org.netbeans.modules.php.editor.nav.SemiAttribute.AttributedElement.Kind;
-import org.netbeans.modules.php.editor.parser.api.Utils;
+import org.netbeans.modules.php.editor.model.ModelElement;
 import org.netbeans.modules.php.editor.parser.astnodes.ASTNode;
 import org.netbeans.modules.php.editor.parser.astnodes.ArrayAccess;
 import org.netbeans.modules.php.editor.parser.astnodes.Assignment;
@@ -100,14 +99,14 @@ import org.netbeans.modules.php.editor.parser.astnodes.StaticMethodInvocation;
 import org.netbeans.modules.php.editor.parser.astnodes.Variable;
 import org.netbeans.modules.php.editor.parser.astnodes.VariableBase;
 import org.netbeans.modules.php.editor.parser.astnodes.visitors.DefaultVisitor;
-import org.openide.filesystems.FileObject;
+import org.netbeans.modules.refactoring.php.findusages.AttributedNodes.AttributedElement.Kind;
 import org.openide.util.Union2;
 
 /**
  *
  * @author Jan Lahoda, Radek Matous
  */
-public class SemiAttribute extends DefaultVisitor {
+public class AttributedNodes extends DefaultVisitor {
     private static final List<String> SUPERGLOBALS = Arrays.asList(
             "GLOBALS", "_SERVER", "_GET", "_POST", "_FILES", //NOI18N
             "_COOKIE", "_SESSION", "_REQUEST", "_ENV"); //NOI18N
@@ -119,15 +118,63 @@ public class SemiAttribute extends DefaultVisitor {
     private ParserResult info;
     private Stack<ASTNode> nodes = new Stack<ASTNode>();
 
-    public SemiAttribute(ParserResult info) {
+    public AttributedNodes(ParserResult info) {
         this(info, -1);
     }
 
-    public SemiAttribute(ParserResult info, int o) {
+    public AttributedNodes(ParserResult info, int o) {
         this.offset = o;
         this.info = info;
         scopes.push(global = new DefinitionScope());
     }
+
+   public static AttributedNodes getInstance(ParserResult info) {
+        AttributedNodes a = info2Attr.get(info);
+
+        if (a == null) {
+            long startTime = System.currentTimeMillis();
+
+            a = new AttributedNodes(info);
+            a.scan(RefactoringUtils.getRoot(info));
+
+            a.info = null;
+
+            info2Attr.put(info, a);
+
+            long endTime = System.currentTimeMillis();
+
+            Logger.getLogger("TIMER").log(Level.FINE, "SemiAttribute global instance", new Object[]{info.getSnapshot().getSource().getFileObject(), a});
+            Logger.getLogger("TIMER").log(Level.FINE, "SemiAttribute global time", new Object[]{info.getSnapshot().getSource().getFileObject(), (endTime - startTime)});
+        }
+
+        return a;
+    }
+
+    public static AttributedNodes getInstance(ParserResult info, int stopOffset) {
+        AttributedNodes a = new AttributedNodes(info, stopOffset);
+
+        try {
+            a.scan(RefactoringUtils.getRoot(info));
+        } catch (Stop s) {
+        }
+
+        return a;
+    }
+
+    public Map<ASTNode, AttributedElement> findDirectSubclasses(ModelElement elemToBeFound) {
+        Map<ASTNode, AttributedElement> results = new HashMap<ASTNode, AttributedElement>();
+        for (Entry<ASTNode, AttributedElement> entry : node2Element.entrySet()) {
+            AttributedElement elem = entry.getValue();
+            ASTNode node = entry.getKey();
+            if (WhereUsedSupport.matchDirectSubclass(elemToBeFound, node, elem)) {
+                if (!WhereUsedSupport.isAlreadyInResults(node, results.keySet())) {
+                    results.put(node, elem);
+                }
+            }
+        }
+        return results;
+    }
+
 
     @Override
     public void scan(ASTNode node) {
@@ -247,17 +294,17 @@ public class SemiAttribute extends DefaultVisitor {
             if (var != null && name != null) {
                 node2Element.put(var,
                         scopes.peek().enterWrite(name, Kind.VARIABLE, var));
-            }            
+            }
         }
         super.visit(node);
     }
 
     @Override
     public void visit(CatchClause node) {
-        Identifier className = (node.getClassName() != null) ? CodeUtils.extractUnqualifiedIdentifier(node.getClassName()) : null;
+        Expression className = node.getClassName();
         AttributedElement ae = null;
         if (className != null) {
-            String name = className.getName();
+            String name = CodeUtils.extractTypeName(className);
             Collection<AttributedElement> namedGlobalElements =
                     getNamedGlobalElements(Kind.CLASS, name);
             if (!namedGlobalElements.isEmpty()) {
@@ -269,10 +316,10 @@ public class SemiAttribute extends DefaultVisitor {
         Variable var = node.getVariable();
         final String name = extractVariableName(var);
 
-        if (var != null && name != null) {       
+        if (var != null && name != null) {
             node2Element.put(var,
                     scopes.peek().enterWrite(name, Kind.VARIABLE, var));
-        } 
+        }
 
         super.visit(node);
     }
@@ -296,10 +343,8 @@ public class SemiAttribute extends DefaultVisitor {
                 scopes.peek().enterWrite(name, Kind.VARIABLE, var);
             }
         }
-        Identifier parameterType = (node.getParameterType() != null) ? 
-            CodeUtils.extractUnqualifiedIdentifier(node.getParameterType()) : null;
-
-        if (parameterType != null){
+        Identifier parameterType = node.getParameterType() != null ? CodeUtils.extractIdentifier(node.getParameterType()) : null;
+        if (parameterType != null) {
             String name = parameterType.getName();
             if (name != null) {
                 Collection<AttributedElement> namedGlobalElements = getNamedGlobalElements(Kind.CLASS, name);
@@ -310,7 +355,6 @@ public class SemiAttribute extends DefaultVisitor {
                 }
             }
         }
-        
         super.visit(node);
     }
 
@@ -360,13 +404,12 @@ public class SemiAttribute extends DefaultVisitor {
             } else {
                 if (par instanceof StaticMethodInvocation) {
                     StaticMethodInvocation smi = (StaticMethodInvocation) par;
-                    final String clsName = CodeUtils.extractUnqualifiedClassName(smi);
-                    Collection<AttributedElement> nn = getNamedGlobalElements(Kind.CLASS,clsName);
+                    String contextClassName = CodeUtils.extractClassName(smi);
+                    Collection<AttributedElement> nn = getNamedGlobalElements(Kind.CLASS, contextClassName);
                     if (!nn.isEmpty()) {
-                        String contextClassName = clsName;
-                        if ("parent".equals(clsName)) {//NOI18N
+                        if ("parent".equals(contextClassName)) {//NOI18N
                             contextClassName = getContextSuperClassName();
-                        } else if ("self".equals(clsName)) {//NOI18N
+                        } else if ("self".equals(contextClassName)) {//NOI18N
                             contextClassName = getContextClassName();
                         }
                         for (AttributedElement ell : nn) {
@@ -395,8 +438,8 @@ public class SemiAttribute extends DefaultVisitor {
                 if (d instanceof Scalar && ((Scalar) d).getScalarType() == Type.STRING) {
                     String value = ((Scalar) d).getStringValue();
 
-                    if (NavUtils.isQuoted(value)) {
-                        node2Element.put(d, global.enterWrite(NavUtils.dequote(value), Kind.CONST, d));
+                    if (RefactoringUtils.isQuoted(value)) {
+                        node2Element.put(d, global.enterWrite(RefactoringUtils.dequote(value), Kind.CONST, d));
                     }
                 }
             }
@@ -418,7 +461,7 @@ public class SemiAttribute extends DefaultVisitor {
         node2Element.put(node, ce);
         List<Expression> interfaes = node.getInterfaes();
         for (Expression identifier : interfaes) {
-            ClassElement iface = (ClassElement) lookup(CodeUtils.extractUnqualifiedName(identifier), Kind.IFACE);
+            ClassElement iface = (ClassElement) lookup(CodeUtils.extractTypeName(identifier), Kind.IFACE);
             ce.ifaces.add(iface);
             node2Element.put(identifier, iface);
         }
@@ -443,14 +486,13 @@ public class SemiAttribute extends DefaultVisitor {
         ClassElement ce = (ClassElement) global.enterWrite(name, Kind.CLASS, node);
 
         node2Element.put(node, ce);
-        Identifier superClsName = (node.getSuperClass() != null) ?
-            CodeUtils.extractUnqualifiedIdentifier(node.getSuperClass()) : null;
-        if (superClsName != null) {
-            ce.superClass = (ClassElement) lookup(superClsName.getName(), Kind.CLASS);
+
+        if (node.getSuperClass() != null) {
+            ce.superClass = (ClassElement) lookup(CodeUtils.extractSuperClassName(node), Kind.CLASS);
         }
         List<Expression> interfaes = node.getInterfaes();
         for (Expression identifier : interfaes) {
-            ClassElement iface = (ClassElement) lookup(CodeUtils.extractUnqualifiedName(identifier), Kind.IFACE);
+            ClassElement iface = (ClassElement) lookup(CodeUtils.extractTypeName(identifier), Kind.IFACE);
             ce.ifaces.add(iface);
             node2Element.put(identifier, iface);
         }
@@ -491,7 +533,7 @@ public class SemiAttribute extends DefaultVisitor {
 
     @Override
     public void visit(Scalar scalar) {
-        if (scalar.getScalarType() == Type.STRING && !NavUtils.isQuoted(scalar.getStringValue())) {
+        if (scalar.getScalarType() == Type.STRING && !RefactoringUtils.isQuoted(scalar.getStringValue())) {
             AttributedElement def = global.lookup(scalar.getStringValue(), Kind.CONST);
 
             node2Element.put(scalar, def);
@@ -538,7 +580,7 @@ public class SemiAttribute extends DefaultVisitor {
 
     @Override
     public void visit(StaticConstantAccess node) {
-        String clsName = CodeUtils.extractUnqualifiedClassName(node);
+        String clsName = CodeUtils.extractClassName(node);
         if (clsName.equals("self")) {//NOI18N
             ClassElement c = getCurrentClassElement();
             if (c != null) {
@@ -559,7 +601,7 @@ public class SemiAttribute extends DefaultVisitor {
             for (AttributedElement ell : nn) {
                 ClassElement ce = (ClassElement)ell;
                 if (ce != null && ce.getName().equals(clsName)) {
-                    String name = CodeUtils.extractUnqualifiedClassName(node);
+                    String name = node.getConstant().getName();
                     AttributedElement thisEl = ce.lookup(name, Kind.CONST);
                     node2Element.put(node.getClassName(), ce);
                     node2Element.put(node, thisEl);
@@ -575,9 +617,9 @@ public class SemiAttribute extends DefaultVisitor {
     @Override
     public void visit(StaticFieldAccess node) {
         Collection<AttributedElement> nn = getNamedGlobalElements(Kind.CLASS,
-                CodeUtils.extractUnqualifiedClassName(node));
+                CodeUtils.extractClassName(node));
         if (!nn.isEmpty()) {
-            String contextClassName = CodeUtils.extractUnqualifiedClassName(node);
+            String contextClassName = CodeUtils.extractClassName(node);
             if ("parent".equals(contextClassName)) {
                 contextClassName = getContextSuperClassName();
             } else if ("self".equals(contextClassName)) {
@@ -633,8 +675,8 @@ public class SemiAttribute extends DefaultVisitor {
 
                 if (v.getScalarType() == Type.STRING) {
                     String value = v.getStringValue();
-                    if (NavUtils.isQuoted(value)) {
-                        node2Element.put(v, enterGlobalVariable(NavUtils.dequote(value)));
+                    if (RefactoringUtils.isQuoted(value)) {
+                        node2Element.put(node, enterGlobalVariable(RefactoringUtils.dequote(value)));
                     }
                 }
             }
@@ -678,7 +720,7 @@ public class SemiAttribute extends DefaultVisitor {
 
         switch (k) {
             case FUNC:
-            case IFACE:    
+            case IFACE:
             case CLASS:
                 e = global.lookup(name, k);
                 break;
@@ -717,8 +759,8 @@ public class SemiAttribute extends DefaultVisitor {
                 }
             }
             if (Kind.CLASS.equals(k) && fName.equals("parent")) {//NOI18N
-                Collection<AttributedElement> values = name2El.values();
                 if (name2El != null) {
+                    Collection<AttributedElement> values = name2El.values();
                     for (AttributedElement ael : values) {
                         if (ael instanceof ClassElement) {
                             ClassElement ce = (ClassElement) ael;
@@ -796,11 +838,8 @@ public class SemiAttribute extends DefaultVisitor {
                 String name = node.getName().getName();
                 ClassElement ce = (ClassElement) global.enterWrite(name, Kind.CLASS, node);
                 node2Element.put(node, ce);
-                Identifier superClsName = (node.getSuperClass() != null) ?
-                    CodeUtils.extractUnqualifiedIdentifier(node.getSuperClass()) : null;
-
-                if (superClsName != null) {
-                    ce.superClass = (ClassElement) lookup(superClsName.getName(), Kind.CLASS);
+                if (node.getSuperClass() != null) {
+                    ce.superClass = (ClassElement) lookup(CodeUtils.extractSuperClassName(node), Kind.CLASS);
                     node2Element.put(node.getSuperClass(), ce.superClass);
                 }
                 List<Expression> interfaes = node.getInterfaes();
@@ -821,16 +860,16 @@ public class SemiAttribute extends DefaultVisitor {
 
         }
     }
-    private static Map<ParserResult, SemiAttribute> info2Attr = new WeakHashMap<ParserResult, SemiAttribute>();
+    private static Map<ParserResult, AttributedNodes> info2Attr = new WeakHashMap<ParserResult, AttributedNodes>();
 
-    public static SemiAttribute semiAttribute(ParserResult info) {
-        SemiAttribute a = info2Attr.get(info);
+    public static AttributedNodes AttributedNodes(ParserResult info) {
+        AttributedNodes a = info2Attr.get(info);
 
         if (a == null) {
             long startTime = System.currentTimeMillis();
 
-            a = new SemiAttribute(info);
-            a.scan(Utils.getRoot(info));
+            a = new AttributedNodes(info);
+            a.scan(RefactoringUtils.getRoot(info));
 
             a.info = null;
 
@@ -838,20 +877,18 @@ public class SemiAttribute extends DefaultVisitor {
 
             long endTime = System.currentTimeMillis();
 
-            FileObject fo = info.getSnapshot().getSource().getFileObject();
-
-            Logger.getLogger("TIMER").log(Level.FINE, "SemiAttribute global instance", new Object[]{fo, a});
-            Logger.getLogger("TIMER").log(Level.FINE, "SemiAttribute global time", new Object[]{fo, (endTime - startTime)});
+            Logger.getLogger("TIMER").log(Level.FINE, "AttributedNodes global instance", new Object[]{info.getSnapshot().getSource().getFileObject(), a});
+            Logger.getLogger("TIMER").log(Level.FINE, "AttributedNodes global time", new Object[]{info.getSnapshot().getSource().getFileObject(), (endTime - startTime)});
         }
 
         return a;
     }
 
-    public static SemiAttribute semiAttribute(ParserResult info, int stopOffset) {
-        SemiAttribute a = new SemiAttribute(info, stopOffset);
+    public static AttributedNodes AttributedNodes(ParserResult info, int stopOffset) {
+        AttributedNodes a = new AttributedNodes(info, stopOffset);
 
         try {
-            a.scan(Utils.getRoot(info));
+            a.scan(RefactoringUtils.getRoot(info));
         } catch (Stop s) {
         }
 
@@ -869,7 +906,7 @@ public class SemiAttribute extends DefaultVisitor {
     @CheckForNull
     //TODO converge this method with CodeUtils.extractVariableName()
     public static String extractVariableName(Variable var) {
-        String varName = CodeUtils.extractVariableName(var);
+        String varName = WhereUsedElement.extractVariableName(var);
 
         if (varName != null && varName.startsWith("$")){ //NOI18N
             return varName.substring(1);
@@ -1165,9 +1202,9 @@ public class SemiAttribute extends DefaultVisitor {
             }
             PHPIndex index = PHPIndex.get(info);
             int attrs = PHPIndex.ANY_ATTR;
+
             switch(k) {
                 case CONST:
-                    
                 for (IndexedClassMember<IndexedConstant> classMember : index.getAllClassConstants(null, getName(), name, QuerySupport.Kind.PREFIX)) {
                     IndexedConstant m = classMember.getMember();
                     String idxName = m.getName();
@@ -1344,7 +1381,7 @@ public class SemiAttribute extends DefaultVisitor {
             if (k == Kind.VARIABLE && this != global) {
                 //TODO: review
                 if (SUPERGLOBALS.contains(name)) {
-                    return SemiAttribute.this.enterGlobalVariable(name);
+                    return AttributedNodes.this.enterGlobalVariable(name);
                 }
             }
 
@@ -1401,7 +1438,7 @@ public class SemiAttribute extends DefaultVisitor {
             return el;
         }
 
-        public AttributedElement lookup(String name, Kind k) {            
+        public AttributedElement lookup(String name, Kind k) {
             AttributedElement el = null;
             Map<String, AttributedElement> name2El = name2Writes.get(k);
             if (name2El != null) {
