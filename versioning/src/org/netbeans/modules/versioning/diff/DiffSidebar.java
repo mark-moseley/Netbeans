@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -59,6 +59,7 @@ import org.openide.loaders.DataObjectNotFoundException;
 import org.openide.loaders.MultiDataObject;
 import org.openide.filesystems.*;
 import org.openide.awt.UndoRedo;
+import org.openide.util.Exceptions;
 import org.openide.windows.TopComponent;
 import org.openide.util.Lookup;
 import org.openide.util.RequestProcessor;
@@ -85,7 +86,7 @@ import java.text.MessageFormat;
  * 
  * @author Maros Sandor
  */
-class DiffSidebar extends JComponent implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
+class DiffSidebar extends JPanel implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
     
     private static final int BAR_WIDTH = 9;
     
@@ -134,8 +135,8 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private void refreshOriginalContent() {
-        File file = FileUtil.toFile(fileObject);
-        ownerVersioningSystem = VersioningManager.getInstance().getOwner(file);
+        File file = fileObject != null ? FileUtil.toFile(fileObject) : null;
+        ownerVersioningSystem = file != null ? VersioningManager.getInstance().getOwner(file) : null;
         originalContentSerial++;
         refreshDiff();
     }
@@ -203,15 +204,47 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
             // delete annotations (arrows) are rendered between lines
             diff = getDifference(line);
             if (diff != null && diff.getType() != Difference.DELETE) diff = null;
+        } else if (diff.getType() == Difference.DELETE) {
+            Difference diffPrev = getDifference(line);
+            if (diffPrev != null && diffPrev.getType() == Difference.DELETE) {
+                // two delete arrows next to each other cause some selection problems, select the closer one
+                diff = getCloserDifference(event, diffPrev, diff);
+            }
         }
         return diff;
+    }
+
+    /**
+     * In case of two neighboring DELETE differences which meet on the same line, this method returns a difference
+     * which' annotation is closer (in y-axis) to the click-point
+     * @param event event with the click-point
+     * @param previous a difference reaching out from the previous line
+     * @param next a difference reaching out from the next line
+     * @return
+     */
+    private Difference getCloserDifference(MouseEvent event, Difference previous, Difference next) {
+        Difference returnedDiff = next;
+        JTextComponent component = editorUI.getComponent();
+        if (component != null) {
+            BaseTextUI textUI = (BaseTextUI) component.getUI();
+            try {
+                Rectangle rec = textUI.modelToView(component, textUI.viewToModel(component, new Point(0, event.getY())));
+                if (rec != null && event.getY() < rec.getY() + rec.getHeight() / 2) {
+                    // previous difference is closer to the click
+                    returnedDiff = previous;
+                }
+            } catch (BadLocationException ex) {
+                // not interested, default next is returned
+            }
+        }
+        return returnedDiff;
     }
 
     void onDiff(Difference diff) {
         try {
             DiffController view = DiffController.create(new SidebarStreamSource(true), new SidebarStreamSource(false));
             DiffTopComponent tc = new DiffTopComponent(view);
-            tc.setName(fileObject.getNameExt() + " [Diff]"); // NOI18N
+            tc.setName(NbBundle.getMessage(DiffSidebar.class, "CTL_DiffPanel_Title", new Object[] {fileObject.getNameExt()})); // NOI18N
             tc.open();
             tc.requestActive();
             view.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, getDiffIndex(diff));
@@ -227,19 +260,30 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         return -1;
     }
 
+    private int computeDocumentOffset(int lineOffset) {
+        int end = Utilities.getRowStartFromLineOffset(document, lineOffset);
+        if (end == -1) {
+            Element lineRoot = document.getParagraphElement(0).getParentElement();
+            for (end = lineRoot.getElement(lineOffset - 1).getEndOffset(); end > document.getLength(); end--) {
+            }
+        }
+        return end;
+    }
+
     void onRollback(Difference diff) {
         try {
             if (diff.getType() == Difference.ADD) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeDocumentOffset(diff.getSecondEnd());
                 document.remove(start, end - start);
             } else if (diff.getType() == Difference.CHANGE) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeDocumentOffset(diff.getSecondEnd());
                 document.replace(start, end - start, diff.getFirstText(), null);
             } else {
-                int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart());
-                document.insertString(start, diff.getFirstText(), null);
+                int start = computeDocumentOffset(diff.getSecondStart());
+                String newline = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart()) == -1 ? "\n" : "";
+                document.insertString(start, newline + diff.getFirstText(), null);
             }
             refreshDiff();
         } catch (BadLocationException e) {
@@ -277,6 +321,11 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     private Point scrollToDifference(Difference diff) {
         int lineStart = diff.getSecondStart() - 1;
         int lineEnd = diff.getSecondEnd() - 1;
+        if (lineStart == -1) {
+            // the change was delete starting on the first line, show the diff on the next line
+            // since in this case the file cannot be empty, 0 index does not throw BLE
+            lineStart = 0;
+        }
         if (diff.getType() == Difference.DELETE) {
             lineEnd = lineStart;
         }
@@ -385,9 +434,11 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (editorUI != null) {
             try{
                 JTextComponent component = editorUI.getComponent();
-                BaseTextUI textUI = (BaseTextUI)component.getUI();
-                int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
-                line = Utilities.getLineOffset(document, clickOffset);
+                if (component != null) {
+                    BaseTextUI textUI = (BaseTextUI)component.getUI();
+                    int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
+                    line = Utilities.getLineOffset(document, clickOffset);
+                }
             }catch (BadLocationException ble){
                 Logger.getLogger(DiffSidebar.class.getName()).log(Level.WARNING, "getLineFromMouseEvent", ble); // NOI18N
             }
@@ -424,7 +475,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     
     private void initialize() {
         assert SwingUtilities.isEventDispatchThread();
-        
+
         document.addDocumentListener(this);
         textComponent.addComponentListener(this);
         foldHierarchy.addFoldHierarchyListener(this);
@@ -726,9 +777,10 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (vs == null) return null;
         File mainFile = FileUtil.toFile(fileObject);
         if (mainFile == null) return null;
-        
+
         File tempFolder = Utils.getTempFolder();
-        
+        tempFolder.deleteOnExit();
+
         Set<File> filesToCheckout = new HashSet<File>(2);
         filesToCheckout.add(mainFile);
         DataObject dao = null;
@@ -748,6 +800,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         try {            
             for (File file : filesToCheckout) {
                 File originalFile = new File(tempFolder, file.getName());
+                originalFile.deleteOnExit();
                 vs.getOriginalFile(file, originalFile);
                 originalFiles.add(originalFile);
             }         
@@ -762,12 +815,22 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
             if(encodinqQuery != null) {
                 encodinqQuery.resetEncodingForFiles(originalFiles);
             }
-            Utils.deleteRecursively(tempFolder);
         }
     }
     
     private Reader createReader(File file) {
         try {
+            /*
+             * Text returned by EditorCookie.openDocument.getText(...)
+             * may differ from the raw text contained in the file.
+             * For example, this is the case of FormDataObject, which trims
+             * some special comments (tags) while the Java source file is
+             * being loaded to the editor. When the file is being saved,
+             * the special comments are written to the raw file.
+             * This is the reason why text for the diff is read using
+             * the EditorCookie, instead of reading it directly from the
+             * File or FileObject.
+             */
             FileObject fo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
             DataObject dao = DataObject.find(fo);
             Document doc = null;            
