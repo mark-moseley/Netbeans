@@ -52,10 +52,12 @@ import java.util.Set;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
-import org.netbeans.modules.cnd.discovery.api.ProjectUtil;
+import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
+import org.netbeans.modules.cnd.discovery.api.Progress;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -63,6 +65,7 @@ import org.openide.util.Utilities;
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.discovery.api.DiscoveryProvider.class)
 public class AnalyzeFolder extends BaseDwarfProvider {
     private Map<String,ProviderProperty> myProperties = new HashMap<String,ProviderProperty>();
     public static final String FOLDER_KEY = "folder"; // NOI18N
@@ -177,16 +180,16 @@ public class AnalyzeFolder extends BaseDwarfProvider {
         return 0;
     }
     
-    public List<Configuration> analyze(ProjectProxy project) {
-        isStoped = false;
+    public List<Configuration> analyze(ProjectProxy project, final Progress progress) {
+        isStoped.set(false);
         List<Configuration> confs = new ArrayList<Configuration>();
         setCommpilerSettings(project);
-        if (!isStoped){
+        if (!isStoped.get()){
             Configuration conf = new Configuration(){
                 private List<SourceFileProperties> myFileProperties;
                 private List<String> myIncludedFiles;
                 public List<ProjectProperties> getProjectConfiguration() {
-                    return divideByLanguage(getSourcesConfiguration());
+                    return ProjectImpl.divideByLanguage(getSourcesConfiguration());
                 }
                 
                 public List<Configuration> getDependencies() {
@@ -196,10 +199,16 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                 public List<SourceFileProperties> getSourcesConfiguration() {
                     if (myFileProperties == null){
                         Set<String> set = getObjectFiles((String)getProperty(FOLDER_KEY).getValue());
+                        if (progress != null) {
+                            progress.start(set.size());
+                        }
                         if (set.size() > 0) {
-                            myFileProperties = getSourceFileProperties(set.toArray(new String[set.size()]));
+                            myFileProperties = getSourceFileProperties(set.toArray(new String[set.size()]), progress);
                         } else {
                             myFileProperties = new ArrayList<SourceFileProperties>();
+                        }
+                        if (progress != null) {
+                            progress.done();
                         }
                     }
                     return myFileProperties;
@@ -209,7 +218,7 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                     if (myIncludedFiles == null) {
                         HashSet<String> set = new HashSet<String>();
                         for(SourceFileProperties source : getSourcesConfiguration()){
-                            if (isStoped) {
+                            if (isStoped.get()) {
                                 break;
                             }
                             set.addAll( ((DwarfSource)source).getIncludedFiles() );
@@ -217,12 +226,12 @@ public class AnalyzeFolder extends BaseDwarfProvider {
                         }
                         HashSet<String> unique = new HashSet<String>();
                         for(String path : set){
-                            if (isStoped) {
+                            if (isStoped.get()) {
                                 break;
                             }
                             File file = new File(path);
-                            if (file.exists()) {
-                                unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                            if (CndFileUtils.exists(file)) {
+                                unique.add(CndFileUtils.normalizeFile(file).getAbsolutePath());
                             }
                         }
                         myIncludedFiles = new ArrayList<String>(unique);
@@ -240,11 +249,11 @@ public class AnalyzeFolder extends BaseDwarfProvider {
         gatherSubFolders(new File(root), set);
         HashSet<String> map = new HashSet<String>();
         for (Iterator it = set.iterator(); it.hasNext();){
-            if (isStoped) {
+            if (isStoped.get()) {
                 break;
             }
             File d = new File((String)it.next());
-            if (d.isDirectory()){
+            if (d.exists() && d.isDirectory() && d.canRead()){
                 File[] ff = d.listFiles();
                 for (int i = 0; i < ff.length; i++) {
                     if (ff[i].isFile()) {
@@ -284,11 +293,11 @@ public class AnalyzeFolder extends BaseDwarfProvider {
     }
     
     private void gatherSubFolders(File d, HashSet<String> set){
-        if (isStoped) {
+        if (isStoped.get()) {
             return;
         }
-        if (d.isDirectory()){
-            if (ProjectUtil.ignoreFolder(d)){
+        if (d.exists() && d.isDirectory() && d.canRead()){
+            if (DiscoveryUtils.ignoreFolder(d)){
                 return;
             }
             String path = d.getAbsolutePath();

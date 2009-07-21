@@ -48,17 +48,20 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.netbeans.modules.cnd.discovery.api.Configuration;
+import org.netbeans.modules.cnd.discovery.api.Progress;
+import org.netbeans.modules.cnd.discovery.api.ProjectImpl;
 import org.netbeans.modules.cnd.discovery.api.ProjectProperties;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.api.ProviderProperty;
 import org.netbeans.modules.cnd.discovery.api.SourceFileProperties;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.NbBundle;
 
 /**
  *
  * @author Alexander Simon
  */
+@org.openide.util.lookup.ServiceProvider(service=org.netbeans.modules.cnd.discovery.api.DiscoveryProvider.class)
 public class AnalyzeExecutable extends BaseDwarfProvider {
     private Map<String,ProviderProperty> myProperties = new LinkedHashMap<String,ProviderProperty>();
     public static final String EXECUTABLE_KEY = "executable"; // NOI18N
@@ -177,19 +180,22 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
         if (set == null || set.length() == 0) {
             return 0;
         }
-        return 70;
+        if (sizeComilationUnit(set) > 0) {
+            return 70;
+        }
+        return 0;
     }
     
-    public List<Configuration> analyze(ProjectProxy project) {
-        isStoped = false;
+    public List<Configuration> analyze(ProjectProxy project, Progress progress) {
+        isStoped.set(false);
         List<Configuration> confs = new ArrayList<Configuration>();
         setCommpilerSettings(project);
-        if (!isStoped){
+        if (!isStoped.get()){
             Configuration conf = new Configuration(){
                 private List<SourceFileProperties> myFileProperties;
                 private List<String> myIncludedFiles;
                 public List<ProjectProperties> getProjectConfiguration() {
-                    return divideByLanguage(getSourcesConfiguration());
+                    return ProjectImpl.divideByLanguage(getSourcesConfiguration());
                 }
                 
                 public List<Configuration> getDependencies() {
@@ -202,14 +208,14 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
                         if (set != null && set.length() > 0) {
                             String[] add = (String[])getProperty(LIBRARIES_KEY).getValue();
                             if (add == null || add.length==0) {
-                                myFileProperties = getSourceFileProperties(new String[]{set});
+                                myFileProperties = getSourceFileProperties(new String[]{set},null);
                             } else {
                                 String[] all = new String[add.length+1];
                                 all[0] = set;
                                 for(int i = 0; i < add.length; i++){
                                     all[i+1]=add[i];
                                 }
-                                myFileProperties = getSourceFileProperties(all);
+                                myFileProperties = getSourceFileProperties(all,null);
                             }
                         }
                     }
@@ -220,7 +226,7 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
                     if (myIncludedFiles == null) {
                         HashSet<String> set = new HashSet<String>();
                         for(SourceFileProperties source : getSourcesConfiguration()){
-                            if (isStoped) {
+                            if (isStoped.get()) {
                                 break;
                             }
                             if (source instanceof DwarfSource) {
@@ -230,12 +236,12 @@ public class AnalyzeExecutable extends BaseDwarfProvider {
                         }
                         HashSet<String> unique = new HashSet<String>();
                         for(String path : set){
-                            if (isStoped) {
+                            if (isStoped.get()) {
                                 break;
                             }
                             File file = new File(path);
-                            if (file.exists()) {
-                                unique.add(FileUtil.normalizeFile(file).getAbsolutePath());
+                            if (CndFileUtils.exists(file)) {
+                                unique.add(CndFileUtils.normalizeFile(file).getAbsolutePath());
                             }
                         }
                         myIncludedFiles = new ArrayList<String>(unique);

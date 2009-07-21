@@ -45,12 +45,11 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryProvider;
 import org.netbeans.modules.cnd.discovery.api.ProjectProxy;
 import org.netbeans.modules.cnd.discovery.api.DiscoveryUtils;
@@ -61,7 +60,8 @@ import org.netbeans.modules.cnd.dwarfdump.CompilationUnit;
 import org.netbeans.modules.cnd.dwarfdump.Dwarf;
 import org.netbeans.modules.cnd.dwarfdump.dwarfconsts.LANG;
 import org.netbeans.modules.cnd.dwarfdump.exception.WrongFileFormatException;
-import org.openide.filesystems.FileUtil;
+import org.netbeans.modules.cnd.utils.CndUtils;
+import org.netbeans.modules.cnd.utils.cache.CndFileUtils;
 import org.openide.util.Exceptions;
 import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
@@ -76,7 +76,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
     private static final boolean FULL_TRACE = Boolean.getBoolean("cnd.dwarfdiscovery.trace.read.source"); // NOI18N
     public static final String RESTRICT_SOURCE_ROOT = "restrict_source_root"; // NOI18N
     public static final String RESTRICT_COMPILE_ROOT = "restrict_compile_root"; // NOI18N
-    protected boolean isStoped = false;
+    protected AtomicBoolean isStoped = new AtomicBoolean(false);
     
     public BaseDwarfProvider() {
     }
@@ -86,19 +86,12 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
     }
     
     public void stop() {
-        isStoped = true;
-    }
-
-    private int getNumberThreads(){
-        int threadCount = Integer.getInteger("cnd.modelimpl.parser.threads", // NOI18N
-                Runtime.getRuntime().availableProcessors()).intValue(); // NOI18N
-        threadCount = Math.min(threadCount, 4);
-        return Math.max(threadCount, 1);
+        isStoped.set(true);
     }
 
     protected List<SourceFileProperties> getSourceFileProperties(String[] objFileName, Progress progress){
         CountDownLatch countDownLatch = new CountDownLatch(objFileName.length);
-        RequestProcessor rp = new RequestProcessor("Parallel analyzing", getNumberThreads()); // NOI18N
+        RequestProcessor rp = new RequestProcessor("Parallel analyzing", CndUtils.getNumberCndWorkerThreads()); // NOI18N
         try{
             Map<String,SourceFileProperties> map = new ConcurrentHashMap<String,SourceFileProperties>();
             for (String file : objFileName) {
@@ -116,11 +109,12 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         } finally {
             PathCache.dispose();
             grepBase.clear();
+            getCommpilerSettings().dispose();
         }
     }
 
     private boolean processObjectFile(String file, Map<String, SourceFileProperties> map, Progress progress) {
-        if (isStoped) {
+        if (isStoped.get()) {
             return true;
         }
         String restrictSourceRoot = null;
@@ -128,7 +122,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         if (p != null) {
             String s = (String) p.getValue();
             if (s.length() > 0) {
-                restrictSourceRoot = FileUtil.normalizeFile(new File(s)).getAbsolutePath();
+                restrictSourceRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
             }
         }
         String restrictCompileRoot = null;
@@ -136,11 +130,11 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         if (p != null) {
             String s = (String) p.getValue();
             if (s.length() > 0) {
-                restrictCompileRoot = FileUtil.normalizeFile(new File(s)).getAbsolutePath();
+                restrictCompileRoot = CndFileUtils.normalizeFile(new File(s)).getAbsolutePath();
             }
         }
         for (SourceFileProperties f : getSourceFileProperties(file, map)) {
-            if (isStoped) {
+            if (isStoped.get()) {
                 break;
             }
             String name = f.getItemPath();
@@ -230,7 +224,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             List <CompilationUnit> units = dump.getCompilationUnits();
             if (units != null && units.size() > 0) {
                 for (CompilationUnit cu : units) {
-                    if (isStoped) {
+                    if (isStoped.get()) {
                         break;
                     }
                     if (cu.getRoot() == null || cu.getSourceFileName() == null) {
@@ -302,7 +296,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         return list;
     }
 
-    private Map<String,List<String>> grepBase = new ConcurrentHashMap<String, List<String>>();
+    private Map<String,GrepEntry> grepBase = new ConcurrentHashMap<String, GrepEntry>();
     
     public CompilerSettings getCommpilerSettings(){
         return myCommpilerSettings;
@@ -313,6 +307,12 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
     }
     private CompilerSettings myCommpilerSettings;
 
+    public static class GrepEntry {
+        List<String> includes = new ArrayList<String>();
+        String firstMacro = null;
+        int firstMacroLine = -1;
+    }
+
     public static class CompilerSettings{
         private List<String> systemIncludePathsC;
         private List<String> systemIncludePathsCpp;
@@ -320,7 +320,6 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         private Map<String,String> systemMacroDefinitionsCpp;
         private Map<String,String> normalizedPaths = new ConcurrentHashMap<String, String>();
         private String compileFlavor;
-        private String compileDirectory;
         private String cygwinDriveDirectory;
         
         public CompilerSettings(ProjectProxy project){
@@ -329,7 +328,6 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             systemMacroDefinitionsCpp = DiscoveryUtils.getSystemMacroDefinitions(project, true);
             systemMacroDefinitionsC = DiscoveryUtils.getSystemMacroDefinitions(project,false);
             compileFlavor = DiscoveryUtils.getCompilerFlavor(project);
-            compileDirectory = DiscoveryUtils.getCompilerDirectory(project);
             cygwinDriveDirectory = DiscoveryUtils.getCygwinDrive(project);
         }
         
@@ -359,7 +357,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         }
 
         private String normalizePath(String path){
-            path = FileUtil.normalizeFile(new File(path)).getAbsolutePath();
+            path = CndFileUtils.normalizeFile(new File(path)).getAbsolutePath();
             if (Utilities.isWindows()) {
                 path = path.replace('\\', '/');
             }
@@ -370,12 +368,16 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
             return compileFlavor;
         }
 
-        public String getCompileDirectory() {
-            return compileDirectory;
-        }
-
         public String getCygwinDrive() {
             return cygwinDriveDirectory;
+        }
+
+        private void dispose(){
+            systemIncludePathsC.clear();
+            systemIncludePathsCpp.clear();
+            systemMacroDefinitionsC.clear();
+            systemMacroDefinitionsCpp.clear();
+            normalizedPaths.clear();
         }
     }
 
@@ -393,7 +395,7 @@ public abstract class BaseDwarfProvider implements DiscoveryProvider {
         }
         public void run() {
             try {
-                if (!isStoped) {
+                if (!isStoped.get()) {
                     Thread.currentThread().setName("Parallel analyzing "+file); // NOI18N
                     processObjectFile(file, map, progress);
                 }
