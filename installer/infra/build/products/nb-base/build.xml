@@ -53,39 +53,70 @@
     <!-- import the base script for building product packages -->
     <import file="${common.dir}/product.xml" optional="false"/>
     
-    <!--
-      Corrects the layout of the incoming installation data files. 
-      
-      Overrides the '-pre-package' target in product.xml.
-    -->
-    <target name="-pre-package">
-        <if property="instrument.jars" value="true">
-            <if property="i" value="2">
-                <mkdir 
-                    dir="${data.directory}/emma-lib"/>
-                <copy 
-                    file="${emma.jar.file}" 
-                    todir="${data.directory}/emma-lib"/>
-                
-                <replace 
-                    file="${data.directory}/etc/netbeans.conf" 
-                    token="netbeans_default_options=&quot;"
-                    value="netbeans_default_options=&quot;--cp:p &quot;${NETBEANS_HOME}/emma-lib/emma.jar&quot; -J-Dnetbeans.security.nocheck=true "/>
-            </if>
-            
-            <exec executable="${bash.executable}" failonerror="true" dir="${data.directory}">
-                <arg value="${emma.sh.file}"/>
-                <arg value="."/>
-                <arg value="${emma.txt.file}"/>
-                <arg value="${emma.jar.file}"/>
-            </exec>
-        </if>
-    </target>
-    
     <!-- ============================================================================
       Default
     ============================================================================= -->
-    
+    <target name="clean-all">
+        <antcall target="clean-platform">
+            <param name="product.platforms" value="windows"/>
+        </antcall>
+        <antcall target="clean-platform">
+            <param name="product.platforms" value="linux"/>
+        </antcall>
+        <antcall target="clean-platform">
+            <param name="product.platforms" value="solaris-x86"/>
+        </antcall>
+        <antcall target="clean-platform">
+            <param name="product.platforms" value="solaris-sparc"/>
+        </antcall>        
+        <antcall target="clean-platform">
+            <param name="product.platforms" value="macosx-x86 macosx-ppc"/>
+        </antcall>
+
+    </target>
+
+    <target name="build-all">
+        <antcall target="build-platform">
+            <param name="product.platforms" value="windows"/>
+        </antcall>
+        <antcall target="build-platform">
+            <param name="product.platforms" value="linux"/>
+        </antcall>
+        <antcall target="build-platform">
+            <param name="product.platforms" value="solaris-x86"/>
+        </antcall>
+        <antcall target="build-platform">
+            <param name="product.platforms" value="solaris-sparc"/>
+        </antcall>        
+        <antcall target="build-platform">
+            <param name="product.platforms" value="macosx-x86 macosx-ppc"/>
+        </antcall>
+
+    </target>
+
+    <target name="release-all">
+        <antcall target="release-platform">
+            <param name="product.platforms" value="windows"/>
+        </antcall>
+        <antcall target="release-platform">
+            <param name="product.platforms" value="linux"/>
+        </antcall>
+        <antcall target="release-platform">
+            <param name="product.platforms" value="solaris-x86"/>
+        </antcall>
+        <antcall target="release-platform">
+            <param name="product.platforms" value="solaris-sparc"/>
+        </antcall>        
+        <antcall target="release-platform">
+            <param name="product.platforms" value="macosx-x86 macosx-ppc"/>
+        </antcall>
+    </target>
+
+    <target name="clean-platform" depends="clean"/>
+    <target name="build-platform" depends="clean-platform,checkout,build"/>
+    <target name="release-platform" depends="build-platform,release"/>
+
+
     <!--
       The default target. 
       
