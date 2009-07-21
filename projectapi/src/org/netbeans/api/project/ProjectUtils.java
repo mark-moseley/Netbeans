@@ -42,18 +42,27 @@
 package org.netbeans.api.project;
 
 import java.beans.PropertyChangeListener;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.prefs.Preferences;
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
+import org.netbeans.modules.projectapi.AuxiliaryConfigBasedPreferencesProvider;
+import org.netbeans.modules.projectapi.AuxiliaryConfigImpl;
+import org.netbeans.spi.project.AuxiliaryConfiguration;
+import org.netbeans.spi.project.AuxiliaryProperties;
+import org.netbeans.spi.project.CacheDirectoryProvider;
 import org.netbeans.spi.project.SubprojectProvider;
 import org.netbeans.spi.project.support.GenericSources;
+import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileUtil;
+import org.openide.util.ImageUtilities;
 import org.openide.util.Mutex;
-import org.openide.util.Utilities;
+import org.openide.util.Parameters;
 
 /**
  * Utility methods to get information about {@link Project}s.
@@ -143,6 +152,27 @@ public class ProjectUtils {
     }
     
     /**
+     * Return {@link Preferences} for the given project and given module.
+     * 
+     * <p class="nonnormative">
+     * The preferences are stored in the project using either {@link AuxiliaryConfiguration}
+     * or {@link AuxiliaryProperties}.
+     * </p>
+     * 
+     * @param project project for which preferences should be returned
+     * @param clazz module specification as in {@link org.openide.util.NbPreferences#forModule(java.lang.Class)}
+     * @param shared whether the returned settings should be shared
+     * @return {@link Preferences} for the given project
+     * @since 1.16
+     */
+    public static Preferences getPreferences(Project project, Class clazz, boolean shared) {
+        Parameters.notNull("project", project);
+        Parameters.notNull("clazz", clazz);
+        
+        return AuxiliaryConfigBasedPreferencesProvider.getPreferences(project, clazz, shared);
+    }
+    
+    /**
      * Do a DFS traversal checking for cycles.
      * @param encountered projects already encountered in the DFS (added and removed as you go)
      * @param curr current node to visit
@@ -198,7 +228,7 @@ public class ProjectUtils {
         }
         
         public Icon getIcon() {
-            return new ImageIcon(Utilities.loadImage("org/netbeans/modules/projectapi/resources/empty.gif")); // NOI18N
+            return ImageUtilities.loadImageIcon("org/netbeans/modules/projectapi/resources/empty.gif", false); // NOI18N
         }
         
         public void addPropertyChangeListener(PropertyChangeListener listener) {
@@ -215,4 +245,50 @@ public class ProjectUtils {
         
     }
     
+    /**
+     * Find a way of storing extra configuration in a project.
+     * If the project's {@linkplain Project#getLookup lookup} does not provide an instance,
+     * a fallback implementation is used.
+     * <p class="nonnormative">
+     * The current fallback implementation uses {@linkplain FileObject#setAttribute file attributes}
+     * for "nonsharable" configuration, and a specially named file in the project directory
+     * for "sharable" configuration. For compatibility purposes (in case a project adds an
+     * {@link AuxiliaryConfiguration} instance to its lookup where before it had none),
+     * the fallback storage is read (but not written) even if there is an instance in project lookup.
+     * </p>
+     * @param project a project
+     * @return an auxiliary configuration handle
+     * @since org.netbeans.modules.projectapi/1 1.17
+     */
+    public static AuxiliaryConfiguration getAuxiliaryConfiguration(Project project) {
+        return new AuxiliaryConfigImpl(project);
+    }
+
+    /**
+     * Gets a directory in which modules may store arbitrary extra unversioned files
+     * associated with a project.
+     * These could be caches of information found in sources, logs or snapshots
+     * from activities associated with developing the project, etc.
+     * <p>
+     * If the project supplies a {@link CacheDirectoryProvider}, that will be used
+     * for the parent directory. Otherwise an unspecified storage area will be used.
+     * @param project a project
+     * @param owner a class from the calling module (each module or package will get its own space)
+     * @return a directory available for storing miscellaneous files
+     * @throws IOException if no such directory could be created
+     * @since org.netbeans.modules.projectapi/1 1.26
+     */
+    public static FileObject getCacheDirectory(Project project, Class<?> owner) throws IOException {
+        FileObject d;
+        CacheDirectoryProvider cdp = project.getLookup().lookup(CacheDirectoryProvider.class);
+        if (cdp != null) {
+            d = cdp.getCacheDirectory();
+        } else {
+            d = FileUtil.createFolder(FileUtil.getConfigRoot(),
+                    String.format("Projects/extra/%s-%08x", getInformation(project).getName().replace('/', '_'), // NOI18N
+                                  project.getProjectDirectory().getPath().hashCode()));
+        }
+        return FileUtil.createFolder(d, AuxiliaryConfigBasedPreferencesProvider.findCNBForClass(owner));
+    }
+
 }
