@@ -272,7 +272,7 @@ Yes (as part of <samp>openide.nbm</samp> and <samp>core.nbm</samp>).
             public, though it is made available to <code>autoupdate</code> and
             <code>apisupport</code> as these special modules deal directly with
             the module system at a deeper level than the API provides for.
-            <api name="CoreModulesAPI" group="java" type="export" category="friend" url="http://www.netbeans.org/unbranded-source/browse/~checkout~/core/src/org/netbeans/core/modules/package.html"/>
+            <api name="CoreModulesAPI" group="java" type="export" category="friend"/>
         </p>
     </answer>
 
@@ -415,7 +415,7 @@ from the module system.
 Suppresses checks to ensure that module section classes are actually loaded
 from the module itself.
 </api>
-<api type="import" group="property" name="netbeans.full.hack" category="friend">
+<api type="import" group="property" name="netbeans.full.hack" category="friend" url="http://wiki.netbeans.org/DevFaqNetBeansFullHack">
 Avoids using GUI when user-visible error conditions occur.
 </api>
 <api type="import" group="property" name="netbeans.mainclass" category="friend">
