@@ -450,11 +450,11 @@ public class ClassFile {
 		try {
 		    int classIndex = in.readUnsignedShort();
 		    int natIndex = in.readUnsignedShort();
-		    CPEntry classInfo = constantPool.get(classIndex);
-		    if (classInfo.getTag() == ConstantPool.CONSTANT_Class)
+		    CPEntry entry = constantPool.get(classIndex);
+		    if (entry.getTag() == ConstantPool.CONSTANT_Class)
 			enclosingMethod = 
 			    new EnclosingMethod(constantPool, 
-						(CPClassInfo)classInfo, 
+						(CPClassInfo)entry, 
 						natIndex);
 		    else
 			; // JDK 1.5 beta1 bug
@@ -531,8 +531,8 @@ public class ClassFile {
         Set<ClassName> set = new HashSet<ClassName>();
 
         // include all class name constants from constant pool
-        Collection c = constantPool.getAllConstants(CPClassInfo.class);
-        for (Iterator i = c.iterator(); i.hasNext();) {
+        Collection<CPEntry> c = constantPool.getAllConstants(CPClassInfo.class);
+        for (Iterator<CPEntry> i = c.iterator(); i.hasNext();) {
             CPClassInfo ci = (CPClassInfo)i.next();
             set.add(ci.getClassName());
         }
@@ -561,6 +561,7 @@ public class ClassFile {
         }
     }
 
+    @Override
     public String toString() {
         StringBuffer sb = new StringBuffer();
         sb.append("ClassFile: "); //NOI18N
@@ -586,7 +587,7 @@ public class ClassFile {
         sb.append("\n   ");
 	loadAnnotations();
 	if (annotations.size() > 0) {
-	    Iterator iter = annotations.values().iterator();
+	    Iterator<Annotation> iter = annotations.values().iterator();
 	    sb.append("annotations: ");
 	    while (iter.hasNext()) {
                 sb.append("\n      ");

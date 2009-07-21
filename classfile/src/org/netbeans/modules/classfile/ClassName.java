@@ -59,7 +59,7 @@ import java.util.WeakHashMap;
  *
  * @author Thomas Ball
  */
-public final class ClassName implements Comparable, Comparator, Serializable {
+public final class ClassName implements Comparable<ClassName>, Comparator<ClassName>, Serializable {
 
     static final long serialVersionUID = -8444469778945723553L;
 
@@ -116,37 +116,36 @@ public final class ClassName implements Comparable, Comparator, Serializable {
 	    return null;
 
         ClassName cn = getCacheEntry(classType);
-	if (cn == null)
-	    synchronized (cache) {
-		cn = getCacheEntry(classType);
-		if (cn == null) {
-		    // check for valid class type
-		    int i = classType.indexOf('L');
-		    String _type;
-		    char lastChar = classType.charAt(classType.length()-1);
-		    if (i != -1 && lastChar == ';') {
-                        // remove 'L' and ';' from type
-			_type = classType.substring(i+1, classType.length()-1);
-                        if (i > 0)
-                            // add array prefix
-                            _type = classType.substring(0, i) + _type;
-			cn = getCacheEntry(_type);
-			if (cn != null)
-			    return cn;
-		    } else {
-			_type = classType;
-		    }
+        synchronized (cache) {
+            cn = getCacheEntry(classType);
+            if (cn == null) {
+                // check for valid class type
+                int i = classType.indexOf('L');
+                String _type;
+                char lastChar = classType.charAt(classType.length()-1);
+                if (i != -1 && lastChar == ';') {
+                    // remove 'L' and ';' from type
+                    _type = classType.substring(i+1, classType.length()-1);
+                    if (i > 0)
+                        // add array prefix
+                        _type = classType.substring(0, i) + _type;
+                    cn = getCacheEntry(_type);
+                    if (cn != null)
+                        return cn;
+                } else {
+                    _type = classType;
+                }
 
-		    cn = new ClassName(_type);
-		    cache.put(_type, new WeakReference<ClassName>(cn));
-		}
-	    }
+                cn = new ClassName(_type);
+                cache.put(_type, new WeakReference<ClassName>(cn));
+            }
+        }
 	return cn;
     }
 
     private static ClassName getCacheEntry(String key) {
-	WeakReference ref = cache.get(key);
-	return ref != null ? (ClassName)ref.get() : null;
+	WeakReference<ClassName> ref = cache.get(key);
+	return ref != null ? ref.get() : null;
     }
 
     /**
@@ -263,6 +262,7 @@ public final class ClassName implements Comparable, Comparator, Serializable {
             simpleName = extName.substring(i + 1);
     }
 
+    @Override
     public boolean equals(Object obj) {
         if (this == obj)
 	    return true;
@@ -284,10 +284,10 @@ public final class ClassName implements Comparable, Comparator, Serializable {
      *		less than this string.
      * @see     java.lang.Comparable
      */
-    public int compareTo(Object obj) {
+    public int compareTo(ClassName obj) {
         // If obj isn't a ClassName, the correct ClassCastException
         // will be thrown by the cast.
-        return type.compareTo(((ClassName)obj).type);
+        return type.compareTo(obj.type);
     }
 
     /**
@@ -303,14 +303,16 @@ public final class ClassName implements Comparable, Comparator, Serializable {
      * @throws ClassCastException if the arguments' types prevent them from
      * 	       being compared by this Comparator.
      */
-    public int compare(Object o1, Object o2) {
-        return ((ClassName)o1).compareTo(o2);
+    public int compare(ClassName o1, ClassName o2) {
+        return o1.compareTo(o2);
     }
 
+    @Override
     public int hashCode() {
         return type.hashCode();
     }
 
+    @Override
     public String toString() {
         return getExternalName();
     }
