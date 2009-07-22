@@ -46,22 +46,16 @@ import java.awt.Component;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.event.KeyEvent;
-import java.io.IOException;
-
 import javax.swing.text.*;
 import javax.swing.Icon;
 
 import org.netbeans.editor.*;
-//import org.netbeans.editor.ext.*;
-import org.netbeans.editor.Utilities;
 import javax.swing.JLabel;
 import org.netbeans.api.editor.completion.Completion;
+import org.netbeans.modules.xml.text.api.XMLDefaultTokenContext;
+import org.netbeans.modules.xml.text.syntax.XMLSyntaxSupport;
 import org.netbeans.spi.editor.completion.CompletionItem;
-
-import org.netbeans.editor.ext.CompletionQuery.ResultItem;
-import org.netbeans.editor.ext.ExtFormatter;
 import org.netbeans.spi.editor.completion.CompletionTask;
-import org.netbeans.spi.editor.completion.support.AsyncCompletionTask;
 
 /**
  * This class carries result information required by NetBeans Editor module.
@@ -69,7 +63,7 @@ import org.netbeans.spi.editor.completion.support.AsyncCompletionTask;
  * @author  Petr Kuzel
  * @author  Sandeep Randhawa
  */
-class XMLResultItem implements ResultItem, CompletionItem {
+class XMLResultItem implements CompletionItem {
     
     private static final int XML_ITEMS_SORT_PRIORITY = 20;
     // text to be diplayed to user
@@ -142,16 +136,59 @@ class XMLResultItem implements ResultItem, CompletionItem {
      * @param offset the target offset
      * @param len a length that should be removed before inserting text
      */
-    boolean replaceText( JTextComponent component, String text, int offset, int len) {
+    boolean replaceText( JTextComponent component, final String replaceToText, int offset, int len) {
         BaseDocument doc = (BaseDocument)component.getDocument();
         doc.atomicLock();
+        int replacementLength = replaceToText.length();
         try {
-            String currentText = doc.getText(offset, (doc.getLength() - offset) < text.length() ? (doc.getLength() - offset) : text.length()) ;
-            if(!text.equals(currentText)) {
-                doc.remove( offset, len );
-                doc.insertString( offset, text, null);
+            String currentText = doc.getText(offset, 
+                    (doc.getLength() - offset) < replacementLength ?
+                        (doc.getLength() - offset) : replacementLength) ;
+            //fix for #86792
+            if(("<"+currentText+">").equals(("</")+replaceToText))
+                return true;
+            if(!replaceToText.equals(currentText)) {
+                //fix for 137717
+                String str = doc.getText(offset-1, 1);
+                if(str != null && str.equals("&")) {
+                    offset--;
+                    currentText = doc.getText(offset,
+                        (doc.getLength() - offset) < replacementLength ?
+                            (doc.getLength() - offset) : replacementLength) ;
+                }
+                //
+                // Length correction here. See the issue #141320
+                len = getFirstDiffPosition(currentText, replaceToText);
+                //
+                // if the text is going to remove isn't the same as that is going
+                // to be inserted, then only move the caret position
+                if (len == replacementLength) {
+                    component.setCaretPosition(offset + len);
+                } else {
+                    boolean isTextRemovingAllowable = true;
+
+                    //+++ fix for issue #166462
+                    //    (http://www.netbeans.org/issues/show_bug.cgi?id=166462)
+                    // check that the next XML document text is a correct different
+                    // XML tag - it must no be removed
+                    XMLSyntaxSupport support = (XMLSyntaxSupport)
+                        org.netbeans.editor.Utilities.getSyntaxSupport(component);
+                    TokenItem tokenItem = support.getTokenChain(offset, doc.getLength() - 1);
+                    isTextRemovingAllowable = (tokenItem == null);
+                    if (! isTextRemovingAllowable) {
+                        TokenID tokenID = tokenItem.getTokenID();
+                        isTextRemovingAllowable = (tokenID != null) &&
+                            (tokenID.getNumericID() != XMLDefaultTokenContext.TAG_ID);
+                    }
+                    //+++ end of fix for issue #166462
+
+                    if (isTextRemovingAllowable) {
+                        doc.remove(offset, len);
+                    }
+                    doc.insertString(offset, replaceToText, null);
+                }
             } else {
-                int newCaretPos = component.getCaret().getDot() + text.length() - len;
+                int newCaretPos = component.getCaret().getDot() + replacementLength - len;
                 //#82242 workaround - the problem is that in some situations
                 //1) result item is created and it remembers the remove length
                 //2) document is changed
@@ -171,6 +208,25 @@ class XMLResultItem implements ResultItem, CompletionItem {
         return true;
     }
     
+    /**
+     * Calculates the index of the first difference between two strings. 
+     * If they are differenent starting the first character, then 0 is returned.
+     * If one of the string completely starts with another one, then the length
+     * of the shorter string is returned.
+     * @param str1
+     * @param str2
+     * @return
+     */
+    private int getFirstDiffPosition(String str1, String str2) {
+        int lastCharIndex = Math.min(str1.length(), str2.length());
+        for (int index = 0; index < lastCharIndex; index++) {
+            if (str1.charAt(index) != str2.charAt(index)) {
+                return index;
+            }
+        }
+        return lastCharIndex;
+    }
+
     public boolean substituteCommonText( JTextComponent c, int offset, int len, int subLen ) {
         return replaceText( c, getReplacementText(0).substring( 0, subLen ), offset, len );
     }
@@ -282,7 +338,9 @@ class XMLResultItem implements ResultItem, CompletionItem {
         renderComponent.setForeground(defaultColor);
         renderComponent.setBackground(backgroundColor);
         renderComponent.setBounds(0, 0, width, height);
-        ((XMLCompletionResultItemPaintComponent)renderComponent).paintComponent(g);
+        XMLCompletionResultItemPaintComponent xmlComp = (XMLCompletionResultItemPaintComponent)renderComponent;
+        xmlComp.setIcon(icon);
+        xmlComp.paintComponent(g);
     }
     
 }
