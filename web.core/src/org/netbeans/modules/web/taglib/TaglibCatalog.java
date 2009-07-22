@@ -41,7 +41,10 @@
 
 package org.netbeans.modules.web.taglib;
 
-import org.netbeans.modules.xml.catalog.spi.*;
+import org.netbeans.modules.xml.catalog.spi.CatalogDescriptor;
+import org.netbeans.modules.xml.catalog.spi.CatalogListener;
+import org.netbeans.modules.xml.catalog.spi.CatalogReader;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import org.openide.util.Utilities;
 
@@ -55,13 +58,17 @@ public class TaglibCatalog implements CatalogReader, CatalogDescriptor, org.xml.
     
     public static final String J2EE_NS = "http://java.sun.com/xml/ns/j2ee"; // NOI18N
     private static final String TAGLIB_2_0_XSD="web-jsptaglibrary_2_0.xsd"; // NOI18N
+    private static final String TAGLIB_2_1_XSD="web-jsptaglibrary_2_1.xsd"; // NOI18N
     private static final String TAGLIB_2_0=J2EE_NS+"/"+TAGLIB_2_0_XSD; // NOI18N
+    private static final String TAGLIB_2_1=J2EE_NS+"/"+TAGLIB_2_1_XSD; // NOI18N
     public static final String TAGLIB_2_0_ID="SCHEMA:"+TAGLIB_2_0; // NOI18N
+    public static final String TAGLIB_2_1_ID="SCHEMA:"+TAGLIB_2_1; // NOI18N
     private static final String WEB_SERVICES_CLIENT_XSD = "http://www.ibm.com/webservices/xsd/j2ee_web_services_client_1_1.xsd"; // NOI18N
     
     private static final String URL_TAGLIB_1_1="nbres:/org/netbeans/modules/web/taglib/resources/web-jsptaglibrary_1_1.dtd"; // NOI18N
     private static final String URL_TAGLIB_1_2="nbres:/org/netbeans/modules/web/taglib/resources/web-jsptaglibrary_1_2.dtd"; // NOI18N
     private static final String URL_TAGLIB_2_0="nbres:/org/netbeans/modules/web/taglib/resources/web-jsptaglibrary_2_0.xsd"; // NOI18N
+    private static final String URL_TAGLIB_2_1="nbres:/org/netbeans/modules/web/taglib/resources/web-jsptaglibrary_2_1.xsd"; // NOI18N
     private static final String URL_WEB_SERVICES_CLIENT = "nbres:/org/netbeans/modules/web/taglib/resources/j2ee_web_services_client_1_1.xsd"; // NOI18N
     
     private static final String XML_XSD="http://www.w3.org/2001/xml.xsd"; // NOI18N
@@ -80,6 +87,7 @@ public class TaglibCatalog implements CatalogReader, CatalogDescriptor, org.xml.
         list.add(TAGLIB_1_1);
         list.add(TAGLIB_1_2);
         list.add(TAGLIB_2_0_ID);
+        list.add(TAGLIB_2_1_ID);
         return list.listIterator();
     }
     
@@ -94,6 +102,8 @@ public class TaglibCatalog implements CatalogReader, CatalogDescriptor, org.xml.
             return URL_TAGLIB_1_1;
         else if (TAGLIB_2_0_ID.equals(publicId))
             return URL_TAGLIB_2_0;
+        else if (TAGLIB_2_1_ID.equals(publicId))
+            return URL_TAGLIB_2_1;
         else return null;
     }
     
@@ -134,7 +144,7 @@ public class TaglibCatalog implements CatalogReader, CatalogDescriptor, org.xml.
      * @return icon representing current state or null
      */
     public java.awt.Image getIcon(int type) {
-        return Utilities.loadImage("org/netbeans/modules/web/taglib/resources/TaglibCatalog.gif"); // NOI18N
+        return ImageUtilities.loadImage("org/netbeans/modules/web/taglib/resources/TaglibCatalog.gif"); // NOI18N
     }
     
     /**
@@ -157,6 +167,8 @@ public class TaglibCatalog implements CatalogReader, CatalogDescriptor, org.xml.
     public org.xml.sax.InputSource resolveEntity(String publicId, String systemId) throws org.xml.sax.SAXException, java.io.IOException {
         if (TAGLIB_2_0.equals(systemId)) {
             return new org.xml.sax.InputSource(URL_TAGLIB_2_0);
+        } else if (TAGLIB_2_1.equals(systemId)) {
+            return new org.xml.sax.InputSource(URL_TAGLIB_2_1);
         } else if (systemId!=null && systemId.endsWith(TAGLIB_2_0_XSD)) {
             return new org.xml.sax.InputSource(URL_TAGLIB_2_0);
         } else if (WEB_SERVICES_CLIENT_XSD.equals(systemId)) {
