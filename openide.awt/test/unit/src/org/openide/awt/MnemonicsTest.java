@@ -42,6 +42,8 @@
 package org.openide.awt;
 
 import java.awt.event.KeyEvent;
+import javax.swing.ButtonModel;
+import javax.swing.DefaultButtonModel;
 import javax.swing.JButton;
 import org.netbeans.junit.NbTestCase;
 import org.openide.util.Utilities;
@@ -55,7 +57,7 @@ public class MnemonicsTest extends NbTestCase {
         super(name);
     }
 
-    // XXX testSetLocalizedText, testFindMnemonicAmpersand
+    // XXX testFindMnemonicAmpersand
 
     /** @see #31093 */
     public void testMnemonicAfterParens() throws Exception {
@@ -79,8 +81,10 @@ public class MnemonicsTest extends NbTestCase {
         assertEquals("<html><b>R&amp;D</b> department", b.getText());
         assertEquals(0, b.getMnemonic());
         assertEquals(-1, b.getDisplayedMnemonicIndex());
+        String underStart = Utilities.isMac() ? "" : "<u>";
+        String underEnd = Utilities.isMac() ? "" : "</u>";
         Mnemonics.setLocalizedText(b, "<html><b>R&amp;D</b> departmen&t");
-        assertEquals("<html><b>R&amp;D</b> departmen<u>t</u>", b.getText());
+        assertEquals("<html><b>R&amp;D</b> departmen" + underStart + "t" + underEnd, b.getText());
         if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
             assertEquals(0, b.getMnemonic());
             assertEquals(-1, b.getDisplayedMnemonicIndex());
@@ -89,7 +93,7 @@ public class MnemonicsTest extends NbTestCase {
         }
         
         Mnemonics.setLocalizedText(b, "<html>Smith &amp; &Wesson");
-        assertEquals("<html>Smith &amp; <u>W</u>esson", b.getText());
+        assertEquals("<html>Smith &amp; " + underStart + "W" + underEnd + "esson", b.getText());
         if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
             assertEquals(0, b.getMnemonic());
             assertEquals(-1, b.getDisplayedMnemonicIndex());
@@ -97,7 +101,7 @@ public class MnemonicsTest extends NbTestCase {
             assertEquals(KeyEvent.VK_W, b.getMnemonic());
         }
         Mnemonics.setLocalizedText(b, "<html>&Advanced Mode <em>(experimental)</em></html>");
-        assertEquals("<html><u>A</u>dvanced Mode <em>(experimental)</em></html>", b.getText());
+        assertEquals("<html>" + underStart + "A" + underEnd + "dvanced Mode <em>(experimental)</em></html>", b.getText());
         if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
             assertEquals(0, b.getMnemonic());
             assertEquals(-1, b.getDisplayedMnemonicIndex());
@@ -105,6 +109,19 @@ public class MnemonicsTest extends NbTestCase {
             assertEquals(KeyEvent.VK_A, b.getMnemonic());
             assertEquals('A', b.getText().charAt(b.getDisplayedMnemonicIndex()));
         }
+    }
+    
+    public void testSetLocalizedTextWithModel() throws Exception {
+        ButtonModel m = new DefaultButtonModel();
+        JButton b = new JButton();
+        Mnemonics.setLocalizedText(b, "Hello &There");
+        assertEquals("Hello There", b.getText());
+        assertEquals('T', b.getMnemonic());
+        assertEquals(6, b.getDisplayedMnemonicIndex());
+        b.setModel(m);
+        assertEquals("Hello There", b.getText());
+        assertEquals('T', b.getMnemonic());
+        assertEquals(6, b.getDisplayedMnemonicIndex());
     }
     
 }
