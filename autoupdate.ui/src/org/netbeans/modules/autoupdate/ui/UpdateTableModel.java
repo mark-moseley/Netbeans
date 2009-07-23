@@ -165,13 +165,14 @@ public class UpdateTableModel extends UnitCategoryTableModel {
     }
     
     public int getPreferredWidth (JTableHeader header, int col) {
+        final int minWidth = super.getMinWidth(header, col);
         switch (col) {
         case 1:
-            return super.getMinWidth (header, col)*4;
+            return minWidth*4;
         case 2:
-            return super.getMinWidth (header, col)*2;
+            return minWidth*2;
         }
-        return super.getMinWidth (header, col);
+        return minWidth;
     }
     
     public Type getType () {
@@ -245,7 +246,7 @@ public class UpdateTableModel extends UnitCategoryTableModel {
 
     @Override
     public boolean isTabEnabled() {
-        return getRawItemCount() > 0;
+        return true;//getRawItemCount() > 0;
     }
 
     public boolean needsRestart () {
