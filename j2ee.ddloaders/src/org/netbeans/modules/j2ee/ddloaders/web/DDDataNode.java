@@ -41,12 +41,15 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web;
 
+import org.openide.filesystems.FileStateInvalidException;
 import org.openide.loaders.*;
 import org.openide.nodes.*;
+import org.openide.util.Exceptions;
+import org.openide.util.ImageUtilities;
 import org.openide.util.NbBundle;
 import java.beans.*;
 
-import org.netbeans.modules.xml.multiview.XmlMultiViewDataObject;
+import java.net.URL;
 
 /** A node to represent this object.
  *
@@ -74,21 +77,33 @@ public class DDDataNode extends DataNode {
     }
     
     private static final java.awt.Image ERROR_BADGE = 
-        org.openide.util.Utilities.loadImage( "org/netbeans/modules/j2ee/ddloaders/web/resources/error-badge.gif" ); //NOI18N
+        ImageUtilities.loadImage( "org/netbeans/modules/j2ee/ddloaders/web/resources/error-badge.gif" ); //NOI18N
     private static final java.awt.Image WEB_XML = 
-        org.openide.util.Utilities.loadImage( "org/netbeans/modules/j2ee/ddloaders/web/resources/DDDataIcon.gif" ); //NOI18N
+        ImageUtilities.loadImage( "org/netbeans/modules/j2ee/ddloaders/web/resources/DDDataIcon.gif" ); //NOI18N
     
+    @Override
     public java.awt.Image getIcon(int type) {
         if (dataObject.getSaxError()==null)
             return WEB_XML;
         else 
-            return org.openide.util.Utilities.mergeImages(WEB_XML, ERROR_BADGE, 6, 6);
+            return ImageUtilities.mergeImages(WEB_XML, ERROR_BADGE, 6, 6);
     }
     
+    @Override
     public String getShortDescription() {
         org.xml.sax.SAXException saxError = dataObject.getSaxError();
-        if (saxError==null) {
-            return NbBundle.getBundle(DDDataNode.class).getString("HINT_web_dd");
+        if (saxError == null) {
+            if (dataObject instanceof DDFragmentDataObject) {
+                URL url = null;
+                try {
+                    url = dataObject.getPrimaryFile().getURL();
+                } catch (FileStateInvalidException ex) {
+                    // ignore
+                }
+                return NbBundle.getBundle(DDDataNode.class).getString("HINT_web_fragment_dd") + (url != null ? " ["+url+"]" : "");
+            }
+            else
+                return NbBundle.getBundle(DDDataNode.class).getString("HINT_web_dd");
         } else {
             return saxError.getMessage();
         }
@@ -127,6 +142,7 @@ public class DDDataNode extends DataNode {
         getDataObject ().addPropertyChangeListener (ddListener);
     }
 
+    @Override
     protected Sheet createSheet () {
         Sheet s = super.createSheet();
         Sheet.Set ss = s.get(Sheet.PROPERTIES);
