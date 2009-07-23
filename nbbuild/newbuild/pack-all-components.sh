@@ -27,19 +27,50 @@ pack_all_components()
     NAME=${2}
     cd $NB_ALL/nbbuild
 
-    #Pack the distrubutions
-    find netbeans | egrep -v "netbeans/(extra|testtools)" | zip -q $DIST_DIR/zip/$NAME.zip -@ || exit 1
+    #Pack the distributions
+    ant zip-cluster-config -Dcluster.config=full -Dzip.name=$DIST_DIR/zip/$NAME.zip || exit 1
 
-    #find netbeans | egrep "netbeans/(platform|harness)" | zip -q $DIST_DIR/zip/$NAME-platform.zip -@ || exit 1
-    find netbeans | egrep -v "netbeans/(extra|testtools|xml|mobility|enterprise|visualweb|uml|ruby|soa|cnd|identity|php)" | zip -q $DIST_DIR/zip/$NAME-javase.zip -@ || exit 1
-    find netbeans | egrep -v "netbeans/(extra|testtools|xml|enterprise|visualweb|uml|ruby|soa|cnd|identity|php)" | egrep -v "(org-netbeans-modules-mobility-end2end|org-netbeans-modules-mobility-jsr172)" | zip -q $DIST_DIR/zip/$NAME-mobility.zip -@ || exit 1
-    find netbeans | egrep -v "netbeans/(extra|testtools|mobility|uml|ruby|soa|cnd|identity|php)" | zip -q $DIST_DIR/zip/$NAME-javaee.zip -@ || exit 1
-    find netbeans | egrep -v "netbeans/(extra|testtools|xml|java|apisupport|harness|profiler|mobility|enterprise|visualweb|uml|soa|identity|cnd|php)" | zip -q $DIST_DIR/zip/$NAME-ruby.zip -@ || exit 1
-    find netbeans | egrep -v "netbeans/(extra|testtools|xml|java|apisupport|harness|profiler|mobility|enterprise|visualweb|uml|ruby|soa|identity|php)" | zip -q $DIST_DIR/zip/$NAME-cpp.zip -@ || exit 1
+    #ant zip-cluster-config -Dcluster.config=platform -Dzip.name=$DIST_DIR/zip/$NAME-platform.zip || exit 1
+    ant zip-cluster-config -Dcluster.config=basic -Dzip.name=$DIST_DIR/zip/$NAME-javase.zip || exit 1
+    ant zip-cluster-config -Dcluster.config=standard -Dzip.name=$DIST_DIR/zip/$NAME-java.zip || exit 1
+    ant zip-cluster-config -Dcluster.config=ruby -Dzip.name=$DIST_DIR/zip/$NAME-ruby.zip || exit 1
+    ant zip-cluster-config -Dcluster.config=php -Dzip.name=$DIST_DIR/zip/$NAME-php.zip || exit 1
+    ant zip-cluster-config -Dcluster.config=cnd -Dzip.name=$DIST_DIR/zip/$NAME-cpp.zip || exit 1
 
     mkdir $DIST_DIR/zip/moduleclusters
 
-    rm -rf $NB_ALL/nbbuild/netbeans/extra
+    cd $NB_ALL/nbbuild/netbeans
+
+    codename="org-netbeans-core-browser"
+    native="extra/modules/lib/native"
+    locale="extra/modules/locale"
+    config="extra/config/Modules"
+    update_tracking="extra/update_tracking"
+    modules="extra/modules"
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME extra-core-browser-linux       "$config/$codename-linux.xml      $update_tracking/$codename-linux.xml   $modules/$codename-linux.jar   $locale/$codename-linux_*.jar   $native/linux/xulrunner"
+    pack_component $DIST_DIR/zip/moduleclusters $NAME extra-core-browser-windows     "$config/$codename-win.xml        $update_tracking/$codename-win.xml     $modules/$codename-win.jar     $locale/$codename-win_*.jar     $native/win32/xulrunner"
+    pack_component $DIST_DIR/zip/moduleclusters $NAME extra-core-browser-solaris-x86 "$config/$codename-solaris.xml    $update_tracking/$codename-solaris.xml $modules/$codename-solaris.jar $locale/$codename-solaris_*.jar $native/solaris-x86/xulrunner"
+    pack_component $DIST_DIR/zip/moduleclusters $NAME extra-core-browser-macosx      "$config/$codename-macosx.xml     $update_tracking/$codename-macosx.xml  $modules/$codename-macosx.jar  $locale/$codename-macosx_*.jar  $native/macosx/xulrunner $native/macosx/libcocoautils.jnilib"
+
+    rm -rf extra
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME soa "soa*"
+    rm -rf soa*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME uml "uml*"
+    rm -rf uml*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME visualweb "visualweb*"
+    rm -rf visualweb*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME xml "xml*"
+    rm -rf xml*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME javacard "javacard*"
+    rm -rf javacard*
+
+    cd $NB_ALL/nbbuild
 
     #Pack all the NetBeans
     pack_component $DIST_DIR/zip/moduleclusters $NAME all-in-one netbeans
@@ -47,11 +78,17 @@ pack_all_components()
     cd $NB_ALL/nbbuild/netbeans
 
     #Continue with individual component
-    pack_component $DIST_DIR/zip/moduleclusters $NAME uml "uml*"
-    rm -rf uml*
+    pack_component $DIST_DIR/zip/moduleclusters $NAME dlight "dlight*"
+    rm -rf dlight*
 
-    pack_component $DIST_DIR/zip/moduleclusters $NAME visualweb "visualweb*"
-    rm -rf visualweb*
+    pack_component $DIST_DIR/zip/moduleclusters $NAME webcommon "webcommon*"
+    rm -rf webcommon*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME groovy "groovy*"
+    rm -rf groovy*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME php "php*"
+    rm -rf php*
 
     pack_component $DIST_DIR/zip/moduleclusters $NAME ruby "ruby*"
     rm -rf ruby*
@@ -71,14 +108,14 @@ pack_all_components()
     pack_component $DIST_DIR/zip/moduleclusters $NAME ide "ide*"
     rm -rf ide*
 
-    pack_component $DIST_DIR/zip/moduleclusters $NAME xml "xml*"
-    rm -rf xml*
-
     pack_component $DIST_DIR/zip/moduleclusters $NAME harness "harness*"
     rm -rf harness*
 
     pack_component $DIST_DIR/zip/moduleclusters $NAME enterprise "enterprise*"
     rm -rf enterprise*
+
+    pack_component $DIST_DIR/zip/moduleclusters $NAME ergonomics "ergonomics*"
+    rm -rf ergonomics*
 
     pack_component $DIST_DIR/zip/moduleclusters $NAME soa "soa*"
     rm -rf soa*
@@ -91,9 +128,6 @@ pack_all_components()
 
     pack_component $DIST_DIR/zip/moduleclusters $NAME cnd "cnd*"
     rm -rf cnd*
-
-    pack_component $DIST_DIR/zip/moduleclusters $NAME php "php*"
-    rm -rf php*
 
     pack_component $DIST_DIR/zip/moduleclusters $NAME nb6.0-etc "*"
 }
