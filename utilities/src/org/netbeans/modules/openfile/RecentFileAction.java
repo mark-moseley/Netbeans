@@ -40,19 +40,25 @@
  */
 
 package org.netbeans.modules.openfile;
-import java.awt.Image;
+import java.awt.Component;
+import java.awt.MouseInfo;
+import java.awt.Point;
 import java.awt.event.ActionEvent;
 import java.beans.BeanInfo;
+import java.net.URL;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.ImageIcon;
+import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.MenuElement;
+import javax.swing.MenuSelectionManager;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.PopupMenuEvent;
@@ -74,11 +80,8 @@ import org.openide.util.actions.Presenter;
 public class RecentFileAction extends AbstractAction implements Presenter.Menu, PopupMenuListener, ChangeListener {
 
     /** property of menu items where we store fileobject to open */
-    private static final String FO_PROP = "RecentFileAction.Recent_FO";
+    private static final String URL_PROP = "RecentFileAction.Recent_URL";
 
-    /** number of maximum shown items in submenu */ 
-    private static final int MAX_COUNT = 15;
-            
     private JMenu menu;
     
     public RecentFileAction() {
@@ -134,39 +137,64 @@ public class RecentFileAction extends AbstractAction implements Presenter.Menu, 
     
     /** Fills submenu with recently closed files got from RecentFiles support */
     private void fillSubMenu () {
-        List<RecentFiles.HistoryItem> files = RecentFiles.getRecentFiles();
+        List<HistoryItem> files = RecentFiles.getRecentFiles();
 
-        int counter = 0;
-        for (HistoryItem hItem : files) {
-            // obtain file object
-            // note we need not check for null or validity, as it is ensured
-            // by RecentFiles.getRecentFiles()
-            FileObject fo = RecentFiles.convertURL2File(hItem.getURL());
-            // allow only up to max items
-            if (++counter > MAX_COUNT) {
-                break;
-            }
-            // obtain icon for fileobject
-            Image icon = null;
-            try {
-                DataObject dObj = DataObject.find(fo);
-                icon = dObj.getNodeDelegate().getIcon(BeanInfo.ICON_COLOR_16x16);
-            } catch (DataObjectNotFoundException ex) {
-                // should not happen, log and skip to next
-                Logger.getLogger(RecentFiles.class.getName()).log(
-                        Level.INFO, ex.getMessage(), ex);
-                continue;
-            }
+        for (final HistoryItem hItem : files) {
             // create and configure menu item
-            JMenuItem jmi = null;
-            if (icon != null) {
-                jmi = new JMenuItem(fo.getNameExt(), new ImageIcon(icon));
-            } else {
-                jmi = new JMenuItem(fo.getNameExt());
-            }
-            jmi.putClientProperty(FO_PROP, fo);
+            final JMenuItem jmi = new JMenuItem(hItem.getFileName());
+            jmi.putClientProperty(URL_PROP, hItem.getURL());
             jmi.addActionListener(this);
             menu.add(jmi);
+
+            //get icon on another thread
+            new Runnable(){
+                public void run() {
+                    FileObject fo = RecentFiles.convertURL2File(hItem.getURL());
+                    Icon icon = null;
+                    try {
+                        DataObject dObj = DataObject.find(fo);
+                        icon = new ImageIcon(dObj.getNodeDelegate().getIcon(BeanInfo.ICON_COLOR_16x16));
+                    } catch (DataObjectNotFoundException ex) {
+                        // should not happen, log and skip to next
+                        Logger.getLogger(RecentFiles.class.getName()).log(
+                                Level.INFO, ex.getMessage(), ex);
+                    }
+                    jmi.setIcon(icon);
+                }
+            }.run();
+        }
+        
+        ensureSelected();
+    }
+
+    /** Workaround for JDK bug 6663119, it ensures that first item in submenu
+     * is correctly selected during keyboard navigation.
+     */
+    private void ensureSelected () {
+        if (menu.getMenuComponentCount() <=0) {
+            return;
+        }
+        
+        Component first = menu.getMenuComponent(0);
+        if (!(first instanceof JMenuItem)) {
+            return;
+        }
+        
+        Point loc = MouseInfo.getPointerInfo().getLocation();
+        SwingUtilities.convertPointFromScreen(loc, menu);
+        MenuElement[] selPath = MenuSelectionManager.defaultManager().getSelectedPath();
+        
+        // apply workaround only when mouse is not hovering over menu
+        // (which signalizes mouse driven menu traversing) and only
+        // when selected menu path contains expected value - submenu itself 
+        if (!menu.contains(loc) && selPath.length > 0 && 
+                menu.getPopupMenu() == selPath[selPath.length - 1]) {
+            // select first item in submenu through MenuSelectionManager
+            MenuElement[] newPath = new MenuElement[selPath.length + 1];
+            System.arraycopy(selPath, 0, newPath, 0, selPath.length);
+            JMenuItem firstItem = (JMenuItem)first;
+            newPath[selPath.length] = firstItem;
+            MenuSelectionManager.defaultManager().setSelectedPath(newPath);
         }
     }
     
@@ -177,9 +205,9 @@ public class RecentFileAction extends AbstractAction implements Presenter.Menu, 
      */
     public void actionPerformed(ActionEvent evt) {
         JMenuItem source = (JMenuItem) evt.getSource();
-        FileObject fo = (FileObject) source.getClientProperty(FO_PROP);
-        if (fo != null) {
-            OpenFile.open(fo, -1);
+        URL url = (URL) source.getClientProperty(URL_PROP);
+        if (url != null) {
+            OpenFile.open(RecentFiles.convertURL2File(url), -1);
         }
     }
     
@@ -193,7 +221,7 @@ public class RecentFileAction extends AbstractAction implements Presenter.Menu, 
         }
     
         public JComponent[] getMenuPresenters() {
-            setEnabled(!RecentFiles.getRecentFiles().isEmpty());
+            setEnabled(RecentFiles.hasRecentFiles());
             return content;
         }
 
