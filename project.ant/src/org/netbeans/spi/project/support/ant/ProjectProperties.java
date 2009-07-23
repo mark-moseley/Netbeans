@@ -50,16 +50,20 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.ChangeListener;
 import org.netbeans.api.project.ProjectManager;
-import org.netbeans.modules.project.ant.FileChangeSupport;
-import org.netbeans.modules.project.ant.FileChangeSupportEvent;
-import org.netbeans.modules.project.ant.FileChangeSupportListener;
 import org.netbeans.modules.project.ant.UserQuestionHandler;
 import org.openide.ErrorManager;
+import org.openide.filesystems.FileAttributeEvent;
+import org.openide.filesystems.FileChangeListener;
+import org.openide.filesystems.FileEvent;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
-import org.openide.filesystems.FileSystem;
+import org.openide.filesystems.FileRenameEvent;
+import org.openide.filesystems.FileSystem.AtomicAction;
 import org.openide.filesystems.FileUtil;
 import org.openide.modules.InstalledFileLocator;
 import org.openide.util.ChangeSupport;
@@ -68,13 +72,14 @@ import org.openide.util.NbCollections;
 import org.openide.util.RequestProcessor;
 import org.openide.util.UserQuestionException;
 import org.openide.util.Utilities;
+import org.openide.util.WeakSet;
 
 /**
  * Manages the loaded property files for {@link AntProjectHelper}.
  * @author Jesse Glick
  */
 final class ProjectProperties {
-    
+
     /** Associated helper. */
     private final AntProjectHelper helper;
     
@@ -150,7 +155,7 @@ final class ProjectProperties {
         return pp;
     }
     
-    private static final class PP implements PropertyProvider, FileChangeSupportListener {
+    private static final class PP implements PropertyProvider, FileChangeListener {
         
         private static final RequestProcessor RP = new RequestProcessor("ProjectProperties.PP.RP"); // NOI18N
         
@@ -161,13 +166,15 @@ final class ProjectProperties {
         private final AntProjectHelper helper;
         private EditableProperties properties = null;
         private boolean loaded = false;
+        private Throwable reloadedStackTrace;
         private final ChangeSupport cs = new ChangeSupport(this);
-        private boolean writing = false;
+        /** Atomic actions in use to save XML files. */
+        private final Set<AtomicAction> saveActions = new WeakSet<AtomicAction>();
         
         public PP(String path, AntProjectHelper helper) {
             this.path = path;
             this.helper = helper;
-            FileChangeSupport.DEFAULT.addListener(this, new File(FileUtil.toFile(dir()), path.replace('/', File.separatorChar)));
+            FileUtil.addFileChangeListener(this, new File(FileUtil.toFile(dir()), path.replace('/', File.separatorChar)));
         }
         
         private FileObject dir() {
@@ -194,12 +201,14 @@ final class ProjectProperties {
                     }
                 }
                 loaded = true;
+                reloadedStackTrace = null;
             }
             return properties;
         }
         
         public boolean put(EditableProperties nue) {
             loaded = true;
+            reloadedStackTrace = null;
             boolean modifying = !Utilities.compareObjects(nue, properties);
             if (modifying) {
                 if (nue != null) {
@@ -212,19 +221,29 @@ final class ProjectProperties {
             return modifying;
         }
         
+        private void runSaveAA(AtomicAction action) throws IOException {
+            synchronized (saveActions) {
+                saveActions.add(action);
+            }
+            dir().getFileSystem().runAtomicAction(action);
+        }
         public FileLock write() throws IOException {
-            assert loaded;
+            if (!loaded) {
+                Logger.getLogger(ProjectProperties.class.getName()).log(Level.INFO, null,
+                        new IOException("#167784: changes on disk for " + path + " in " + dir() + " clobbered by in-memory data").
+                        initCause(reloadedStackTrace));
+                loaded = true;
+                reloadedStackTrace = null;
+            }
             final FileObject f = dir().getFileObject(path);
-            assert !writing;
             final FileLock[] _lock = new FileLock[1];
-            writing = true;
             try {
                 if (properties != null) {
                     // Supposed to create/modify the file.
                     // Need to use an atomic action - otherwise listeners will first
                     // receive an event that the file has been written to zero length
                     // (which for *.properties means no keys), which is wrong.
-                    dir().getFileSystem().runAtomicAction(new FileSystem.AtomicAction() {
+                    runSaveAA(new AtomicAction() {
                         public void run() throws IOException {
                             final FileObject _f;
                             if (f == null) {
@@ -249,27 +268,27 @@ final class ProjectProperties {
                                 UserQuestionHandler.handle(uqe, new UserQuestionHandler.Callback() {
                                     public void accepted() {
                                         // Try again.
-                                        assert !writing;
-                                        writing = true;
                                         try {
-                                            FileLock lock = _f.lock();
-                                            try {
-                                                OutputStream os = _f.getOutputStream(lock);
-                                                try {
-                                                    os.write(data);
-                                                } finally {
-                                                    os.close();
+                                            runSaveAA(new AtomicAction() {
+                                                public void run() throws IOException {
+                                                    FileLock lock = _f.lock();
+                                                    try {
+                                                        OutputStream os = _f.getOutputStream(lock);
+                                                        try {
+                                                            os.write(data);
+                                                        } finally {
+                                                            os.close();
+                                                        }
+                                                    } finally {
+                                                        lock.releaseLock();
+                                                    }
+                                                    helper.maybeCallPendingHook();
                                                 }
-                                            } finally {
-                                                lock.releaseLock();
-                                            }
-                                            helper.maybeCallPendingHook();
+                                            });
                                         } catch (IOException e) {
                                             // Oh well.
                                             ErrorManager.getDefault().notify(e);
                                             reload();
-                                        } finally {
-                                            writing = false;
                                         }
                                     }
                                     public void denied() {
@@ -282,7 +301,7 @@ final class ProjectProperties {
                                     private void reload() {
                                         helper.cancelPendingHook();
                                         // Revert the save.
-                                        diskChange();
+                                        diskChange(null);
                                     }
                                 });
                             }
@@ -300,8 +319,6 @@ final class ProjectProperties {
                     _lock[0].releaseLock();
                 }
                 throw e;
-            } finally {
-                writing = false;
             }
             return _lock[0];
         }
@@ -349,10 +366,21 @@ final class ProjectProperties {
             }
         }
         
-        private void diskChange() {
-            // XXX should check for a possible clobber from in-memory data
+        private void diskChange(FileEvent fe) {
+            boolean writing = false;
+            if (fe != null) {
+                synchronized (saveActions) {
+                    for (AtomicAction a : saveActions) {
+                        if (fe.firedFrom(a)) {
+                            writing = true;
+                            break;
+                        }
+                    }
+                }
+            }
             if (!writing) {
                 loaded = false;
+                reloadedStackTrace = new Throwable("noticed disk change here");
             }
             fireChange();
             if (!writing) {
@@ -360,18 +388,29 @@ final class ProjectProperties {
             }
         }
 
-        public void fileCreated(FileChangeSupportEvent event) {
-            diskChange();
+        public void fileFolderCreated(FileEvent fe) {
+            diskChange(fe);
         }
 
-        public void fileDeleted(FileChangeSupportEvent event) {
-            diskChange();
+        public void fileDataCreated(FileEvent fe) {
+            diskChange(fe);
         }
 
-        public void fileModified(FileChangeSupportEvent event) {
-            diskChange();
+        public void fileChanged(FileEvent fe) {
+            diskChange(fe);
         }
-        
+
+        public void fileRenamed(FileRenameEvent fe) {
+            diskChange(fe);
+        }
+
+        public void fileAttributeChanged(FileAttributeEvent fe) {
+            diskChange(fe);
+        }
+
+        public void fileDeleted(FileEvent fe) {
+            diskChange(fe);
+        }
     }
 
     /**
