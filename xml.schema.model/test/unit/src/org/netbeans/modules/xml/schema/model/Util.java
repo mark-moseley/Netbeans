@@ -50,29 +50,35 @@
 
 package org.netbeans.modules.xml.schema.model;
 
+import org.netbeans.modules.xml.schema.model.resolver.TestCatalogModel2;
+import org.netbeans.modules.xml.schema.model.resolver.FileObjectModelAccessProvider;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.lang.management.ManagementFactory;
 import java.net.URI;
+import java.net.URL;
 import java.util.Collection;
 import javax.swing.text.Document;
+import org.netbeans.editor.BaseDocument;
 import org.netbeans.modules.xml.schema.model.impl.SchemaModelImpl;
 import org.netbeans.modules.xml.schema.model.visitor.FindSchemaComponentFromDOM;
+import org.netbeans.modules.xml.xam.ModelSource;
 import org.netbeans.modules.xml.xam.dom.AbstractDocumentModel;
 import org.netbeans.modules.xml.xam.dom.DocumentModel;
 import org.openide.filesystems.FileLock;
 import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
-import org.openide.filesystems.Repository;
+import org.openide.filesystems.URLMapper;
+import org.openide.util.Lookup;
+import org.openide.util.lookup.Lookups;
 import org.w3c.dom.Element;
 /**
  *
@@ -80,42 +86,14 @@ import org.w3c.dom.Element;
  */
 public class Util {
     public static final String EMPTY_XSD = "resources/Empty.xsd";
-    
-    static {
-        //JEditorPane.registerEditorKitForContentType(SchemaDataLoader.MIME_TYPE, XMLKit.class.getName());
-        registerXMLKit();
-    }
-    
-    public static void registerXMLKit() {
-        String[] path = new String[] { "Editors", "text", "x-xml" };
-        FileObject target = Repository.getDefault().getDefaultFileSystem().getRoot();
-        try {
-            for (int i=0; i<path.length; i++) {
-                FileObject f = target.getFileObject(path[i]);
-                if (f == null) {
-                    f = target.createFolder(path[i]);
-                }
-                target = f;
-            }
-            String name = "EditorKit.instance";
-            if (target.getFileObject(name) == null) {
-                FileObject f = target.createData(name);
-                f.setAttribute("instanceClass", "org.netbeans.modules.xml.text.syntax.XMLKit");
-            }
-        } catch(IOException ioe) {
-            ioe.printStackTrace();
-        }
-    }
-    
+        
     public static Document getResourceAsDocument(String path) throws Exception {
         InputStream in = Util.class.getResourceAsStream(path);
         return loadDocument(in);
     }
 
     public static Document loadDocument(InputStream in) throws Exception {
-//	Document sd = new PlainDocument();
-        Document sd = new org.netbeans.editor.BaseDocument(
-                org.netbeans.modules.xml.text.syntax.XMLKit.class, false);
+        Document sd = new BaseDocument(true, "text/xml"); //NOI18N
         return setDocumentContentTo(sd, in);
     }
     
@@ -145,6 +123,30 @@ public class Util {
     }
     
     public static int count = 0;
+
+    public static SchemaModel loadSchemaModel(String archivePath, String resourcePath)
+            throws Exception {
+        URL url = Util.class.getResource(archivePath);
+        url = new URL("jar:" + url.toString() + "!/" + resourcePath); // NOI18N
+        FileObject fo = URLMapper.findFileObject(url);
+        SchemaModel schemaModel = loadSchemaModel(fo, true);
+        return schemaModel;
+    }
+
+    public static SchemaModel loadSchemaModel(FileObject xmlFo, boolean editable)
+            throws Exception {
+        //
+        Document doc = loadDocument(xmlFo.getInputStream());
+        assert doc != null : "Can't load the document: " + xmlFo.toString();
+        //
+        Lookup lookup = Lookups.fixed(xmlFo, doc, TestCatalogModel2.getDefault(),
+                FileObjectModelAccessProvider.getDefault());
+        ModelSource ms = new ModelSource(lookup, editable);
+        SchemaModel model = SchemaModelFactory.getDefault().getModel(ms);
+        //
+        return model;
+    }
+
     public static SchemaModel loadSchemaModel(String resourcePath) throws Exception {
         NamespaceLocation nl = NamespaceLocation.valueFromResourcePath(resourcePath);
         if (nl != null) {
