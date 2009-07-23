@@ -56,6 +56,7 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
@@ -72,7 +73,6 @@ import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
-import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.debugger.DebuggerEngine;
 import org.netbeans.api.debugger.DebuggerManager;
@@ -81,7 +81,6 @@ import org.netbeans.api.debugger.jpda.InvalidExpressionException;
 import org.netbeans.api.debugger.jpda.JPDADebugger;
 import org.netbeans.api.debugger.jpda.ObjectVariable;
 import org.netbeans.api.debugger.jpda.Variable;
-import org.netbeans.modules.debugger.jpda.ui.HistoryPanel.Item;
 import org.netbeans.modules.debugger.jpda.ui.views.VariablesViewButtons;
 import org.netbeans.spi.debugger.ContextProvider;
 import org.netbeans.spi.viewmodel.Models;
@@ -107,11 +106,11 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
     private static final String ID = "evaluator"; //NOI18N
     private static final String PROP_RESULT_CHANGED = "resultChanged"; // NOI18N
 
-    private static CodeEvaluator defaultInstance = null;
-    private static PropertyChangeSupport pcs = new PropertyChangeSupport(new Integer(0)); // TODO
+    final private PropertyChangeSupport pcs = new PropertyChangeSupport(this);
+    private static WeakReference<CodeEvaluator> instanceRef;
 
     private JEditorPane codePane;
-    private HistoryPanel historyPanel;
+    private History history;
     private Reference<JPDADebugger> debuggerRef = new WeakReference(null);
     private DbgManagerListener dbgManagerListener;
     private TopComponent resultView;
@@ -133,7 +132,7 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         initComponents();
         codePane = new JEditorPane();
         codePane.setMinimumSize(new Dimension(0,0));
-        historyPanel = new HistoryPanel();
+        history = new History();
 
         rightPanel.setPreferredSize(new Dimension(evaluateButton.getPreferredSize().width + 6, 0));
 
@@ -153,7 +152,6 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
                 dbgManagerListener
         );
         checkDebuggerState();
-        defaultInstance = this;
     }
 
     public void pasteExpression(String expr) {
@@ -262,31 +260,76 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         return instance;
     }
 
-    public static ArrayList<Item> getHistory() {
-        return defaultInstance != null ? defaultInstance.historyPanel.getHistoryItems() : new ArrayList<Item>();
+    private static CodeEvaluator getDefaultInstance() {
+        CodeEvaluator evaluator = instanceRef != null ? instanceRef.get() : null;
+        if (evaluator != null) {
+            return evaluator;
+        }
+        final CodeEvaluator result[] = new CodeEvaluator[1];
+        if (SwingUtilities.isEventDispatchThread()) {
+            result[0] = getInstance();
+        } else {
+            try {
+                SwingUtilities.invokeAndWait(new Runnable() {
+                    public void run() {
+                        result[0] = getInstance();
+                    }
+                });
+            } catch (InterruptedException ex) {
+                Exceptions.printStackTrace(ex);
+            } catch (InvocationTargetException ex) {
+                Exceptions.printStackTrace(ex);
+            }
+        }
+        instanceRef = new WeakReference(result[0]);
+        return result[0];
+    }
+
+    public static ArrayList<History.Item> getHistory() {
+        CodeEvaluator defaultInstance = getDefaultInstance();
+        return defaultInstance != null ? defaultInstance.history.getItems() : new ArrayList<History.Item>();
     }
 
     public static Variable getResult() {
+        CodeEvaluator defaultInstance = getDefaultInstance();
         return defaultInstance != null ? defaultInstance.result : null;
     }
 
     public static String getExpressionText() {
+        CodeEvaluator defaultInstance = getDefaultInstance();
         return defaultInstance != null ? defaultInstance.getExpression() : ""; // NOI18N
     }
 
-    public static synchronized void addResultListener(PropertyChangeListener listener) {
-        pcs.addPropertyChangeListener(listener);
+    public static void addResultListener(final PropertyChangeListener listener) {
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                CodeEvaluator defaultInstance = getDefaultInstance();
+                synchronized(defaultInstance.pcs) {
+                    defaultInstance.pcs.addPropertyChangeListener(listener);
+                }
+            }
+        });
     }
 
-    public static synchronized void removeResultListener(PropertyChangeListener listener) {
-        pcs.removePropertyChangeListener(listener);
+    public static void removeResultListener(final PropertyChangeListener listener) {
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                CodeEvaluator defaultInstance = getDefaultInstance();
+                synchronized(defaultInstance.pcs) {
+                    defaultInstance.pcs.removePropertyChangeListener(listener);
+                }
+            }
+        });
     }
 
     private static void fireResultChange() {
         RequestProcessor.getDefault().post(new Runnable() {
             public void run() {
-                synchronized(CodeEvaluator.class) {
-                    pcs.firePropertyChange(PROP_RESULT_CHANGED, null, null);
+                CodeEvaluator defaultInstance = getDefaultInstance();
+                if (defaultInstance != null) {
+                    synchronized (defaultInstance.pcs) {
+                        defaultInstance.pcs.firePropertyChange(PROP_RESULT_CHANGED, null, null);
+                    }
                 }
             }
         });
@@ -312,7 +355,7 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
                     debugger.addPropertyChangeListener(JPDADebugger.PROP_CURRENT_THREAD, CodeEvaluator.this);
                     debugger.addPropertyChangeListener(JPDADebugger.PROP_STATE, CodeEvaluator.this);
                 } else {
-                    historyPanel.clearHistory();
+                    history.clear();
                 }
                 computeEvaluationButtonState();
             }
@@ -497,7 +540,7 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
 
     private void addResultToHistory(final String expr, Variable result) {
         if (lastEvaluationRecord != null) {
-            historyPanel.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
+            history.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
                     lastEvaluationRecord.value, lastEvaluationRecord.toString);
         }
         String type = result.getType();
@@ -598,7 +641,7 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
                 JPDADebugger debugger = debuggerRef.get();
                 if (debugger != null && debugger.getState() != JPDADebugger.STATE_STOPPED) {
                     if (result != null) {
-                        historyPanel.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
+                        history.addItem(lastEvaluationRecord.expr, lastEvaluationRecord.type,
                             lastEvaluationRecord.value, lastEvaluationRecord.toString);
                         lastEvaluationRecord = null;
                         result = null;
@@ -649,6 +692,63 @@ public class CodeEvaluator extends TopComponent implements HelpCtx.Provider,
         tree.setFocusTraversalKeys(KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, tfkeys);
         tfkeys = referenceTextField.getFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS);
         tree.setFocusTraversalKeys(KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, tfkeys);
+    }
+
+    // History ..................................................................
+
+    public static class History {
+
+        private static final int MAX_ITEMS = 100;
+
+        private ArrayList<Item> historyItems = new ArrayList<Item>();
+
+        private void addItem(String expr, String type, String value, String toString) {
+            Item item = new Item(expr, type, value, toString);
+            historyItems.add(0, item);
+            if (historyItems.size() > MAX_ITEMS) {
+                historyItems.remove(MAX_ITEMS);
+            }
+        }
+
+        public ArrayList<Item> getItems() {
+            return historyItems;
+        }
+
+        public void clear() {
+            historyItems.clear();
+        }
+
+        public class Item {
+            public String expr;
+            public String type;
+            public String value;
+            public String toString;
+            public String tooltip;
+            public String exprFormatted;
+
+            Item(String expr, String type, String value, String toString) {
+                this.expr = expr;
+                this.type = type;
+                this.value = value;
+                this.toString = toString;
+                StringBuffer buf = new StringBuffer();
+                buf.append("<html>");
+                String text = expr.replaceAll ("&", "&amp;");
+                text = text.replaceAll ("<", "&lt;");
+                text = text.replaceAll (">", "&gt;");
+                text = text.replaceAll ("\n", "<br/>");
+                text = text.replaceAll ("\r", "");
+                buf.append(text);
+                buf.append("</html>");
+                this.tooltip = buf.toString();
+            }
+
+            @Override
+            public String toString() {
+                return expr;
+            }
+        }
+
     }
 
     // ResultView ...............................................................
