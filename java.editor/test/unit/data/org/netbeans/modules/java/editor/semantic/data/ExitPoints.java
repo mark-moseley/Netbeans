@@ -1,5 +1,5 @@
 package test;
-
+import javax.swing.text.BadLocationException;
 public class ExitPoints {
     
     public ExitPoints() {
@@ -105,4 +105,27 @@ public class ExitPoints {
     private String[] testArray() {
         return new String[]{new String()};
     }
+
+    public String method() {
+        class H {
+            public void run() {
+                if(true) return;
+            }
+        }
+        new Runnable() {
+            public void run() {
+                if(true) return;
+            }
+        };
+        return "";
+    }
+
 }
+
+class ConstructorThrows {
+
+    public ConstructorThrows() throws NullPointerException, BadLocationException {
+    }
+
+}
+
