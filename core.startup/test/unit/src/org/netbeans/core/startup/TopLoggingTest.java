@@ -43,20 +43,18 @@ package org.netbeans.core.startup;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.PrintStream;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
-import java.util.logging.StreamHandler;
-import java.util.logging.XMLFormatter;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.swing.SwingUtilities;
 import org.netbeans.junit.NbTestCase;
+import org.openide.util.Exceptions;
+import org.openide.util.RequestProcessor;
 
 
 /**
@@ -116,9 +114,6 @@ public class TopLoggingTest extends NbTestCase {
     }
 
 
-    protected void tearDown() throws Exception {
-    }
-
     protected ByteArrayOutputStream getStream() {
         return w;
     }
@@ -140,6 +135,28 @@ public class TopLoggingTest extends NbTestCase {
             fail("msg shall be logged to file: " + disk);
         }
 
+    }
+    public void testLoggingAnnotateException() throws Exception {
+        Exception e = new Exception("One");
+        Exceptions.attachMessage(e, "Two");
+
+        Logger.getLogger(TopLoggingTest.class.getName()).log(Level.INFO, "Three", e);
+
+        String disk = readLog(true);
+        if (!disk.contains("One") || !disk.contains("Two") || !disk.contains("Three")) {
+            fail("There shall be One, Two, Three text in the log:\n" + disk);
+        }
+    }
+    public void testLoggingLocalizedAnnotateException() throws Exception {
+        Exception e = new Exception("One");
+        Exceptions.attachLocalizedMessage(e, "Two");
+
+        Logger.getLogger(TopLoggingTest.class.getName()).log(Level.INFO, "Three", e);
+
+        String disk = readLog(true);
+        if (!disk.contains("One") || !disk.contains("Two") || !disk.contains("Three")) {
+            fail("There shall be One, Two, Three text in the log:\n" + disk);
+        }
     }
     public void testLogMultiLineIsPrintedWithoutTheWarningPrefix() throws Exception {
         Logger.getLogger(TopLoggingTest.class.getName()).log(Level.WARNING, "Some info");
@@ -336,6 +353,17 @@ public class TopLoggingTest extends NbTestCase {
             fail("There should be IllegalStateException:\n" + log);
         }
     }
+    
+    public void testLoggingFromRequestProcessor() throws Exception {
+        Logger.getLogger("org.openide.util.RequestProcessor").setLevel(Level.ALL);
+
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                
+            }
+        }).waitFinished();
+        
+    }
 
     private String readLog(boolean doFlush) throws IOException {
         if (doFlush) {
@@ -353,6 +381,19 @@ public class TopLoggingTest extends NbTestCase {
         is.close();
 
         return new String(arr);
+    }
+
+    public void testAttachMessage() throws Exception { // #158906
+        Exception e = new Exception("Help");
+        String msg = "me please";
+        Exception result = Exceptions.attachMessage(e, msg);
+        assertSame(result, e);
+        Logger.getLogger(TopLoggingTest.class.getName()).log(Level.INFO, "background", e);
+        String disk = readLog(true);
+        assertTrue(disk, disk.contains("background"));
+        assertTrue(disk, disk.contains("java.lang.Exception"));
+        assertTrue(disk, disk.contains("Help"));
+        assertTrue(disk, disk.contains("me please"));
     }
 
 }
