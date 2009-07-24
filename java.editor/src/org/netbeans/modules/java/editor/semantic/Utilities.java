@@ -46,6 +46,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
@@ -67,7 +68,6 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.Name;
 import org.netbeans.api.java.lexer.JavaTokenId;
-import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.lexer.Token;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
@@ -183,6 +183,31 @@ public class Utilities {
         return null;
     }
     
+    private static Token<JavaTokenId> findIdentifierSpanImpl(CompilationInfo info, IdentifierTree tree, CompilationUnitTree cu, SourcePositions positions) {
+        int start = (int)positions.getStartPosition(cu, tree);
+        int endPosition = (int)positions.getEndPosition(cu, tree);
+        
+        if (start == (-1) || endPosition == (-1))
+            return null;
+
+        TokenHierarchy<?> th = info.getTokenHierarchy();
+        TokenSequence<JavaTokenId> ts = th.tokenSequence(JavaTokenId.language());
+
+        if (ts.move(start) == Integer.MAX_VALUE) {
+            return null;
+        }
+
+        ts.moveNext();
+
+        if (ts.offset() >= start) {
+            Token<JavaTokenId> t = ts.token();
+
+            return t;
+        }
+        
+        return null;
+    }
+
     private static final Map<Class, List<Kind>> class2Kind;
     
     static {
@@ -246,7 +271,13 @@ public class Utilities {
             
             return findTokenWithText(info, name, start, end);
         }
-        throw new IllegalArgumentException("Only MethodDecl, VariableDecl and ClassDecl are accepted by this method.");
+        if (class2Kind.get(IdentifierTree.class).contains(leaf.getKind())) {
+            return findIdentifierSpanImpl(info, (IdentifierTree) leaf, info.getCompilationUnit(), info.getTrees().getSourcePositions());
+        }
+        if (class2Kind.get(ParameterizedTypeTree.class).contains(leaf.getKind())) {
+            return findIdentifierSpanImpl(info, new TreePath(decl, ((ParameterizedTypeTree) leaf).getType()));
+        }
+        throw new IllegalArgumentException("Only MethodDecl, VariableDecl, MemberSelectTree, IdentifierTree and ClassDecl are accepted by this method. Got: " + leaf.getKind());
     }
 
     public static int[] findIdentifierSpan( final TreePath decl, final CompilationInfo info, final Document doc) {
@@ -393,9 +424,15 @@ public class Utilities {
         }
         
         ts.moveNext();
-        
-        if (ts.offset() == start && ts.token().id() == JavaTokenId.IDENTIFIER) {
-             return ts.token();
+
+        final JavaTokenId id = ts.token().id();
+        if (ts.offset() == start) {
+            if (id == JavaTokenId.IDENTIFIER) {
+                return ts.token();
+            }
+            if (id == JavaTokenId.THIS || id == JavaTokenId.SUPER) {
+                return ts.offsetToken();
+            }
         }
         
         return null;
@@ -415,6 +452,7 @@ public class Utilities {
     }
     
     private static final Set<String> keywords;
+    private static final Set<String> nonCtorKeywords;
     
     static {
         keywords = new HashSet<String>();
@@ -425,6 +463,11 @@ public class Utilities {
         keywords.add("this");
         keywords.add("super");
         keywords.add("class");
+
+        nonCtorKeywords = new HashSet(keywords);
+        nonCtorKeywords.remove("this");
+        nonCtorKeywords.remove("super");
+
     }
     
     public static boolean isKeyword(Tree tree) {
@@ -435,6 +478,17 @@ public class Utilities {
             return keywords.contains(((MemberSelectTree) tree).getIdentifier().toString());
         }
         
+        return false;
+    }
+
+    public static boolean isNonCtorKeyword(Tree tree) {
+        if (tree.getKind() == Kind.IDENTIFIER) {
+            return nonCtorKeywords.contains(((IdentifierTree) tree).getName().toString());
+        }
+        if (tree.getKind() == Kind.MEMBER_SELECT) {
+            return nonCtorKeywords.contains(((MemberSelectTree) tree).getIdentifier().toString());
+        }
+
         return false;
     }
     
