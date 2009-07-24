@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.websvc.core.dev.wizard;
 
+import org.netbeans.modules.websvc.api.support.ServiceCreator;
 import org.netbeans.modules.websvc.api.support.java.GenerationUtils;
 import org.netbeans.modules.websvc.api.support.java.SourceUtils;
 import org.netbeans.modules.websvc.core.ProjectInfo;
@@ -97,7 +98,6 @@ import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlModelListener;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlModeler;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlPort;
 import org.netbeans.modules.websvc.api.jaxws.wsdlmodel.WsdlService;
-import org.netbeans.modules.websvc.core.ServiceCreator;
 import org.netbeans.modules.websvc.core.JaxWsUtils;
 import org.netbeans.modules.websvc.jaxws.api.JAXWSSupport;
 import org.netbeans.spi.java.project.classpath.ProjectClassPathExtender;
@@ -202,20 +202,22 @@ public class JaxWsServiceCreator implements ServiceCreator {
 
 
         if (serviceType == WizardProperties.FROM_SCRATCH) {
-//            if ((projectType == ProjectInfo.JSE_PROJECT_TYPE && Util.isSourceLevel16orHigher(project)) ||
-//                    ((Util.isJavaEE5orHigher(project) &&
-//                    (projectType == WEB_PROJECT_TYPE || projectType == EJB_PROJECT_TYPE))) ||
-//                    (jwsdpSupported)
-//                    ) {
             JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(projectInfo.getProject().getProjectDirectory());
-            wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
-            handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_WS"), 50); //NOI18N
-            //add the JAXWS 2.0 library, if not already added
-            if (addJaxWsLib) {
-                addJaxws21Library(projectInfo.getProject());
+            if (jaxWsSupport != null) {
+                wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
+                handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_WS"), 50); //NOI18N
+                //add the JAXWS 2.0 library, if not already added
+                if (addJaxWsLib) {
+                    addJaxws21Library(projectInfo.getProject());
+                }
+                generateJaxWSImplFromTemplate(pkg, wsName, projectType);
+                handle.finish();
+            } else {
+                 DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(JaxWsServiceCreator.class, "TXT_JaxWsNotSupported"),
+                        NotifyDescriptor.ERROR_MESSAGE));
+                 handle.finish();
             }
-            generateJaxWSImplFromTemplate(pkg, wsName, projectType);
-            handle.finish();
             return;
         }
         if (serviceType == WizardProperties.ENCAPSULATE_SESSION_BEAN) {
@@ -223,13 +225,18 @@ public class JaxWsServiceCreator implements ServiceCreator {
                     ) {
 
                 JAXWSSupport jaxWsSupport = JAXWSSupport.getJAXWSSupport(projectInfo.getProject().getProjectDirectory());
-                wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
-                handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_SEI_AND_IMPL"), 50); //NOI18N
-                Node[] nodes = (Node[]) wiz.getProperty(WizardProperties.DELEGATE_TO_SESSION_BEAN);
-                generateWebServiceFromEJB(wsName, pkg, projectInfo, nodes);
-
-                handle.progress(70);
-                handle.finish();
+                if (jaxWsSupport != null) {
+                    wsName = getUniqueJaxwsName(jaxWsSupport, wsName);
+                    handle.progress(NbBundle.getMessage(JaxWsServiceCreator.class, "MSG_GEN_SEI_AND_IMPL"), 50); //NOI18N
+                    Node[] nodes = (Node[]) wiz.getProperty(WizardProperties.DELEGATE_TO_SESSION_BEAN);
+                    generateWebServiceFromEJB(wsName, pkg, projectInfo, nodes);
+                    handle.finish();
+                } else {
+                    DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
+                        NbBundle.getMessage(JaxWsServiceCreator.class, "TXT_JaxWsNotSupported"),
+                        NotifyDescriptor.ERROR_MESSAGE));
+                    handle.finish();                   
+                }
             }
         }
     }
@@ -238,7 +245,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
         DataFolder df = DataFolder.findFolder(pkg);
         FileObject template = Templates.getTemplate(wiz);
 
-        if (projectType == ProjectInfo.EJB_PROJECT_TYPE) { //EJB Web Service
+        if ((Boolean)wiz.getProperty(WizardProperties.IS_STATELESS_BEAN)) { //EJB Web Service
             FileObject templateParent = template.getParent();
             template = templateParent.getFileObject("EjbWebService", "java"); //NOI18N
         }
@@ -250,30 +257,34 @@ public class JaxWsServiceCreator implements ServiceCreator {
         dobj = DataObject.find(createdFile);
         final JaxWsModel jaxWsModel = projectInfo.getProject().getLookup().lookup(JaxWsModel.class);
         if (jaxWsModel != null) {
-            ClassPath classPath = ClassPath.getClassPath(createdFile, ClassPath.SOURCE);
-            String serviceImplPath = classPath.getResourceName(createdFile, '.', false);
-            Service service = jaxWsModel.addService(wsName, serviceImplPath);
-            ProjectManager.mutex().writeAccess(new Runnable() {
+            
+            ClassPath classPath = getClassPathForFile( projectInfo.getProject(), createdFile);
+                if (classPath != null) {
+                String serviceImplPath = classPath.getResourceName(createdFile, '.', false);
+                Service service = jaxWsModel.addService(wsName, serviceImplPath);
+                ProjectManager.mutex().writeAccess(new Runnable() {
 
-                public void run() {
-                    try {
-                        jaxWsModel.write();
-                    } catch (IOException ex) {
-                        ErrorManager.getDefault().notify(ex);
+                    public void run() {
+                        try {
+                            jaxWsModel.write();
+                        } catch (IOException ex) {
+                            ErrorManager.getDefault().notify(ex);
+                        }
                     }
-                }
-            });
-            JaxWsUtils.openFileInEditor(dobj, service);
+                });
+            }            
+            JaxWsUtils.openFileInEditor(dobj);
+            displayDuplicityWarning(createdFile);
         }
 
         return createdFile;
     }
 
     private String getUniqueJaxwsName(JAXWSSupport jaxWsSupport, String origName) {
-        List<Service> webServices = jaxWsSupport.getServices();
+        List webServices = jaxWsSupport.getServices();
         List<String> serviceNames = new ArrayList<String>(webServices.size());
-        for (Service service : webServices) {
-            serviceNames.add(service.getName());
+        for (Object service : webServices) {
+            serviceNames.add(((Service)service).getName());
         }
         return uniqueWSName(origName, serviceNames);
     }
@@ -323,6 +334,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
         }
         final URL wsdlURL = wsdlUrl;
         final WsdlService service = (WsdlService) wiz.getProperty(WizardProperties.WSDL_SERVICE);
+        final Boolean useProvider = (Boolean) wiz.getProperty(WizardProperties.USE_PROVIDER);
         if (service == null) {
             FileObject targetFolder = Templates.getTargetFolder(wiz);
             String targetName = Templates.getTargetName(wiz);
@@ -346,6 +358,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
             }
         } else {
             final WsdlPort port = (WsdlPort) wiz.getProperty(WizardProperties.WSDL_PORT);
+            final boolean isStatelessSB = (Boolean)wiz.getProperty(WizardProperties.IS_STATELESS_BEAN);
             //String portJavaName = port.getJavaName();   
             WsdlModeler wsdlModeler = (WsdlModeler) wiz.getProperty(WizardProperties.WSDL_MODELER);
             // don't set the packageName for modeler (use the default one generated from target Namespace)
@@ -362,13 +375,12 @@ public class JaxWsServiceCreator implements ServiceCreator {
                     port1.setSOAPVersion(port.getSOAPVersion());
                     FileObject targetFolder = Templates.getTargetFolder(wiz);
                     String targetName = Templates.getTargetName(wiz);
-
                     try {
                         JaxWsUtils.generateJaxWsImplementationClass(projectInfo.getProject(),
                                 targetFolder,
                                 targetName,
                                 wsdlURL,
-                                service1, port1);
+                                service1, port1, useProvider, isStatelessSB);
                         handle.finish();
                     } catch (Exception ex) {
                         handle.finish();
@@ -390,7 +402,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
                 DataFolder df = DataFolder.findFolder(pkg);
                 FileObject template = Templates.getTemplate(wiz);
 
-                if (projectType == ProjectInfo.EJB_PROJECT_TYPE) { //EJB Web Service
+                if ((Boolean)wiz.getProperty(WizardProperties.IS_STATELESS_BEAN)) { //EJB Web Service
                     FileObject templateParent = template.getParent();
                     template = templateParent.getFileObject("EjbWebService", "java"); //NOI18N
                 }
@@ -401,27 +413,46 @@ public class JaxWsServiceCreator implements ServiceCreator {
                 dobj.setValid(false);
                 dobj = DataObject.find(createdFile);
 
-                ClassPath classPath = ClassPath.getClassPath(createdFile, ClassPath.SOURCE);
-                String serviceImplPath = classPath.getResourceName(createdFile, '.', false);
-                generateDelegateMethods(createdFile, ejbRef);
+                ClassPath classPath = getClassPathForFile(projectInfo.getProject(), createdFile);
+                if (classPath != null) {
+                    String serviceImplPath = classPath.getResourceName(createdFile, '.', false);
+                    generateDelegateMethods(createdFile, ejbRef);
 
-                final JaxWsModel jaxWsModel = projectInfo.getProject().getLookup().lookup(JaxWsModel.class);
-                if (jaxWsModel != null) {
-                    Service service = jaxWsModel.addService(wsName, serviceImplPath);
-                    ProjectManager.mutex().writeAccess(new Runnable() {
+                    final JaxWsModel jaxWsModel = projectInfo.getProject().getLookup().lookup(JaxWsModel.class);
+                    if (jaxWsModel != null) {
+                        jaxWsModel.addService(wsName, serviceImplPath);
+                        ProjectManager.mutex().writeAccess(new Runnable() {
 
-                        public void run() {
-                            try {
-                                jaxWsModel.write();
-                            } catch (IOException ex) {
-                                ErrorManager.getDefault().notify(ex);
+                            public void run() {
+                                try {
+                                    jaxWsModel.write();
+                                } catch (IOException ex) {
+                                    ErrorManager.getDefault().notify(ex);
+                                }
                             }
-                        }
-                    });
-                    JaxWsUtils.openFileInEditor(dobj, service);
+                        });
+                    }
                 }
+                JaxWsUtils.openFileInEditor(dobj);
+                displayDuplicityWarning(createdFile);
             }
         }
+    }
+    
+    private void displayDuplicityWarning(final FileObject createdFile) {
+        final String serviceName = createdFile.getName()+"Service"; //NOI18N
+        RequestProcessor.getDefault().post(new Runnable() {
+            public void run() {
+                Service serv = JaxWsUtils.findServiceForServiceName(createdFile, serviceName);
+                if (serv != null) {
+                    DialogDisplayer.getDefault().notify(
+                        new NotifyDescriptor.Message(
+                            NbBundle.getMessage(JaxWsServiceCreator.class,"MSG_ServiceNameExists", serviceName, serv.getImplementationClass()), 
+                            NotifyDescriptor.WARNING_MESSAGE));
+                }
+            }
+
+        });        
     }
 
     private void generateDelegateMethods(final FileObject targetFo, final EjbReference ref) throws IOException {
@@ -443,12 +474,15 @@ public class JaxWsServiceCreator implements ServiceCreator {
                     if (interfaceClass[0] == null) {
                         interfaceClass[0] = ref.getRemote();
                     }
+                    if (interfaceClass[0] == null) {
+                        interfaceClass[0] = ref.getEjbClass();
+                    }
 
                     ejbRefInjection = generateEjbInjection(workingCopy, make, interfaceClass[0], onClassPath);
 
                     if (ejbRefInjection != null) {
                         String comment1 = "Add business logic below. (Right-click in editor and choose"; //NOI18N
-                        String comment2 = "\"Web Service > Add Operation\""; //NOI18N                        
+                        String comment2 = "\"Insert Code > Add Web Service Operation\")"; //NOI18N
                         make.addComment(ejbRefInjection, Comment.create(Comment.Style.LINE, 0, 0, 4, comment1), false);
                         make.addComment(ejbRefInjection, Comment.create(Comment.Style.LINE, 0, 0, 4, comment2), false);
 
@@ -521,7 +555,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
 
         Set<String> operationNames = new HashSet<String>();
         for (Element el : interfaceElements) {
-            if (el.getKind() == ElementKind.METHOD) {
+            if (el.getKind() == ElementKind.METHOD && el.getModifiers().contains(Modifier.PUBLIC)) {
                 ExecutableElement methodEl = (ExecutableElement) el;
                 MethodTree method = utils.createAbstractMethodImplementation(classElement, methodEl);
 
@@ -561,14 +595,29 @@ public class JaxWsServiceCreator implements ServiceCreator {
                 }
 
                 // generate @Oneway annotation
-                if (isVoid) {
+                if (isVoid && method.getThrows().isEmpty()) {
                     TypeElement onewayEl = workingCopy.getElements().getTypeElement("javax.jws.Oneway"); //NOI18N
                     AnnotationTree onewayAn = make.Annotation(
                             make.QualIdent(onewayEl),
                             Collections.<ExpressionTree>emptyList());
                     modifiersTree = make.addModifiersAnnotation(modifiersTree, onewayAn);
                 }
-
+                // parameters
+                List<? extends VariableTree> params = method.getParameters();
+                List<VariableTree> newParams = new ArrayList<VariableTree>();
+                if (params.size() > 0) {
+                    TypeElement paramEl = workingCopy.getElements().getTypeElement("javax.jws.WebParam"); //NOI18N
+                    for (VariableTree param: params) {
+                        String paramName = param.getName().toString();
+                        AssignmentTree nameAttr = make.Assignment(make.Identifier("name"), make.Literal(paramName)); //NOI18N
+                        AnnotationTree paramAn = make.Annotation(
+                                make.QualIdent(paramEl),
+                                Collections.<ExpressionTree>singletonList(nameAttr));
+                        ModifiersTree paramModifierTree = make.addModifiersAnnotation(param.getModifiers(), paramAn);
+                        newParams.add(make.Variable(paramModifierTree, param.getName(), param.getType(), null));
+                    }
+                }
+                
                 // method body
                 List<ExpressionTree> arguments = new ArrayList<ExpressionTree>();
                 for (VariableElement ve : methodEl.getParameters()) {
@@ -588,7 +637,7 @@ public class JaxWsServiceCreator implements ServiceCreator {
                         method.getName(),
                         method.getReturnType(),
                         method.getTypeParameters(),
-                        method.getParameters(),
+                        newParams,
                         method.getThrows(),
                         body,
                         null);
@@ -609,5 +658,16 @@ public class JaxWsServiceCreator implements ServiceCreator {
             }
             return newName;
         }
+    }
+    
+    private ClassPath getClassPathForFile(Project project, FileObject file) {
+        SourceGroup[] srcGroups = ProjectUtils.getSources(project).getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
+        for (SourceGroup srcGroup: srcGroups) {
+            FileObject srcRoot = srcGroup.getRootFolder();
+            if (FileUtil.isParentOf(srcRoot, file)) {
+                return ClassPath.getClassPath(srcRoot, ClassPath.SOURCE);
+            }
+        }
+        return null;
     }
 }
