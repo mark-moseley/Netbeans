@@ -38,37 +38,34 @@
  * Version 2 license, then the option applies only if the new code is
  * made subject to such option by the copyright holder.
  */
-package org.netbeans.modules.web.beans.model.spi;
-
-import java.util.List;
-
-import javax.lang.model.element.Element;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeMirror;
+package org.netbeans.modules.web.beans.api.model;
 
 import org.netbeans.modules.j2ee.metadata.model.api.support.annotation.AnnotationModelHelper;
-import org.netbeans.modules.web.beans.api.model.AbstractModelImplementation;
-import org.netbeans.modules.web.beans.api.model.WebBeansModelException;
 
 
 /**
  * @author ads
  *
  */
-public interface WebBeansModelProvider {
+public abstract class AbstractModelImplementation {
+    
+    protected AbstractModelImplementation( ModelUnit unit ){
+        myUnit = unit;
+        myModel = new WebBeansModel( this );
+    }
 
-    Element getInjectable( VariableElement element , 
-            AbstractModelImplementation modelImpl ) throws WebBeansModelException;
+    protected AnnotationModelHelper getHelper(){
+        return getModelUnit().getHelper();
+    }
     
-    List<Element> getInjectables( VariableElement element , 
-            AbstractModelImplementation modelImpl  );
+    protected WebBeansModel getModel(){
+        return myModel;
+    }
     
-    boolean isDynamicInjectionPoint( VariableElement element ,
-            AbstractModelImplementation impl ) throws WebBeansModelException;
+    public ModelUnit getModelUnit(){
+        return myUnit;
+    }
     
-    boolean isInjectionPoint( VariableElement element , 
-            AbstractModelImplementation impl ) throws WebBeansModelException;
-    
-    TypeMirror resolveType(String fqn, AnnotationModelHelper helper ) ;
-
+    private ModelUnit myUnit;
+    private WebBeansModel myModel;
 }
