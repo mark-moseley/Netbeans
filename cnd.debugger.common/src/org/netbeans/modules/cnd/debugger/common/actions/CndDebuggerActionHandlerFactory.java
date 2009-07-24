@@ -39,43 +39,22 @@
  * made subject to such option by the copyright holder.
  */
 
-package org.netbeans.modules.cnd.debugger.gdb.actions;
+package org.netbeans.modules.cnd.debugger.common.actions;
 
-import javax.swing.SwingUtilities;
-import org.netbeans.api.debugger.DebuggerInfo;
-import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.modules.cnd.debugger.common.actions.CndDebuggerActionHandler;
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.profiles.GdbProfile;
 import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
-import org.openide.util.NbBundle;
-import org.openide.windows.InputOutput;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionHandlerFactory;
+import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
 
-public class GdbActionHandler extends CndDebuggerActionHandler {
-    @Override
-    public void execute(final InputOutput io) {
-        GdbProfile profile = (GdbProfile) pae.getConfiguration().getAuxObject(GdbProfile.GDB_PROFILE_ID);
-        if (profile != null) { // profile can be null if dbxgui is enabled
-            String gdb = profile.getGdbPath(pae.getConfiguration(), true);
-            if (gdb != null) {
-                executionStarted();
-                if (pae.getType() == ProjectActionEvent.Type.DEBUG || pae.getType() == ProjectActionEvent.Type.DEBUG_STEPINTO) {
-                    SwingUtilities.invokeLater(new Runnable() {
-                        public void run() {
-                            DebuggerManager.getDebuggerManager().startDebugging(
-                                        DebuggerInfo.create(GdbDebugger.SESSION_PROVIDER_ID,
-                                        new Object[]{pae, io, GdbActionHandler.this}));
-                        }
-                    });
-                }
-            } else {
-                executionFinished(-1);
-                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
-                        NbBundle.getMessage(GdbActionHandler.class, "Err_NoGdbFound"))); // NOI18N
+public abstract class CndDebuggerActionHandlerFactory implements ProjectActionHandlerFactory {
 
-            }
+    public boolean canHandle(ProjectActionEvent.Type type, Configuration conf) {
+        switch (type) {
+            case DEBUG:
+            case DEBUG_LOAD_ONLY:
+            case DEBUG_STEPINTO:
+                return true;
+            default:
+                return false;
         }
     }
 }

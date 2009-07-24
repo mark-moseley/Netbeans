@@ -41,41 +41,33 @@
 
 package org.netbeans.modules.cnd.debugger.gdb.actions;
 
-import javax.swing.SwingUtilities;
-import org.netbeans.api.debugger.DebuggerInfo;
-import org.netbeans.api.debugger.DebuggerManager;
-import org.netbeans.modules.cnd.debugger.common.actions.CndDebuggerActionHandler;
-import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
-import org.netbeans.modules.cnd.debugger.gdb.profiles.GdbProfile;
-import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent;
-import org.openide.DialogDisplayer;
-import org.openide.NotifyDescriptor;
-import org.openide.util.NbBundle;
-import org.openide.windows.InputOutput;
+import org.netbeans.modules.cnd.api.compilers.Tool;
+import org.netbeans.modules.cnd.debugger.common.actions.CndDebuggerActionHandlerFactory;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionEvent.Type;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionHandler;
+import org.netbeans.modules.cnd.makeproject.api.ProjectActionHandlerFactory;
+import org.netbeans.modules.cnd.makeproject.api.compilers.GNUDebuggerTool;
+import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
+import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
+import org.openide.util.lookup.ServiceProvider;
 
-public class GdbActionHandler extends CndDebuggerActionHandler {
+@ServiceProvider(service=ProjectActionHandlerFactory.class, position=5000)
+public class GdbActionHandlerFactory extends CndDebuggerActionHandlerFactory {
+
     @Override
-    public void execute(final InputOutput io) {
-        GdbProfile profile = (GdbProfile) pae.getConfiguration().getAuxObject(GdbProfile.GDB_PROFILE_ID);
-        if (profile != null) { // profile can be null if dbxgui is enabled
-            String gdb = profile.getGdbPath(pae.getConfiguration(), true);
-            if (gdb != null) {
-                executionStarted();
-                if (pae.getType() == ProjectActionEvent.Type.DEBUG || pae.getType() == ProjectActionEvent.Type.DEBUG_STEPINTO) {
-                    SwingUtilities.invokeLater(new Runnable() {
-                        public void run() {
-                            DebuggerManager.getDebuggerManager().startDebugging(
-                                        DebuggerInfo.create(GdbDebugger.SESSION_PROVIDER_ID,
-                                        new Object[]{pae, io, GdbActionHandler.this}));
-                        }
-                    });
-                }
-            } else {
-                executionFinished(-1);
-                DialogDisplayer.getDefault().notify(new NotifyDescriptor.Message(
-                        NbBundle.getMessage(GdbActionHandler.class, "Err_NoGdbFound"))); // NOI18N
-
-            }
+    public boolean canHandle(Type type, Configuration conf) {
+        if (!super.canHandle(type, conf)) {
+            return false;
         }
+
+        if (conf instanceof MakeConfiguration) {
+            MakeConfiguration mc = (MakeConfiguration)conf;
+            return mc.getCompilerSet().getCompilerSet().getTool(Tool.DebuggerTool) instanceof GNUDebuggerTool;
+        }
+        return false;
+    }
+
+    public ProjectActionHandler createHandler() {
+        return new GdbActionHandler();
     }
 }
