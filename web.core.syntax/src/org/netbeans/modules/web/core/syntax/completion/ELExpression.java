@@ -53,6 +53,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
+import org.netbeans.api.html.lexer.HTMLTokenId;
 import org.netbeans.api.java.source.CancellableTask;
 import org.netbeans.api.java.source.ClasspathInfo;
 import org.netbeans.api.java.source.CompilationController;
@@ -137,13 +138,18 @@ public class ELExpression {
             }
             
             Token jspToken = jspTokenSequence.token();
+            //XXX uglyyy hack, the whole code must be reimplemented!!!
+            boolean inAttrValue = jspToken.id() == HTMLTokenId.VALUE &&
+                    (jspToken.text().charAt(0) == '\'' ||
+                    jspToken.text().charAt(0) == '"');
+
             isDefferedExecution = jspToken.text().toString().startsWith("#{"); //NOI18N
             
-            if (jspToken.id() == JspTokenId.EL){
-                if (offset == jspToken.offset(hi) + "${".length()){ //NOI18N
+//            if (jspToken.id() == JspTokenId.EL){
+                if (offset == (jspToken.offset(hi) + "${".length() + (inAttrValue ? 1 : 0))){ //NOI18N
                     return EL_START;
                 }
-            }
+//            }
             
             ts.move(offset);
             if (!ts.moveNext() && !ts.movePrevious()) {
@@ -201,8 +207,8 @@ public class ELExpression {
         return result;
     }
     
-    public List<CompletionItem> getPropertyCompletionItems(String beanType){
-        PropertyCompletionItemsTask task = new PropertyCompletionItemsTask(beanType);
+    public List<CompletionItem> getPropertyCompletionItems(String beanType, int anchor){
+        PropertyCompletionItemsTask task = new PropertyCompletionItemsTask(beanType, anchor);
         runTask(task);
         
         return task.getCompletionItems();
@@ -221,9 +227,11 @@ public class ELExpression {
         String beanName = extractBeanName();
         
         BeanData[] allBeans = sup.getBeanData();
-        for (BeanData beanData : allBeans) {
-            if (beanData.getId().equals(beanName)){
-                return beanData.getClassName();
+        if (allBeans != null) {
+            for (BeanData beanData : allBeans) {
+                if (beanData.getId().equals(beanName)) {
+                    return beanData.getClassName();
+                }
             }
         }
         
@@ -271,6 +279,20 @@ public class ELExpression {
         
         return dotPos == -1 ? null : elExp.substring(dotPos + 1);
     }
+
+    static String getPropertyName(String methodName, int prefixLength) {
+            String propertyName = methodName.substring(prefixLength);
+            String propertyNameWithoutFL = propertyName.substring(1);
+
+            if(propertyNameWithoutFL.length() > 0) {
+                if(propertyNameWithoutFL.equals(propertyNameWithoutFL.toUpperCase())) {
+                    //property is in uppercase
+                    return propertyName;
+                }
+            }
+
+            return Character.toLowerCase(propertyName.charAt(0)) + propertyNameWithoutFL;
+        }
     
     protected abstract class BaseELTaskClass{
         protected String beanType;
@@ -342,11 +364,11 @@ public class ELExpression {
                 String methodName = method.getSimpleName().toString();
                 
                 if (methodName.startsWith("get")){ //NOI18N
-                    return Character.toLowerCase(methodName.charAt(3)) + methodName.substring(4);
+                    return getPropertyName(methodName, 3);
                 }
                 
                 if (methodName.startsWith("is")){ //NOI18N
-                    return Character.toLowerCase(methodName.charAt(2)) + methodName.substring(3);
+                    return getPropertyName(methodName, 2);
                 }
                 
                 if (isDefferedExecution()){
@@ -360,7 +382,7 @@ public class ELExpression {
             
             return null; // not a property accessor
         }
-        
+
         public void cancel() {}
     }
     
@@ -401,9 +423,11 @@ public class ELExpression {
     private class PropertyCompletionItemsTask extends BaseELTaskClass implements CancellableTask<CompilationController>{
         
         private List<CompletionItem> completionItems = new ArrayList<CompletionItem>();
+        private int anchorOffset;
         
-        PropertyCompletionItemsTask(String beanType){
+        PropertyCompletionItemsTask(String beanType, int anchor){
             super(beanType);
+            this.anchorOffset = anchor;
         }
         
         public void run(CompilationController parameter) throws Exception {
@@ -414,15 +438,14 @@ public class ELExpression {
             if (bean != null){
                 String prefix = getPropertyBeingTypedName();
                 
-                for (ExecutableElement method : ElementFilter.methodsIn(bean.getEnclosedElements())){
+                for (ExecutableElement method : ElementFilter.methodsIn(parameter.getElements().getAllMembers(bean))){
                     String propertyName = getExpressionSuffix(method);
                     
                     if (propertyName != null && propertyName.startsWith(prefix)){
                         boolean isMethod = propertyName.equals(method.getSimpleName().toString());
                         String type = isMethod ? "" : method.getReturnType().toString(); //NOI18N
                         
-                        CompletionItem item = new JspCompletionItem.ELProperty(
-                                propertyName, type);
+                        CompletionItem item = ElCompletionItem.createELProperty(propertyName, anchorOffset, type);
                         
                         completionItems.add(item);
                     }
