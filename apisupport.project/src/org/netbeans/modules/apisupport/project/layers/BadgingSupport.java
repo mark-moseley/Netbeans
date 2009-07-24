@@ -46,8 +46,10 @@ import java.awt.Toolkit;
 import java.beans.BeanInfo;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -79,14 +81,19 @@ import org.openide.util.actions.Presenter;
 
 /**
  * Handles addition of badges to a filesystem a la system filesystem.
- * Specifically interprets SystemFileSystem.localizingBundle and
- * SystemFileSystem.icon (and SystemFileSystem.icon32).
+ * Specifically interprets the following attributes:
+ * <ul>
+ * <li><tt>SystemFileSystem.localizingBundle</tt></li>
+ * <li><tt>displayName</tt></li>
+ * <li><tt>SystemFileSystem.icon</tt></li>
+ * <li><tt>SystemFileSystem.icon32</tt></li>
+ * </ul>
  * Also tries to provide display labels for InstanceDataObject's.
- * Parts copied from org.netbeans.core.projects.SystemFileSystem.
+ * Parts copied from <tt>org.netbeans.core.projects.SystemFileSystem</tt>.
  * @author Jesse Glick
  */
 final class BadgingSupport implements FileSystem.Status, FileChangeListener {
-    
+
     /** for branding/localization like "_f4j_ce_ja"; never null, but may be "" */
     private String suffix = "";
     /** classpath in which to look up resources; may be null but then nothing will be found... */
@@ -132,20 +139,28 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
         Iterator it = files.iterator();
         while (it.hasNext()) {
             FileObject fo = (FileObject) it.next();
-            String bundleName = (String) fo.getAttribute("SystemFileSystem.localizingBundle"); // NOI18N
+            // #168446: try <attr name="displayName" bundlevalue="Bundle#key"/> first
+            String bundleKey = (String) fo.getAttribute("literal:displayName"); // NOI18N
+            String bundleName;
+            if (bundleKey != null) {
+                String[] arr = bundleKey.split(":", 2); // NOI18N
+                assert arr[0].equals("bundle") : "Literal displayName value should start with 'bundle:'";    // NOI18N
+                arr = arr[1].split("#", 2);    // NOI18N
+                bundleName = arr[0];
+                bundleKey = arr[1];
+            } else {
+                bundleName = (String) fo.getAttribute("SystemFileSystem.localizingBundle"); // NOI18N
+                bundleKey = fo.getPath();
+            }
             if (bundleName != null) {
                 try {
-                    URL[] u = LayerUtils.currentify(new URL("nbresloc:/" + // NOI18N
-                            bundleName.replace('.', '/') +
-                            ".properties"), // NOI18N
-                            suffix, cp);
+                    URL[] u = LayerUtils.currentify(LayerUtils.urlForBundle(bundleName), suffix, cp);
                     for (int i = 0; i < u.length; i++) {
                     InputStream is = u[i].openStream();
                     try {
                         Properties p = new Properties();
                         p.load(is);
-                        String key = fo.getPath();
-                        String val = p.getProperty(key);
+                        String val = p.getProperty(bundleKey);
                         // Listen to changes in the origin file if any...
                         FileObject ufo = URLMapper.findFileObject(u[i]);
                         if (ufo != null) {
@@ -187,14 +202,14 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
                         orig = null;
                     }
                     if (orig != null && orig.hasExt("instance")) { // NOI18N
-                        return getInstanceLabel(orig);
+                        return annotateNameGeneral((String) originalFile, Collections.singleton(orig), suffix, fileChangeListener, cp);
                     }
                 }
             }
         }
         return name;
     }
-    
+
     private static String getInstanceLabel(FileObject fo) {
         try {
             // First try to load it in current IDE, as this handles most platform cases OK.
@@ -202,12 +217,16 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
             if (ic != null) {
                 Object o;
                 Logger fslogger = Logger.getLogger("org.openide.filesystems"); // NOI18N
-                Level oldLevel = fslogger.getLevel();
+                Logger cachelogger = Logger.getLogger("org.netbeans.core.startup.layers.BinaryFS"); // NOI18N
+                Level fsLevel = fslogger.getLevel();
+                Level cacheLevel = cachelogger.getLevel();
                 fslogger.setLevel(Level.OFF); // #99744
+                cachelogger.setLevel(Level.OFF); // #166199
                 try {
                     o = ic.instanceCreate();
                 } finally {
-                    fslogger.setLevel(oldLevel);
+                    fslogger.setLevel(fsLevel);
+                    cachelogger.setLevel(cacheLevel);
                 }
                 if (o instanceof Action) {
                     String name = (String) ((Action) o).getValue(Action.NAME);
@@ -224,10 +243,9 @@ final class BadgingSupport implements FileSystem.Status, FileChangeListener {
                     return toStringOf(o);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             // ignore, OK
-        } catch (ClassNotFoundException e) {
-            // ignore, OK
+            Logger.getLogger(BadgingSupport.class.getName()).log(Level.FINE, "Ignored exception: (" + e.getClass().getSimpleName() + ") " + e.getMessage());
         }
         // OK, probably a developed module, so take a guess.
         String clazz = (String) fo.getAttribute("instanceClass"); // NOI18N
