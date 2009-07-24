@@ -46,6 +46,7 @@ import javax.swing.text.JTextComponent;
 import org.netbeans.api.lexer.Language;
 import org.netbeans.api.lexer.TokenHierarchy;
 import org.netbeans.api.lexer.TokenSequence;
+import org.netbeans.modules.cnd.utils.MIMENames;
 
 /**
  *
@@ -53,10 +54,6 @@ import org.netbeans.api.lexer.TokenSequence;
  */
 public final class CndLexerUtilities {
 
-    public static final String C_MIME_TYPE = "text/x-c";// NOI18N
-    public static final String CPLUSPLUS_MIME_TYPE = "text/x-c++";    // NOI18N
-    public static final String PREPROC_MIME_TYPE = "text/x-cpp-preprocessor";// NOI18N
-    public static final String FORTRAN_MIME_TYPE = "text/x-fortran";// NOI18N
     public static final String LEXER_FILTER = "lexer-filter"; // NOI18N
     public static final String FORTRAN_FREE_FORMAT = "fortran-free-format"; // NOI18N
     public static final String FORTRAN_MAXIMUM_TEXT_WIDTH = "fortran-maximum-text-width"; // NOI18N
@@ -83,18 +80,20 @@ public final class CndLexerUtilities {
     }
 
     public static Language<CppTokenId> getLanguage(String mime) {
-        if (C_MIME_TYPE.equals(mime)) {
+        if (MIMENames.C_MIME_TYPE.equals(mime)) {
             return CppTokenId.languageC();
-        } else if (CPLUSPLUS_MIME_TYPE.equals(mime)) {
+        } else if (MIMENames.CPLUSPLUS_MIME_TYPE.equals(mime)) {
             return CppTokenId.languageCpp();
+        } else if (MIMENames.HEADER_MIME_TYPE.equals(mime)) {
+            return CppTokenId.languageHeader();
         }
         return null;
     }
 
     public static Language<CppTokenId> getLanguage(final Document doc) {
         // try from property
-        Language lang = (Language) doc.getProperty(Language.class);
-        if (lang == null || (lang != CppTokenId.languageC() && lang != CppTokenId.languageCpp() && lang != CppTokenId.languagePreproc())) {
+        Language<?> lang = (Language<?>) doc.getProperty(Language.class);
+        if (!isCppLanguage(lang, true)) {
             lang = getLanguage((String) doc.getProperty("mimeType")); // NOI18N
         }
         @SuppressWarnings("unchecked")
@@ -125,7 +124,7 @@ public final class CndLexerUtilities {
         for (int i = tsList.size() - 1; i >= 0; i--) {
             TokenSequence<?> ts = tsList.get(i);
             final Language<?> lang = ts.languagePath().innerLanguage();
-            if (lang == CppTokenId.languageC() || lang == CppTokenId.languageCpp() || (lexPP && lang == CppTokenId.languagePreproc())) {
+            if (isCppLanguage(lang, lexPP)) {
                 @SuppressWarnings("unchecked")
                 TokenSequence<CppTokenId> cppInnerTS = (TokenSequence<CppTokenId>) ts;
                 return cppInnerTS;
@@ -134,6 +133,12 @@ public final class CndLexerUtilities {
         return null;
     }
 
+    public static boolean isCppLanguage(Language<?> lang, boolean allowPrepoc) {
+        return lang == CppTokenId.languageC() || lang == CppTokenId.languageCpp()
+                || lang == CppTokenId.languageHeader()
+                || (allowPrepoc && lang == CppTokenId.languagePreproc());
+    }
+    
     public static TokenSequence<FortranTokenId> getFortranTokenSequence(final Document doc, final int offset) {
         TokenHierarchy th = doc != null ? TokenHierarchy.get(doc) : null;
         TokenSequence<FortranTokenId> ts = th != null ? getFortranTokenSequence(th, offset) : null;
@@ -159,16 +164,38 @@ public final class CndLexerUtilities {
         return null;
     }
 
+    public static boolean isCppIdentifier(CharSequence id) {
+        if (id == null) {
+            return false;
+        }
+
+        if (id.length() == 0) {
+            return false;
+        }
+
+        if (!(isCppIdentifierStart(id.charAt(0)))) {
+            return false;
+        }
+
+        for (int i = 1; i < id.length(); i++) {
+            if (!(isCppIdentifierPart(id.charAt(i)))) {
+                return false;
+            }
+        }
+        return getDefatultFilter(true).check(id) == null && getDefatultFilter(false).check(id) == null;
+    }
+
     public static boolean isCppIdentifierStart(char ch) {
-        return Character.isJavaIdentifierStart(ch);
+        //MS VC also supports $ as start or part of id
+        return ('A' <= ch && ch <= 'Z') || ('a'<= ch && ch <= 'z') || (ch == '_') || (ch == '$');
+    }
+
+    public static boolean isCppIdentifierPart(char ch) {
+        return ('0' <= ch && ch <= '9') || isCppIdentifierStart(ch);
     }
 
     public static boolean isCppIdentifierStart(int codePoint) {
         return Character.isJavaIdentifierStart(codePoint);
-    }
-
-    public static boolean isCppIdentifierPart(char ch) {
-        return Character.isJavaIdentifierPart(ch);
     }
 
     public static boolean isCppIdentifierPart(int codePoint) {
@@ -203,6 +230,19 @@ public final class CndLexerUtilities {
                 }
             }
             return buffer.toString();
+        }
+    }
+
+    public static boolean isKeyword(String str) {
+        try {
+            CppTokenId id = CppTokenId.valueOf(str.toUpperCase());
+            return id != null &&
+                    (CppTokenId.KEYWORD_CATEGORY.equals(id.primaryCategory())
+                    || CppTokenId.KEYWORD_DIRECTIVE_CATEGORY.equals(id.primaryCategory())
+                    || CppTokenId.PREPROCESSOR_KEYWORD_CATEGORY.equals(id.primaryCategory()))
+                    || CppTokenId.PREPROCESSOR_KEYWORD_DIRECTIVE_CATEGORY.equals(id.primaryCategory());
+        } catch (IllegalArgumentException ex) {
+            return false;
         }
     }
 
@@ -285,6 +325,7 @@ public final class CndLexerUtilities {
     private static Filter<CppTokenId> FILTER_STD_CPP;
     private static Filter<CppTokenId> FILTER_GCC_CPP;
     private static Filter<CppTokenId> FILTER_PREPRPOCESSOR;
+    private static Filter<CppTokenId> FILTER_OMP;
     private static Filter<FortranTokenId> FILTER_FORTRAN;
 
     public static Filter<CppTokenId> getDefatultFilter(boolean cpp) {
@@ -297,6 +338,14 @@ public final class CndLexerUtilities {
             addPreprocKeywords(FILTER_PREPRPOCESSOR);
         }
         return FILTER_PREPRPOCESSOR;
+    }
+
+    public synchronized static Filter<CppTokenId> getOmpFilter() {
+        if (FILTER_OMP == null) {
+            FILTER_OMP = new Filter<CppTokenId>();
+            addOmpKeywords(FILTER_OMP);
+        }
+        return FILTER_OMP;
     }
 
     public synchronized static Filter<CppTokenId> getStdCFilter() {
@@ -370,6 +419,46 @@ public final class CndLexerUtilities {
         addToFilter(ids, filterToModify);
     }
 
+    private static void addOmpKeywords(Filter<CppTokenId> filterToModify) {
+        CppTokenId[] ids = new CppTokenId[]{
+            CppTokenId.PRAGMA_OMP_START,
+            CppTokenId.PRAGMA_OMP_PARALLEL,
+            CppTokenId.PRAGMA_OMP_SECTIONS,
+            CppTokenId.PRAGMA_OMP_NOWAIT,
+            CppTokenId.PRAGMA_OMP_ORDERED,
+            CppTokenId.PRAGMA_OMP_SCHEDULE,
+            CppTokenId.PRAGMA_OMP_DYNAMIC,
+            CppTokenId.PRAGMA_OMP_GUIDED,
+            CppTokenId.PRAGMA_OMP_RUNTIME,
+            CppTokenId.PRAGMA_OMP_SECTION,
+            CppTokenId.PRAGMA_OMP_SINGLE,
+            CppTokenId.PRAGMA_OMP_MASTER,
+            CppTokenId.PRAGMA_OMP_CRITICAL,
+            CppTokenId.PRAGMA_OMP_BARRIER,
+            CppTokenId.PRAGMA_OMP_ATOMIC,
+            CppTokenId.PRAGMA_OMP_FLUSH,
+            CppTokenId.PRAGMA_OMP_THREADPRIVATE,
+            CppTokenId.PRAGMA_OMP_PRIVATE,
+            CppTokenId.PRAGMA_OMP_FIRSTPRIVATE,
+            CppTokenId.PRAGMA_OMP_LASTPRIVATE,
+            CppTokenId.PRAGMA_OMP_SHARED,
+            CppTokenId.PRAGMA_OMP_NONE,
+            CppTokenId.PRAGMA_OMP_REDUCTION,
+            CppTokenId.PRAGMA_OMP_COPYIN,
+            CppTokenId.PRAGMA_OMP_TASK,
+            CppTokenId.PRAGMA_OMP_TASKWAIT,
+            CppTokenId.PRAGMA_OMP_COLLAPSE,
+            CppTokenId.PRAGMA_OMP_COPYPRIVATE,
+            CppTokenId.PRAGMA_OMP_DEFAULT,
+            CppTokenId.PRAGMA_OMP_STATIC,
+            CppTokenId.PRAGMA_OMP_IF,
+            CppTokenId.PRAGMA_OMP_FOR,
+            CppTokenId.PRAGMA_OMP_AUTO,
+            CppTokenId.PRAGMA_OMP_NUM_THREADS,
+        };
+        addToFilter(ids, filterToModify);
+    }
+
     private static void addCommonCCKeywords(Filter<CppTokenId> filterToModify) {
         CppTokenId[] ids = new CppTokenId[]{
             CppTokenId.AUTO,
@@ -386,6 +475,7 @@ public final class CndLexerUtilities {
             CppTokenId.EXTERN,
             CppTokenId.FLOAT,
             CppTokenId.FOR,
+            CppTokenId.__FUNC__,
             CppTokenId.GOTO,
             CppTokenId.IF,
             CppTokenId.INT,
@@ -466,6 +556,7 @@ public final class CndLexerUtilities {
             CppTokenId.__ASM,
             CppTokenId.__ASM__,
             CppTokenId.__ATTRIBUTE__,
+            CppTokenId.__ATTRIBUTE,
             CppTokenId.__COMPLEX__,
             CppTokenId.__CONST,
             CppTokenId.__CONST__,
@@ -481,6 +572,7 @@ public final class CndLexerUtilities {
             CppTokenId.__TYPEOF__,
             CppTokenId.__VOLATILE,
             CppTokenId.__VOLATILE__,
+            CppTokenId.__THREAD,
             CppTokenId.__UNUSED__,
         };
         addToFilter(ids, filterToModify);
