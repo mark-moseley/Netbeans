@@ -49,11 +49,15 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
+import org.netbeans.modules.cnd.CndModule;
 import org.netbeans.modules.cnd.debugger.gdb.GdbDebugger;
+import org.netbeans.modules.cnd.debugger.gdb.Signal;
+import org.netbeans.modules.nativeexecution.api.util.ProcessUtils;
 import org.openide.util.NbBundle;
-import org.openide.util.RequestProcessor;
 import org.openide.util.Utilities;
 
 /**
@@ -63,21 +67,31 @@ import org.openide.util.Utilities;
  */
 public class ExternalTerminal implements PropertyChangeListener {
     
-    private String tty = null;
-    private long pid;
+    private final String tty;
+    private final long pid;
     private File gdbHelperLog = null;
     private File gdbHelperScript = null;
-    private GdbDebugger debugger;
+    private final GdbDebugger debugger;
+
+    private static final Logger log = Logger.getLogger("gdb.logger"); // NOI18N
+
+    private static final int RETRY_LIMIT = 200;
+
+    public static String create(GdbDebugger debugger, String termpath, String[] env) throws IOException {
+        return new ExternalTerminal(debugger, termpath, env).tty;
+    }
     
     /** Creates a new instance of ExternalTerminal */
-    public ExternalTerminal(GdbDebugger debugger, String termpath, String[] env) throws IOException {
-        initGdbHelpers();
-        debugger.addPropertyChangeListener(this);
+    private ExternalTerminal(GdbDebugger debugger, String termpath, String[] env) throws IOException {
         this.debugger = debugger;
-        
-        ProcessBuilder pb = new ProcessBuilder(getTermOptions(termpath));
+        debugger.addPropertyChangeListener(this);
+        initGdbHelpers();
+
+        TerminalProfile termProfile = getTermProfile(termpath);
+        ProcessBuilder pb = new ProcessBuilder(termProfile.options);
         
         // Set "DISPLAY" environment variable if not already set (Mac OSX only)
+        // Used only localy, so we can use Utilities.getOperatingSystem()
         if (Utilities.getOperatingSystem() == Utilities.OS_MAC) {
             Map<String,String> map = pb.environment();
             if (map.get("DISPLAY") == null) { // NOI18N
@@ -90,41 +104,70 @@ public class ExternalTerminal implements PropertyChangeListener {
                 map.put("DISPLAY", display); // NOI18N
             }
         }
+
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
         
-        Process proc = pb.start();
-        
-        final BufferedReader fromTerm = new BufferedReader(new FileReader(gdbHelperLog.getAbsolutePath()));
-        new RequestProcessor("TermReader").post(new Runnable() { // NOI18N
-            public void run() {
-                int count = 0;
-                String pid_line = null;
-                try {
-                    while (count++ < 300) {
-                        tty = fromTerm.readLine();
-                        pid_line = fromTerm.readLine();
-                        if (pid_line == null) {
-                            try {
-                                Thread.sleep(100);
-                            } catch (InterruptedException ex) {
-                            }
-                        } else {
-                            break;
-                        }
+        int count = 0;
+        String tty_line = null;
+        String pid_line = null;
+        try {
+            while (count++ < RETRY_LIMIT) {
+                // first check for process termination
+                // only if not in KDE
+                if (!termProfile.terminates) {
+                    try {
+                        int rc = process.exitValue();
+
+                        // In case of failure - read output and log it
+                        // See IZ 164026
+                        String out = ProcessUtils.readProcessOutputLine(process);
+
+                        // process already terminated - exit
+                        throw new IllegalStateException(NbBundle.getMessage(
+                                ExternalTerminal.class,
+                                "ERR_ExternalTerminalFailedMessageDetails", // NOI18N
+                                termProfile.options,
+                                rc,
+                                out));
+                    } catch (IllegalThreadStateException e) {
+                        // do nothing
                     }
-                } catch (IOException ioe) {
-                    return;
                 }
-                try {
-                    pid = Long.valueOf(pid_line);
-                } catch (NumberFormatException ex) {
-                    pid = 0;
+                // TODO: it is not good to wait for the file to be filled with info this way
+                // need to find a better way to get pid later
+                BufferedReader fromTerm = new BufferedReader(new FileReader(gdbHelperLog));
+                tty_line = fromTerm.readLine();
+                pid_line = fromTerm.readLine();
+                fromTerm.close();
+                if (pid_line == null) {
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException ex) {
+                    }
+                } else {
+                    break;
                 }
             }
-        });
+            if (count >= RETRY_LIMIT) {
+                log.warning("Retry limit reached for " + gdbHelperLog + ", giving up");
+            }
+        } catch (IOException ioe) {
+            log.warning("Failed to read external terminal helper");
+        }
+        tty = tty_line;
+        log.finest("ExternalTerminal: tty=" + tty);
+        long pidTemp = 0;
+        try {
+            pidTemp = Long.valueOf(pid_line);
+        } catch (Exception ex) {
+            log.warning("Error parsing pid: " + pid_line);
+        }
+        pid = pidTemp;
+        log.finest("ExternalTerminal: pid=" + pid);
     }
     
     private void initGdbHelpers() {
-        
         try {
             gdbHelperLog = File.createTempFile("gdb_helper_", ".log"); // NOI18N
             gdbHelperScript = File.createTempFile("gdb_helper_", ".sh"); // NOI18N
@@ -144,56 +187,56 @@ public class ExternalTerminal implements PropertyChangeListener {
             fw.close();
         } catch (IOException ioe) {
         }
-        ProcessBuilder pb = new ProcessBuilder("/bin/chmod", "755", gdbHelperScript.getAbsolutePath()); // NOI18N
-        try {
-            pb.start();
-        } catch (IOException ex) {
-        }
+        CndModule.chmod755(Collections.singletonList(gdbHelperScript.getAbsolutePath()), log);
     }
     
     /**
      * Return the tty to the gdb engine. We don't have a timeout here because this is managed
      * by the general gdb startup timeout.
      */
-    public String getTty() {
-        while (tty == null) {
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException ex) {
-            }
-        }
+    String getTty() {
         return tty;
     }
     
-    private List<String> getTermOptions(String path) {
-        List<String> options = new ArrayList<String>();
-        
-        options.add(path);
+    private TerminalProfile getTermProfile(String path) {
         if (path.contains("gnome-terminal")) { // NOI18N
-            options.add("--hide-menubar"); // NOI18N
-            options.add("--disable-factory"); // NOI18N
-            options.add("--command"); // NOI18N
-            options.add(gdbHelperScript.getAbsolutePath());
-        } else if (path.contains("xterm")) { // NOI18N
-            options.add("-e"); // NOI18N
-            options.add(gdbHelperScript.getAbsolutePath()); // NOI18N
-        } else if (path.contains("konsole")) { // NOI18N
-            options.add("-e"); // NOI18N
-            options.add(gdbHelperScript.getAbsolutePath());
+            return new TerminalProfile(false,
+                    path,
+                    "--hide-menubar", // NOI18N
+                    "--disable-factory", // NOI18N
+                    "--command", // NOI18N
+                    gdbHelperScript.getAbsolutePath());
+        } else { //if (path.contains("xterm") || path.contains("konsole")) { // NOI18N
+            return new TerminalProfile(false,
+                    path,
+                    "-e", // NOI18N
+                    gdbHelperScript.getAbsolutePath()); // NOI18N
         }
-        return options;
     }
     
     public void propertyChange(PropertyChangeEvent ev) {
         if (ev.getPropertyName().equals(GdbDebugger.PROP_STATE)) {
             Object state = ev.getNewValue();
-            if (state == GdbDebugger.STATE_NONE) {
+            if (state == GdbDebugger.State.EXITED) {
                 gdbHelperScript.delete();
                 gdbHelperLog.delete();
+                debugger.removePropertyChangeListener(this);
             }
 	} else if (ev.getPropertyName().equals(GdbDebugger.PROP_KILLTERM)) {
-            debugger.kill(15, pid);
-            
+            if (pid == 0) {
+                log.warning("Killing zero pid detected from log: " + gdbHelperLog);
+            }
+            debugger.kill(Signal.TERM, pid);
         }
     }
+
+    private static class TerminalProfile {
+        private final String[] options;
+        private final boolean terminates;
+
+        private TerminalProfile(boolean terminates, String... options) {
+            this.options = options;
+            this.terminates = terminates;
+        }
+   }
 }
