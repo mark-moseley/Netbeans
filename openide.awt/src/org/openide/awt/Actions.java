@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -63,9 +63,9 @@ import java.util.logging.Logger;
 import org.openide.util.HelpCtx;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.Map;
@@ -74,6 +74,7 @@ import java.util.Observer;
 import java.util.WeakHashMap;
 import javax.swing.AbstractButton;
 import javax.swing.Action;
+import javax.swing.ActionMap;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JCheckBoxMenuItem;
@@ -84,6 +85,13 @@ import javax.swing.KeyStroke;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.text.Keymap;
+import org.netbeans.api.actions.Closable;
+import org.netbeans.api.actions.Editable;
+import org.netbeans.api.actions.Openable;
+import org.netbeans.api.actions.Printable;
+import org.netbeans.api.actions.Viewable;
+import org.openide.util.ContextAwareAction;
+import org.openide.util.ImageUtilities;
 import org.openide.util.actions.BooleanStateAction;
 import org.openide.util.actions.SystemAction;
 
@@ -168,7 +176,15 @@ public class Actions extends Object {
      * for this method by implementing method
      * {@link ButtonActionConnector#connect(JMenuItem, Action, boolean)} and
      * registering an instance of {@link ButtonActionConnector} in the
-     * default lookup.
+     * default lookup. 
+     * <p>
+     * Since version 7.1 the action can also provide properties
+     * "menuText" and "popupText" if one wants to use other text on the JMenuItem
+     * than the name
+     * of the action taken from Action.NAME. The popupText is checked only if the
+     * popup parameter is true and takes the biggest precedence. The menuText is
+     * tested everytime and takes precedence over standard <code>Action.NAME</code>
+     * 
      * @param item menu item
      * @param action action
      * @param popup create popup or menu item
@@ -371,7 +387,262 @@ public class Actions extends Object {
 
         return result;
     }
+    
+    //
+    // Factories 
+    //
 
+    
+    /** Creates new action which is always enabled. 
+     * This method can also be used from 
+     * <a href="@org-openide-modules@/org/openide/modules/doc-files/api.html#how-layer">XML Layer</a> 
+     * directly by following XML definition:
+     * <pre>
+     * &lt;file name="your-pkg-action-id.instance"&gt;
+     *   &lt;attr name="instanceCreate" methodvalue="org.openide.awt.Actions.alwaysEnabled"/&gt;
+     *   &lt;attr name="delegate" methodvalue="your.pkg.YourAction.factoryMethod"/&gt;
+     *   &lt;attr name="displayName" bundlevalue="your.pkg.Bundle#key"/&gt;
+     *   &lt;attr name="iconBase" stringvalue="your/pkg/YourImage.png"/&gt;
+     *   &lt;!-- if desired: &lt;attr name="noIconInMenu" boolvalue="false"/&gt; --&gt;
+     *   &lt;!-- if desired: &lt;attr name="asynchronous" boolvalue="true"/&gt; --&gt;
+     * &lt;/file&gt;
+     * </pre>
+     * In case the "delegate" is not just {@link ActionListener}, but also
+     * {@link Action}, the returned action acts as a lazy proxy - it defers initialization
+     * of the action itself, but as soon as it is created, it delegates all queries
+     * to it. This way one can create an action that looks statically enabled, and as soon
+     * as user really uses it, it becomes active - it can change its name, it can
+     * change its enabled state, etc.
+     *
+     * 
+     * @param delegate the task to perform when action is invoked
+     * @param displayName the name of the action
+     * @param iconBase the location to the actions icon
+     * @param noIconInMenu true if this icon shall not have an item in menu
+     * @since 7.3
+     */
+    public static Action alwaysEnabled(
+        ActionListener delegate, String displayName, String iconBase, boolean noIconInMenu
+    ) {
+        HashMap<String,Object> map = new HashMap<String,Object>();
+        map.put("delegate", delegate); // NOI18N
+        map.put("displayName", displayName); // NOI18N
+        map.put("iconBase", iconBase); // NOI18N
+        map.put("noIconInMenu", noIconInMenu); // NOI18N
+        return alwaysEnabled(map);
+    }
+    // for use from layers
+    static Action alwaysEnabled(Map map) {
+        return new AlwaysEnabledAction(map);
+    }
+
+    /** Creates new "callback" action. Such action has an assigned key
+     * which is used to find proper delegate in {@link ActionMap} of currently
+     * active component.
+     * <p>
+     * This action can be lazily declared in a
+     * <a href="@org-openide-modules@/org/openide/modules/doc-files/api.html#how-layer">
+     * layer file</a> using following XML snippet:
+     * <pre>
+     * &lt;file name="action-pkg-ClassName.instance"&gt;
+     *   &lt;attr name="instanceCreate" methodvalue="org.openide.awt.Actions.callback"/&gt;
+     *   &lt;attr name="key" stringvalue="KeyInActionMap"/&gt;
+     *   &lt;attr name="surviveFocusChange" boolvalue="false"/&gt; &lt;!-- defaults to false --&gt;
+     *   &lt;attr name="fallback" newvalue="action.pkg.DefaultAction"/&gt; &lt;!-- may be missing --&gt;
+     *   &lt;attr name="displayName" bundlevalue="your.pkg.Bundle#key"/&gt;
+     *   &lt;attr name="iconBase" stringvalue="your/pkg/YourImage.png"/&gt;
+     *   &lt;!-- if desired: &lt;attr name="noIconInMenu" boolvalue="false"/&gt; --&gt;
+     *   &lt;!-- if desired: &lt;attr name="asynchronous" boolvalue="true"/&gt; --&gt;
+     * &lt;/file&gt;
+     * </pre>
+     * 
+     *
+     * @param key the key to search for in an {@link ActionMap}
+     * @param surviveFocusChange true to remember action provided by previously
+     *   active component even some other component is currently active
+     * @param fallback action to delegate to when no key found. Use <code>null</code>
+     *   to make the action disabled if delegate assigned to key is missing
+     * @param displayName localized name of the action (including ampersand)
+     * @param iconBase the location to the action icon
+     * @param noIconInMenu true if this icon shall not have an item in menu
+     * @return creates new action associated with given key
+     * @since 7.10
+     */
+    public static ContextAwareAction callback(
+        String key, Action fallback, boolean surviveFocusChange,
+        String displayName, String iconBase, boolean noIconInMenu
+    ) {
+        Map<String,Object> map = new HashMap<String, Object>();
+        map.put("key", key); // NOI18N
+        map.put("surviveFocusChange", surviveFocusChange); // NOI18N
+        map.put("fallback", fallback); // NOI18N
+        map.put("displayName", displayName); // NOI18N
+        map.put("iconBase", iconBase); // NOI18N
+        map.put("noIconInMenu", noIconInMenu); // NOI18N
+        return callback(map);
+    }
+    static ContextAwareAction callback(Map fo) {
+        return GeneralAction.callback(fo);
+    }
+
+    /** Creates new "context" action, an action that observes the current
+     * selection for a given type and enables if instances of given type are
+     * present. Common interfaces to watch for include {@link Openable},
+     * {@link Editable}, {@link Closable}, {@link Viewable}, and any interfaces
+     * defined and exposed by various other APIs.
+     * <p>
+     * Actions of this kind can be declared in
+     * <a href="@org-openide-modules@/org/openide/modules/doc-files/api.html#how-layer">
+     * layer file</a> using following XML snippet:
+     * <pre>
+     * &lt;file name="action-pkg-ClassName.instance"&gt;
+     *   &lt;attr name="instanceCreate" methodvalue="org.openide.awt.Actions.context"/&gt;
+     *   &lt;attr name="type" stringvalue="org.netbeans.api.actions.Openable"/&gt;
+     *   &lt;attr name="selectionType" stringvalue="ANY"/&gt; &lt-- or EXACTLY_ONE --&gt;
+     *   &lt;attr name="delegate" newvalue="action.pkg.YourAction"/&gt;
+     * 
+     *   &lt;!--
+     *      Similar registration like in case of "callback" action.
+     *      May be missing completely:
+     *   --&gt;
+     *   &lt;attr name="key" stringvalue="KeyInActionMap"/&gt;
+     *   &lt;attr name="surviveFocusChange" boolvalue="false"/&gt; 
+     *   &lt;attr name="displayName" bundlevalue="your.pkg.Bundle#key"/&gt;
+     *   &lt;attr name="iconBase" stringvalue="your/pkg/YourImage.png"/&gt;
+     *   &lt;!-- if desired: &lt;attr name="noIconInMenu" boolvalue="false"/&gt; --&gt;
+     *   &lt;!-- if desired: &lt;attr name="asynchronous" boolvalue="true"/&gt; --&gt;
+     * &lt;/file&gt;
+     * </pre>
+     * In the previous case there has to be a class with public default constructor
+     * named <code>action.pkg.YourAction</code>. It has to implement
+     * {@link ContextAwareAction} interface. Its {@link ContextAwareAction#createContextAwareInstance(org.openide.util.Lookup)}
+     * method is called when the action is invoked. The passed in {@link Lookup}
+     * contains instances of the <code>type</code> interface, <code>actionPerformed</code>
+     * is then called on the returned clone.
+     * <p>
+     * Alternatively one can use support for simple dependency injection by
+     * using following attributes:
+     * <pre>
+     * &lt;file name="action-pkg-ClassName.instance"&gt;
+     *   &lt;attr name="instanceCreate" methodvalue="org.openide.awt.Actions.context"/&gt;
+     *   &lt;attr name="type" stringvalue="org.netbeans.api.actions.Openable"/&gt;
+     *   &lt;attr name="delegate" methodvalue="org.openide.awt.Action.inject"/&gt;
+     *   &lt;attr name="selectionType" stringvalue="EXACTLY_ONE"/&gt;
+     *   &lt;attr name="injectable" stringvalue="pkg.YourClass"/&gt;
+     *   &lt;attr name="displayName" bundlevalue="your.pkg.Bundle#key"/&gt;
+     *   &lt;attr name="iconBase" stringvalue="your/pkg/YourImage.png"/&gt;
+     *   &lt;!-- if desired: &lt;attr name="noIconInMenu" boolvalue="false"/&gt; --&gt;
+     * &lt;/file&gt;
+     * </pre>
+     * where <code>pkg.YourClass</code> is defined with public constructor taking
+     * <code>type</code>:
+     * <pre>
+     * public final class YourClass implements ActionListener {
+     *    Openable context;
+     *
+     *    public YourClass(Openable context) {
+     *      this.context = context;
+     *    }
+     *
+     *    public void actionPerformed(ActionEvent ev) {
+     *       // do something with context
+     *    }
+     * }
+     * </pre>
+     * The instance of this class is created when the action is invoked and
+     * its constructor is fed with the instance of <code>type</code> inside
+     * the active context. <code>actionPerformed</code> method is called then.
+     * <p>
+     * To create action that handled multiselection
+     * one can use following XML snippet:
+     * <pre>
+     * &lt;file name="action-pkg-ClassName.instance"&gt;
+     *   &lt;attr name="type" stringvalue="org.netbeans.api.actions.Openable"/&gt;
+     *   &lt;attr name="delegate" methodvalue="org.openide.awt.Action.inject"/&gt;
+     *   &lt;attr name="selectionType" stringvalue="ANY"/&gt;
+     *   &lt;attr name="injectable" stringvalue="pkg.YourClass"/&gt;
+     *   &lt;attr name="displayName" bundlevalue="your.pkg.Bundle#key"/&gt;
+     *   &lt;attr name="iconBase" stringvalue="your/pkg/YourImage.png"/&gt;
+     *   &lt;!-- if desired: &lt;attr name="noIconInMenu" boolvalue="false"/&gt; --&gt;
+     * &lt;/file&gt;
+     * </pre>
+     * Now the constructor of <code>YourClass</code> needs to have following
+     * form:
+     * <pre>
+     * public final class YourClass implements ActionListener {
+     *    List&lt;Openable&gt; context;
+     *
+     *    public YourClass(List&lt;Openable&gt; context) {
+     *      this.context = context;
+     *    }
+     *  }
+     * </pre>
+     *
+     * @param type the object to seek for in the active context
+     * @param single shall there be just one or multiple instances of the object
+     * @param surviveFocusChange shall the action remain enabled and act on
+     *    previous selection even if no selection is currently in context?
+     * @param delegate action to call when this action is invoked
+     * @param key alternatively an action can be looked up in action map
+     *    (see {@link Actions#callback(java.lang.String, javax.swing.Action, boolean, java.lang.String, java.lang.String, boolean)})
+     * @param displayName localized name of the action (including ampersand)
+     * @param iconBase the location to the action icon
+     * @param noIconInMenu true if this icon shall not have an item in menu
+     * @return new instance of context aware action watching for type
+     * @since 7.10
+     */
+    public static ContextAwareAction context(
+        Class<?> type,
+        boolean single,
+        boolean surviveFocusChange,
+        ContextAwareAction delegate,
+        String key,
+        String displayName, String iconBase, boolean noIconInMenu
+    ) {
+        Map<String,Object> map = new HashMap<String, Object>();
+        map.put("key", key); // NOI18N
+        map.put("surviveFocusChange", surviveFocusChange); // NOI18N
+        map.put("delegate", delegate); // NOI18N
+        map.put("type", type); // NOI18N
+        map.put("selectionType", single ? ContextSelection.EXACTLY_ONE : ContextSelection.ANY);
+        map.put("displayName", displayName); // NOI18N
+        map.put("iconBase", iconBase); // NOI18N
+        map.put("noIconInMenu", noIconInMenu); // NOI18N
+        return context(map);
+    }
+    static ContextAwareAction context(Map fo) {
+        return GeneralAction.context(fo);
+    }
+    static ContextAction.Performer<?> inject(final Map fo) {
+        Object t = fo.get("selectionType"); // NOI18N
+        if (ContextSelection.EXACTLY_ONE.toString().equals(t)) {
+            return new InjectorExactlyOne(fo);
+        }
+        if (ContextSelection.ANY.toString().equals(t)) {
+            return new InjectorAny(fo);
+        }
+        throw new IllegalStateException("no selectionType parameter in " + fo); // NOI18N
+    }
+    static ContextAction.Performer<?> performer(final Map fo) {
+        String type = (String)fo.get("type");
+        if (type.equals(Openable.class.getName())) {
+            return new ActionDefaultPerfomer(0);
+        }
+        if (type.equals(Viewable.class.getName())) {
+            return new ActionDefaultPerfomer(1);
+        }
+        if (type.equals(Editable.class.getName())) {
+            return new ActionDefaultPerfomer(2);
+        }
+        if (type.equals(Closable.class.getName())) {
+            return new ActionDefaultPerfomer(3);
+        }
+        if (type.equals(Printable.class.getName())) {
+            return new ActionDefaultPerfomer(4);
+        }
+        throw new IllegalStateException(type);
+    }
+    
     /** Extracts help from action.
      */
     private static HelpCtx findHelp(Action a) {
@@ -648,13 +919,13 @@ public class Actions extends Object {
                     Image img = null;
 
                     if (!useSmallIcon) {
-                        img = Utilities.loadImage(insertBeforeSuffix(b, "24"), true); // NOI18N
+                        img = ImageUtilities.loadImage(insertBeforeSuffix(b, "24"), true); // NOI18N
 
                         if (img == null) {
-                            img = Utilities.loadImage(b, true);
+                            img = ImageUtilities.loadImage(b, true);
                         }
                     } else {
-                        img = Utilities.loadImage(b, true);
+                        img = ImageUtilities.loadImage(b, true);
                     }
 
                     if (img != null) {
@@ -686,13 +957,13 @@ public class Actions extends Object {
                     Image img = null;
 
                     if (!useSmallIcon) {
-                        img = Utilities.loadImage(insertBeforeSuffix(b, "24"), true); // NOI18N
+                        img = ImageUtilities.loadImage(insertBeforeSuffix(b, "24"), true); // NOI18N
 
                         if (img == null) {
-                            img = Utilities.loadImage(b, true);
+                            img = ImageUtilities.loadImage(b, true);
                         }
                     } else {
-                        img = Utilities.loadImage(b, true);
+                        img = ImageUtilities.loadImage(b, true);
                     }
 
                     if (img != null) {
@@ -738,7 +1009,7 @@ public class Actions extends Object {
 
                 if (i == null) {
                     // even for regular icon
-                    img = Utilities.loadImage(b, true);
+                    img = ImageUtilities.loadImage(b, true);
 
                     if (img != null) {
                         button.setIcon(new ImageIcon(img));
@@ -747,22 +1018,22 @@ public class Actions extends Object {
                     i = img;
                 }
 
-                Image pImg = Utilities.loadImage(insertBeforeSuffix(b, "_pressed"), true); // NOI18N
+                Image pImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_pressed"), true); // NOI18N
 
                 if (pImg != null) {
                     button.setPressedIcon(new ImageIcon(pImg));
                 }
 
-                Image rImg = Utilities.loadImage(insertBeforeSuffix(b, "_rollover"), true); // NOI18N
+                Image rImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_rollover"), true); // NOI18N
 
                 if (rImg != null) {
                     button.setRolloverIcon(new ImageIcon(rImg));
                 }
 
-                Image dImg = Utilities.loadImage(insertBeforeSuffix(b, "_disabled"), true); // NOI18N
+                Image dImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_disabled"), true); // NOI18N
 
                 if (dImg != null) {
-                    button.setDisabledIcon(new ImageIcon(dImg));
+                    button.setDisabledIcon(ImageUtilities.image2Icon(dImg));
                 } else if (img != null) {
                     button.setDisabledIcon(createDisabledIcon(img));
                 }
@@ -890,6 +1161,9 @@ public class Actions extends Object {
         */
         @Override
         public void updateState(String changedProperty) {
+            if (this.button == null) {
+                this.button = (AbstractButton) this.comp;
+            }
             if ((changedProperty == null) || changedProperty.equals(SystemAction.PROP_ENABLED)) {
                 button.setEnabled(action.isEnabled());
             }
@@ -908,7 +1182,16 @@ public class Actions extends Object {
             }
 
             if ((changedProperty == null) || changedProperty.equals(Action.NAME)) {
-                Object s = action.getValue(Action.NAME);
+                Object s = null;
+                if (popup) {
+                    s = action.getValue("popupText"); // NOI18N
+                }
+                if (s == null) {
+                    s = action.getValue("menuText"); // NOI18N
+                }
+                if (s == null) {
+                    s = action.getValue(Action.NAME);
+                }
 
                 if (s instanceof String) {
                     setMenuText(((JMenuItem) comp), (String) s, true);
@@ -959,7 +1242,7 @@ public class Actions extends Object {
 
                 if (i == null) {
                     // even for regular icon
-                    img = Utilities.loadImage(b, true);
+                    img = ImageUtilities.loadImage(b, true);
 
                     if (img != null) {
                         button.setIcon(new ImageIcon(img));
@@ -967,19 +1250,19 @@ public class Actions extends Object {
                     }
                 }
 
-                Image pImg = Utilities.loadImage(insertBeforeSuffix(b, "_pressed"), true); // NOI18N
+                Image pImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_pressed"), true); // NOI18N
 
                 if (pImg != null) {
                     button.setPressedIcon(new ImageIcon(pImg));
                 }
 
-                Image rImg = Utilities.loadImage(insertBeforeSuffix(b, "_rollover"), true); // NOI18N
+                Image rImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_rollover"), true); // NOI18N
 
                 if (rImg != null) {
                     button.setRolloverIcon(new ImageIcon(rImg));
                 }
 
-                Image dImg = Utilities.loadImage(insertBeforeSuffix(b, "_disabled"), true); // NOI18N
+                Image dImg = ImageUtilities.loadImage(insertBeforeSuffix(b, "_disabled"), true); // NOI18N
 
                 if (dImg != null) {
                     button.setDisabledIcon(new ImageIcon(dImg));
@@ -1052,7 +1335,8 @@ public class Actions extends Object {
             }
 
             if (!popup) {
-                button.setIcon(new ImageIcon(Utilities.loadImage("org/openide/resources/actions/gap.gif", true))); // NOI18N
+                boolean jdk16orNewer = "1.6".compareTo(System.getProperty("java.version")) <= 0;
+                button.setIcon(ImageUtilities.loadImageIcon(jdk16orNewer ? "org/openide/resources/actions/empty.gif" : "org/openide/resources/actions/gap.gif", true)); // NOI18N
             }
         }
 
