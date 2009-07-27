@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><!-- -*- sgml-indent-step: 1 -*- -->
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
 DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
 
@@ -1110,7 +1110,7 @@ made subject to such option by the copyright holder.
     category="stable" 
     group="layer" 
     type="import" 
-    url="http://www.netbeans.org/download/dev/javadoc/LoadersAPI/architecture-summary.html#layer-Loaders-folder-any-Actions" >
+    url="@org-openide-loaders@/architecture-summary.html#layer-Loaders-folder-any-Actions" >
     to add certain build system actions to folder popup menu and hide the
     default ones.
     </api>
