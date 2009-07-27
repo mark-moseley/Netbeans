@@ -120,13 +120,27 @@ import org.openide.util.NbBundle;
             SunStudioDataCollector collector = new SunStudioDataCollector();
 
             for (FunctionCallWithMetric functionCall : collector.getFunctionCallsSortedByInclusiveTime()) {
+                if((Double)functionCall.getMetricValue(SunStudioDCConfiguration.c_iUser.getColumnName()) < highLoadFinder.ticks/2) {
+                    break;
+                }
                 CsmFunction function = CodeModelUtils.getFunction(collector.getProject(), functionCall.getFunction().getQuilifiedName());
                 for (CsmLoopStatement loop : CodeModelUtils.getForStatements(function)) {
                     if (CodeModelUtils.canParallelize(loop)) {
                         LoopParallelizationTipsProvider.addTip(new LoopParallelizationAdvice(function, loop, highLoadFinder.getProcessorUtilization()));
                         panel.notifyUser();
-                        ParallelAdviserTopComponent view = ParallelAdviserTopComponent.findInstance();
-                        view.updateTips();
+
+                        Runnable updateView = new Runnable() {
+
+                            public void run() {
+                                ParallelAdviserTopComponent view = ParallelAdviserTopComponent.findInstance();
+                                view.updateTips();
+                            }
+                        };
+                        if (SwingUtilities.isEventDispatchThread()) {
+                            updateView.run();
+                        } else {
+                            SwingUtilities.invokeLater(updateView);
+                        }
                     }
                 }
             }
