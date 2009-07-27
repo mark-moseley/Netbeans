@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -41,9 +41,10 @@
 
 package org.netbeans.modules.subversion.ui.copy;
 
+import java.awt.EventQueue;
 import java.io.File;
+import java.util.List;
 import org.netbeans.modules.subversion.FileInformation;
-import org.netbeans.modules.subversion.FileStatusCache;
 import org.netbeans.modules.subversion.RepositoryFile;
 import org.netbeans.modules.subversion.Subversion;
 import org.netbeans.modules.subversion.client.SvnClient;
@@ -54,7 +55,11 @@ import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.netbeans.modules.versioning.util.Utils;
 import org.openide.nodes.Node;
+import org.openide.util.NbBundle;
+import org.openide.util.RequestProcessor;
+import org.tigris.subversion.svnclientadapter.ISVNInfo;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
+import org.tigris.subversion.svnclientadapter.SVNNodeKind;
 import org.tigris.subversion.svnclientadapter.SVNRevision;
 import org.tigris.subversion.svnclientadapter.SVNUrl;
 
@@ -85,11 +90,12 @@ public class SwitchToAction extends ContextAction {
              & ~FileInformation.STATUS_NOTVERSIONED_EXCLUDED 
              & ~FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY;
     }
-
-    protected boolean enable(Node[] nodes) {
-        return nodes != null && nodes.length == 1 &&  getContext(nodes).getRoots().size() > 0;
-    }        
     
+    @Override
+    protected boolean enable(Node[] nodes) {
+        return super.enable(nodes) && nodes.length == 1;
+    }
+
     protected void performContextAction(final Node[] nodes) {
         
         if(!Subversion.getInstance().checkClientAvailable()) {            
@@ -97,12 +103,20 @@ public class SwitchToAction extends ContextAction {
         }
         
         Context ctx = getContext(nodes);        
-        
-        final File root = ctx.getRootFiles()[0];
-        SVNUrl rootUrl;
 
+        File[] roots = SvnUtils.getActionRoots(ctx);
+        if(roots == null || roots.length == 0) return;
+
+        File interestingFile;
+        if(roots.length == 1) {
+            interestingFile = roots[0];
+        } else {
+            interestingFile = SvnUtils.getPrimaryFile(roots[0]);
+        }
+
+        SVNUrl rootUrl;
         try {            
-            rootUrl = SvnUtils.getRepositoryRootUrl(root);
+            rootUrl = SvnUtils.getRepositoryRootUrl(interestingFile);
         } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, true, true);
             return;
@@ -111,17 +125,72 @@ public class SwitchToAction extends ContextAction {
         File[] files = Subversion.getInstance().getStatusCache().listFiles(ctx, FileInformation.STATUS_LOCAL_CHANGE);       
         boolean hasChanges = files.length > 0;
 
-        final SwitchTo switchTo = new SwitchTo(repositoryRoot, root, hasChanges);
-        if(switchTo.showDialog()) {
-            ContextAction.ProgressSupport support = new ContextAction.ProgressSupport(this, nodes) {
-                public void perform() {
-                    RepositoryFile toRepositoryFile = switchTo.getRepositoryFile();
-                    performSwitch(toRepositoryFile, root, this);
-                }
-            };
-            support.start(createRequestProcessor(nodes));
-        }        
+        final RequestProcessor rp = createRequestProcessor(nodes);
+
+        final SwitchTo switchTo = new SwitchTo(repositoryRoot, interestingFile, hasChanges);
+                
+        performSwitch(switchTo, rp, nodes, roots);
     }
+
+    /**
+     * Switches all files from the roots array to their respective urls given by the SwitchTo controller
+     * @param switchTo
+     * @param rp
+     * @param nodes
+     * @param roots
+     */
+    private void performSwitch(final SwitchTo switchTo, final RequestProcessor rp, final Node[] nodes, final File[] roots) {
+        if(!switchTo.showDialog()) {
+           return;
+        }
+        rp.post(new Runnable() {
+            public void run() {
+                if(!validateInput(roots[0], switchTo.getRepositoryFile())) {
+                    EventQueue.invokeLater(new Runnable() {
+                        public void run() {
+                            performSwitch(switchTo, rp, nodes, roots);
+                        }
+                    });
+                } else {
+                    ContextAction.ProgressSupport support = new ContextAction.ProgressSupport(SwitchToAction.this, nodes) {
+                        public void perform() {
+                            for (File root : roots) {
+                                RepositoryFile toRepositoryFile = switchTo.getRepositoryFile();
+                                if (root.isFile() && roots.length > 1) {
+                                    // change the filename ONLY for multi-file data objects, not for folders
+                                    toRepositoryFile = toRepositoryFile.replaceLastSegment(root.getName(), 0);
+                                }
+                                performSwitch(toRepositoryFile, root, this);
+                            }
+                        }
+                    };
+                    support.start(rp);                            
+                }
+            }
+        });
+    }
+    
+    private boolean validateInput(File root, RepositoryFile toRepositoryFile) {
+        boolean ret = false;
+        SvnClient client;
+        try {                   
+            client = Subversion.getInstance().getClient(toRepositoryFile.getRepositoryUrl());
+            ISVNInfo info = client.getInfo(toRepositoryFile.getFileUrl());
+            if(info.getNodeKind() == SVNNodeKind.DIR && root.isFile()) {
+                SvnClientExceptionHandler.annotate(NbBundle.getMessage(SwitchToAction.class, "LBL_SwitchFileToFolderError"));
+                ret = false;
+            } else if(info.getNodeKind() == SVNNodeKind.FILE && root.isDirectory()) {
+                SvnClientExceptionHandler.annotate(NbBundle.getMessage(SwitchToAction.class, "LBL_SwitchFolderToFileError"));
+                ret = false;
+            } else {
+                ret = true;
+            }
+        } catch (SVNClientException ex) {
+            SvnClientExceptionHandler.notifyException(ex, true, true);
+            return ret;
+        }                            
+        return ret;
+    }        
 
     static void performSwitch(RepositoryFile toRepositoryFile, File root, SvnProgressSupport support) {
         File[][] split = Utils.splitFlatOthers(new File[] {root} );
@@ -131,7 +200,7 @@ public class SwitchToAction extends ContextAction {
             recursive = false;
         } else {
             recursive = true;
-        }        
+        }                
 
         try {
             SvnClient client;
@@ -143,9 +212,16 @@ public class SwitchToAction extends ContextAction {
             }            
             // ... and switch
             client.switchToUrl(root, toRepositoryFile.getFileUrl(), toRepositoryFile.getRevision(), recursive);
-            // XXX this is ugly and expensive! the client should notify (onNotify()) the cache. find out why it doesn't work...
-            SvnUtils.refreshRecursively(root);
-            Subversion.getInstance().refreshAllAnnotations();
+            // the client doesn't notify as there is no output rom the cli. Lets emulate onNotify as from the client
+            List<File> switchedFiles = SvnUtils.listRecursively(root);
+            File[] fileArray = switchedFiles.toArray(new File[switchedFiles.size()]);
+            Subversion.getInstance().getRefreshHandler().refreshImediately(fileArray);                        
+            // the cache fires status change events to trigger the annotation refresh
+            // unfortunatelly - we have to call the refresh explicitly for each file also 
+            // from this place as the branch label was changed evern if the files status didn't
+            Subversion.getInstance().refreshAnnotations(fileArray);
+            // refresh the inline diff
+            Subversion.getInstance().versionedFilesChanged();
         } catch (SVNClientException ex) {
             support.annotate(ex);
         }

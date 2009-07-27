@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -49,7 +49,6 @@ import org.netbeans.modules.subversion.client.SvnProgressSupport;
 import org.netbeans.modules.subversion.util.Context;
 import org.netbeans.modules.subversion.util.SvnUtils;
 import org.netbeans.modules.subversion.ui.actions.ContextAction;
-import org.netbeans.modules.versioning.util.AccessibleJFileChooser;
 import org.netbeans.modules.versioning.util.Utils;
 import org.netbeans.api.diff.Difference;
 import org.netbeans.spi.diff.DiffProvider;
@@ -59,20 +58,17 @@ import org.openide.util.RequestProcessor;
 import org.openide.util.NbBundle;
 import org.openide.NotifyDescriptor;
 import org.openide.DialogDisplayer;
-import org.openide.DialogDescriptor;
 import org.openide.nodes.Node;
 import org.openide.awt.StatusDisplayer;
-import javax.swing.*;
 import java.io.*;
 import java.util.*;
 import java.util.List;
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
-import java.awt.*;
 import java.util.logging.Level;
 import org.netbeans.modules.subversion.FileStatusCache;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.netbeans.modules.proxy.Base64Encoder;
+import org.netbeans.modules.versioning.spi.VCSContext;
+import org.netbeans.modules.versioning.util.ExportDiffSupport;
 import org.tigris.subversion.svnclientadapter.SVNClientException;
 
 /**
@@ -118,7 +114,7 @@ public class ExportDiffAction extends ContextAction {
     }
     
     public boolean enable(Node[] nodes) {
-        Context ctx = SvnUtils.getCurrentContext(nodes);
+        Context ctx = getCachedContext(nodes);
         File[] files = getModifiedFiles(ctx, enabledForStatus);         
         if(files.length < 1) {
             return false;
@@ -139,11 +135,11 @@ public class ExportDiffAction extends ContextAction {
         }
         
         boolean noop;
+        Context context = getContext(nodes);
         TopComponent activated = TopComponent.getRegistry().getActivated();
         if (activated instanceof DiffSetupSource) {
             noop = ((DiffSetupSource) activated).getSetups().isEmpty();
         } else {
-            Context context = getContext(nodes);
             File [] files = SvnUtils.getModifiedFiles(context, FileInformation.STATUS_LOCAL_CHANGE);
             noop = files.length == 0;
         }
@@ -153,76 +149,25 @@ public class ExportDiffAction extends ContextAction {
             return;
         }
 
-        final JFileChooser chooser = new AccessibleJFileChooser(NbBundle.getMessage(ExportDiffAction.class, "ACSD_Export"));
-        chooser.setDialogTitle(NbBundle.getMessage(ExportDiffAction.class, "CTL_Export_Title"));
-        chooser.setMultiSelectionEnabled(false);
-        javax.swing.filechooser.FileFilter[] old = chooser.getChoosableFileFilters();
-        for (int i = 0; i < old.length; i++) {
-            javax.swing.filechooser.FileFilter fileFilter = old[i];
-            chooser.removeChoosableFileFilter(fileFilter);
-
-        }
-        chooser.setCurrentDirectory(new File(SvnModuleConfig.getDefault().getPreferences().get("ExportDiff.saveFolder", System.getProperty("user.home")))); // NOI18N
-        chooser.addChoosableFileFilter(new javax.swing.filechooser.FileFilter() {
-            public boolean accept(File f) {
-                return f.getName().endsWith("diff") || f.getName().endsWith("patch") || f.isDirectory();  // NOI18N
-            }
-            public String getDescription() {
-                return NbBundle.getMessage(ExportDiffAction.class, "BK3002");
-            }
-        });
-        
-        chooser.setDialogType(JFileChooser.SAVE_DIALOG);        
-        chooser.setApproveButtonMnemonic(NbBundle.getMessage(ExportDiffAction.class, "MNE_Export_ExportAction").charAt(0));
-        chooser.setApproveButtonText(NbBundle.getMessage(ExportDiffAction.class, "CTL_Export_ExportAction"));
-        DialogDescriptor dd = new DialogDescriptor(chooser, NbBundle.getMessage(ExportDiffAction.class, "CTL_Export_Title"));
-        dd.setOptions(new Object[0]);
-        final Dialog dialog = DialogDisplayer.getDefault().createDialog(dd);
-
-        chooser.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                String state = e.getActionCommand();
-                if (state.equals(JFileChooser.APPROVE_SELECTION)) {
-                    File destination = chooser.getSelectedFile();
-                    String name = destination.getName();
-                    boolean requiredExt = false;
-                    requiredExt |= name.endsWith(".diff");  // NOI18N
-                    requiredExt |= name.endsWith(".dif");   // NOI18N
-                    requiredExt |= name.endsWith(".patch"); // NOI18N
-                    if (requiredExt == false) {
-                        File parent = destination.getParentFile();
-                        destination = new File(parent, name + ".patch"); // NOI18N
+        ExportDiffSupport exportDiffSupport = new ExportDiffSupport(context.getRootFiles(), SvnModuleConfig.getDefault().getPreferences()) {
+            @Override
+            public void writeDiffFile(final File toFile) {
+                RequestProcessor rp = Subversion.getInstance().getRequestProcessor();
+                SvnProgressSupport ps = new SvnProgressSupport() {
+                    protected void perform() {
+                        async(this, nodes, toFile);
                     }
-
-                    if (destination.exists()) {
-                        NotifyDescriptor nd = new NotifyDescriptor.Confirmation(NbBundle.getMessage(ExportDiffAction.class, "BK3005", destination.getAbsolutePath()));
-                        nd.setOptionType(NotifyDescriptor.YES_NO_OPTION);
-                        DialogDisplayer.getDefault().notify(nd);
-                        if (nd.getValue().equals(NotifyDescriptor.OK_OPTION) == false) {
-                            return;
-                        }
-                    }
-                    SvnModuleConfig.getDefault().getPreferences().put("ExportDiff.saveFolder", destination.getParent()); // NOI18N
-                    final File out = destination;
-                    RequestProcessor rp = Subversion.getInstance().getRequestProcessor();
-                    SvnProgressSupport ps = new SvnProgressSupport() {
-                        protected void perform() {
-                            async(this, nodes, out);
-                        }
-                    };
-                    ps.start(rp, null, getRunningName(nodes));
-                }
-                dialog.dispose();
+                };
+                ps.start(rp, null, getRunningName(nodes)).waitFinished();
             }
-        });
-        dialog.setVisible(true);
-
+        };
+        exportDiffSupport.export();
     }
 
     protected boolean asynchronous() {
         return false;
     }
-    
+
     private void async(SvnProgressSupport progress, Node[] nodes, File destination) {
         boolean success = false;
         OutputStream out = null;
