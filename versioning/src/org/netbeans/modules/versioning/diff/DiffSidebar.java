@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -40,6 +40,11 @@
  */
 package org.netbeans.modules.versioning.diff;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
 import org.netbeans.editor.*;
 import org.netbeans.editor.Utilities;
 import org.netbeans.api.editor.fold.FoldHierarchy;
@@ -77,15 +82,19 @@ import java.util.List;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
 import java.text.ChoiceFormat;
 import java.text.MessageFormat;
+import org.netbeans.api.queries.FileEncodingQuery;
 
 /**
  * Left editor sidebar showing changes in the file against the base version.
  * 
  * @author Maros Sandor
  */
-class DiffSidebar extends JComponent implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
+class DiffSidebar extends JPanel implements DocumentListener, ComponentListener, FoldHierarchyListener, FileChangeListener {
     
     private static final int BAR_WIDTH = 9;
     
@@ -134,8 +143,8 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private void refreshOriginalContent() {
-        File file = FileUtil.toFile(fileObject);
-        ownerVersioningSystem = VersioningManager.getInstance().getOwner(file);
+        File file = fileObject != null ? FileUtil.toFile(fileObject) : null;
+        ownerVersioningSystem = file != null ? VersioningManager.getInstance().getOwner(file) : null;
         originalContentSerial++;
         refreshDiff();
     }
@@ -148,13 +157,16 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         return currentDiff;
     }
 
+    @Override
     public String getToolTipText(MouseEvent event) {
         Difference diff = getDifferenceAt(event);
         return getShortDescription(diff);
     }
 
     static String getShortDescription(Difference diff) {
-        if (diff == null) return null;
+        if (diff == null) {
+            return null;
+        }
         int n;
         switch (diff.getType()) {
             case Difference.ADD:
@@ -171,10 +183,13 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         }
     }
 
+    @Override
     protected void processMouseEvent(MouseEvent event) {
         if (event.getID() == MouseEvent.MOUSE_CLICKED || event.isPopupTrigger()) {
             Difference diff = getDifferenceAt(event);
-            if (diff == null) return;
+            if (diff == null) {
+                return;
+            }
             onClick(event, diff);
         } else {
             super.processMouseEvent(event);
@@ -195,23 +210,62 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
     
     private Difference getDifferenceAt(MouseEvent event) {
-        if (currentDiff == null) return null;
+        Difference[] paintDiff = currentDiff;
+        if (paintDiff == null) {
+            return null;
+        }
         int line = getLineFromMouseEvent(event);
-        if (line == -1) return null;
-        Difference diff = getDifference(line + 1);
+        if (line == -1) {
+            return null;
+        }
+        Difference diff = getDifference(line + 1, paintDiff);
         if (diff == null) {
             // delete annotations (arrows) are rendered between lines
-            diff = getDifference(line);
-            if (diff != null && diff.getType() != Difference.DELETE) diff = null;
+            diff = getDifference(line, paintDiff);
+            if ((diff != null) && (diff.getType() != Difference.DELETE)) {
+                diff = null;
+            }
+        } else if (diff.getType() == Difference.DELETE) {
+            Difference diffPrev = getDifference(line, paintDiff);
+            if (diffPrev != null && diffPrev.getType() == Difference.DELETE) {
+                // two delete arrows next to each other cause some selection problems, select the closer one
+                diff = getCloserDifference(event, diffPrev, diff);
+            }
         }
         return diff;
+    }
+
+    /**
+     * In case of two neighboring DELETE differences which meet on the same line, this method returns a difference
+     * which' annotation is closer (in y-axis) to the click-point
+     * @param event event with the click-point
+     * @param previous a difference reaching out from the previous line
+     * @param next a difference reaching out from the next line
+     * @return
+     */
+    private Difference getCloserDifference(MouseEvent event, Difference previous, Difference next) {
+        Difference returnedDiff = next;
+        JTextComponent component = editorUI.getComponent();
+        if (component != null) {
+            BaseTextUI textUI = (BaseTextUI) component.getUI();
+            try {
+                Rectangle rec = textUI.modelToView(component, textUI.viewToModel(component, new Point(0, event.getY())));
+                if (rec != null && event.getY() < rec.getY() + rec.getHeight() / 2) {
+                    // previous difference is closer to the click
+                    returnedDiff = previous;
+                }
+            } catch (BadLocationException ex) {
+                // not interested, default next is returned
+            }
+        }
+        return returnedDiff;
     }
 
     void onDiff(Difference diff) {
         try {
             DiffController view = DiffController.create(new SidebarStreamSource(true), new SidebarStreamSource(false));
             DiffTopComponent tc = new DiffTopComponent(view);
-            tc.setName(fileObject.getNameExt() + " [Diff]"); // NOI18N
+            tc.setName(NbBundle.getMessage(DiffSidebar.class, "CTL_DiffPanel_Title", new Object[] {fileObject.getNameExt()})); // NOI18N
             tc.open();
             tc.requestActive();
             view.setLocation(DiffController.DiffPane.Modified, DiffController.LocationType.DifferenceIndex, getDiffIndex(diff));
@@ -221,25 +275,41 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private int getDiffIndex(Difference diff) {
-        for (int i = 0; i < currentDiff.length; i++) {
-            if (diff == currentDiff[i]) return i;
+        Difference[] diffs = currentDiff;
+        if (diffs != null) {
+            for (int i = 0; i < diffs.length; i++) {
+                if (diff == diffs[i]) {
+                    return i;
+                }
+            }
         }
         return -1;
+    }
+
+    private int computeDocumentOffset(int lineOffset) {
+        int end = Utilities.getRowStartFromLineOffset(document, lineOffset);
+        if (end == -1) {
+            Element lineRoot = document.getParagraphElement(0).getParentElement();
+            for (end = lineRoot.getElement(lineOffset - 1).getEndOffset(); end > document.getLength(); end--) {
+            }
+        }
+        return end;
     }
 
     void onRollback(Difference diff) {
         try {
             if (diff.getType() == Difference.ADD) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeDocumentOffset(diff.getSecondEnd());
                 document.remove(start, end - start);
             } else if (diff.getType() == Difference.CHANGE) {
                 int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart() - 1);
-                int end = Utilities.getRowStartFromLineOffset(document, diff.getSecondEnd());
+                int end = computeDocumentOffset(diff.getSecondEnd());
                 document.replace(start, end - start, diff.getFirstText(), null);
             } else {
-                int start = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart());
-                document.insertString(start, diff.getFirstText(), null);
+                int start = computeDocumentOffset(diff.getSecondStart());
+                String newline = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart()) == -1 ? "\n" : "";
+                document.insertString(start, newline + diff.getFirstText(), null);
             }
             refreshDiff();
         } catch (BadLocationException e) {
@@ -248,7 +318,9 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     boolean canRollback(Difference diff) {
-        if (!(document instanceof GuardedDocument)) return true;
+        if (!(document instanceof GuardedDocument)) {
+            return true;
+        }
         int start, end;
         if (diff.getType() == Difference.DELETE) {
             start = end = Utilities.getRowStartFromLineOffset(document, diff.getSecondStart());
@@ -261,22 +333,33 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
     
     void onPrevious(Difference diff) {
-        diff = currentDiff[getDiffIndex(diff) - 1];
-        Point location = scrollToDifference(diff);
-        showTooltipWindow(location, diff);
-        textComponent.repaint();
+        Difference[] diffs = currentDiff;
+        if (diffs != null) {
+            diff = diffs[getDiffIndex(diff) - 1];
+            Point location = scrollToDifference(diff);
+            showTooltipWindow(location, diff);
+            textComponent.repaint();
+        }
     }
 
     void onNext(Difference diff) {
-        diff = currentDiff[getDiffIndex(diff) + 1];
-        Point location = scrollToDifference(diff);
-        showTooltipWindow(location, diff);
-        textComponent.repaint();
+        Difference[] diffs = currentDiff;
+        if (diffs != null) {
+            diff = diffs[getDiffIndex(diff) + 1];
+            Point location = scrollToDifference(diff);
+            showTooltipWindow(location, diff);
+            textComponent.repaint();
+        }
     }
 
     private Point scrollToDifference(Difference diff) {
         int lineStart = diff.getSecondStart() - 1;
         int lineEnd = diff.getSecondEnd() - 1;
+        if (lineStart == -1) {
+            // the change was delete starting on the first line, show the diff on the next line
+            // since in this case the file cannot be empty, 0 index does not throw BLE
+            lineStart = 0;
+        }
         if (diff.getType() == Difference.DELETE) {
             lineEnd = lineStart;
         }
@@ -362,19 +445,23 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
 //            getAccessibleContext().setAccessibleDescription(NbBundle.getMessage(DiffTopComponent.class, "ACSD_Diff_Top_Component")); // NOI18N
         }
 
+        @Override
         public UndoRedo getUndoRedo() {
             UndoRedo undoredo = (UndoRedo) diffView.getClientProperty(UndoRedo.class);
             return undoredo == null ? UndoRedo.NONE : undoredo;
         }
         
+        @Override
         public int getPersistenceType(){
             return TopComponent.PERSISTENCE_NEVER;
         }
 
+        @Override
         protected String preferredID(){
             return "DiffSidebarTopComponent";    // NOI18N
         }
 
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(getClass());
         }
@@ -385,9 +472,11 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         if (editorUI != null) {
             try{
                 JTextComponent component = editorUI.getComponent();
-                BaseTextUI textUI = (BaseTextUI)component.getUI();
-                int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
-                line = Utilities.getLineOffset(document, clickOffset);
+                if (component != null) {
+                    BaseTextUI textUI = (BaseTextUI)component.getUI();
+                    int clickOffset = textUI.viewToModel(component, new Point(0, e.getY()));
+                    line = Utilities.getLineOffset(document, clickOffset);
+                }
             }catch (BadLocationException ble){
                 Logger.getLogger(DiffSidebar.class.getName()).log(Level.WARNING, "getLineFromMouseEvent", ble); // NOI18N
             }
@@ -396,7 +485,9 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     void refresh() {
-        if (!sidebarInComponentHierarchy) return;
+        if (!sidebarInComponentHierarchy) {
+            return;
+        }
         shutdown();
         initialize();
         refreshDiff();
@@ -404,18 +495,22 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
         
     public void setSidebarVisible(boolean visible) {
-        if (sidebarVisible == visible) return;
+        if (sidebarVisible == visible) {
+            return;
+        }
         sidebarVisible = visible;
         refreshDiff();
         revalidate();  // resize the component
     }
 
+    @Override
     public void addNotify() {
         super.addNotify();
         sidebarInComponentHierarchy = true;
         initialize();
     }
 
+    @Override
     public void removeNotify() {
         shutdown();
         sidebarInComponentHierarchy = false;
@@ -424,7 +519,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     
     private void initialize() {
         assert SwingUtilities.isEventDispatchThread();
-        
+
         document.addDocumentListener(this);
         textComponent.addComponentListener(this);
         foldHierarchy.addFoldHierarchyListener(this);
@@ -447,7 +542,9 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
 
     private Reader getDocumentReader() {
         JTextComponent component = editorUI.getComponent();
-        if (component == null) return null;
+        if (component == null) {
+            return null;
+        }
 
         return Utils.getDocumentReader(component.getDocument());
     }
@@ -460,16 +557,6 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         return markProvider;
     }
 
-    private static void copyStreamsCloseAll(Writer writer, Reader reader) throws IOException {
-        char [] buffer = new char[2048];
-        int n;
-        while ((n = reader.read(buffer)) != -1) {
-            writer.write(buffer, 0, n);
-        }
-        writer.close();
-        reader.close();
-    }
-
     static void copyStreamsCloseAll(OutputStream writer, InputStream reader) throws IOException {
         byte [] buffer = new byte[2048];
         int n;
@@ -480,12 +567,14 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         reader.close();
     }
     
+    @Override
     public Dimension getPreferredSize() {
         Dimension dim = textComponent.getSize();
         dim.width = sidebarVisible ? BAR_WIDTH : 0;
         return dim;
     }
     
+    @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
@@ -497,17 +586,23 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         }
 
         JTextComponent component = editorUI.getComponent();
-        if (component == null) return;
+        if (component == null) {
+            return;
+        }
 
         BaseTextUI textUI = (BaseTextUI)component.getUI();
         View rootView = Utilities.getDocumentView(component);
-        if (rootView == null) return;
+        if (rootView == null) {
+            return;
+        }
 
         g.setColor(backgroundColor());
         g.fillRect(clip.x, clip.y, clip.width, clip.height);
 
         Difference [] paintDiff = currentDiff;        
-        if (paintDiff == null || paintDiff.length == 0) return;
+        if (paintDiff == null || paintDiff.length == 0) {
+            return;
+        }
         
         try{
             int startPos = textUI.getPosFromY(clip.y);
@@ -538,7 +633,7 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
                     view = rootView.getView(i);
                     line = rootElem.getElementIndex(view.getStartOffset());
                     line++; // make it 1-based
-                    Difference ad = getDifference(line);
+                    Difference ad = getDifference(line, paintDiff);
                     if (ad != null) {
                         g.setColor(getColor(ad));
                         if (ad.getType() == Difference.DELETE) {
@@ -571,18 +666,30 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
     }
 
     private Color getColor(Difference ad) {
-        if (ad.getType() == Difference.ADD) return colorAdded;
-        if (ad.getType() == Difference.CHANGE) return colorChanged;
+        if (ad.getType() == Difference.ADD) {
+            return colorAdded;
+        }
+        if (ad.getType() == Difference.CHANGE) {
+            return colorChanged;
+        }
         return colorRemoved;
     }
 
-    private Difference getDifference(int line) {
-        if (line < 0) return null;
-        for (int i = 0; i < currentDiff.length; i++) {
-            Difference difference = currentDiff[i];
-            if (line < difference.getSecondStart()) return null;
-            if (difference.getType() == Difference.DELETE && line == difference.getSecondStart()) return difference;
-            if (line <= difference.getSecondEnd()) return difference;
+    private Difference getDifference(int line, Difference[] paintDiff) {
+        if (line < 0 || paintDiff == null) {
+            return null;
+        }
+        for (int i = 0; i < paintDiff.length; i++) {
+            Difference difference = paintDiff[i];
+            if (line < difference.getSecondStart()) {
+                return null;
+            }
+            if ((difference.getType() == Difference.DELETE) && (line == difference.getSecondStart())) {
+                return difference;
+            }
+            if (line <= difference.getSecondEnd()) {
+                return difference;
+            }
         }
         return null;
     }
@@ -646,13 +753,15 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
         }
 
         private List<DiffMark> getMarksForDifferences() {
-            if (currentDiff == null || !isVisible() || getWidth() <= 0) return Collections.emptyList();
-            List<DiffMark> marks = new ArrayList<DiffMark>(currentDiff.length);
+            if ((currentDiff == null) || !isVisible() || (getWidth() <= 0)) {
+                return Collections.emptyList();
+            }
+            List<DiffMark> marksList = new ArrayList<DiffMark>(currentDiff.length);
             for (int i = 0; i < currentDiff.length; i++) {
                 Difference difference = currentDiff[i];
-                marks.add(new DiffMark(difference, getColor(difference)));
+                marksList.add(new DiffMark(difference, getColor(difference)));
             }
-            return marks;
+            return marksList;
         }
     }
 
@@ -696,22 +805,12 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
 
         private void fetchOriginalContent() {
             int serial = originalContentSerial;
-            if (originalContentBuffer != null && originalContentBufferSerial == serial) return;
-            originalContentBufferSerial = serial;
-
-            Reader r = getText(ownerVersioningSystem);
-            if (r == null) {
-                originalContentBuffer = null;
+            if ((originalContentBuffer != null) && (originalContentBufferSerial == serial)) {
                 return;
             }
+            originalContentBufferSerial = serial;
 
-            StringWriter w = new StringWriter(2048);
-            try {
-                copyStreamsCloseAll(w, r);
-                originalContentBuffer = w.toString();
-            } catch (IOException e) {
-                // ignore, we will show no diff
-            }
+            originalContentBuffer = getText(ownerVersioningSystem);
         }
     }
 
@@ -722,80 +821,288 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
      * @param oc current OriginalContent
      * @return Reader original content of the working copy or null if the original content is not available
      */ 
-    private Reader getText(VersioningSystem vs) {
-        if (vs == null) return null;
-        File mainFile = FileUtil.toFile(fileObject);
-        if (mainFile == null) return null;
-        
-        File tempFolder = Utils.getTempFolder();
-        
-        Set<File> filesToCheckout = new HashSet<File>(2);
-        filesToCheckout.add(mainFile);
-        DataObject dao = null;
-        try {
-            dao = DataObject.find(fileObject);
-            Set<FileObject> fileObjects = dao.files();
-            for (FileObject fileObject : fileObjects) {
-                File file = FileUtil.toFile(fileObject);
-                filesToCheckout.add(file);
-            }
-        } catch (DataObjectNotFoundException e) {
-            // no dataobject, never mind
+    private String getText(VersioningSystem vs) {
+        if (vs == null) {
+            return null;
         }
 
-        DiffFileEncodingQueryImpl encodinqQuery = Lookup.getDefault().lookup(DiffFileEncodingQueryImpl.class);
-        List<File> originalFiles = new ArrayList<File>();
+        Collection<File> filesToCheckout = getFiles(fileObject);
+        if (filesToCheckout.isEmpty()) {
+            return null;
+        }
+
+        File tempFolder = Utils.getTempFolder();
+
+        Collection<File> originalFiles = null;
+        DiffFileEncodingQueryImpl encodinqQuery = null;
         try {            
-            for (File file : filesToCheckout) {
-                File originalFile = new File(tempFolder, file.getName());
-                vs.getOriginalFile(file, originalFile);
-                originalFiles.add(originalFile);
-            }         
+            originalFiles = checkoutOriginalFiles(filesToCheckout, tempFolder, vs);
+
+            encodinqQuery = Lookup.getDefault().lookup(DiffFileEncodingQueryImpl.class);
+            Charset encoding = FileEncodingQuery.getEncoding(fileObject);
             if(encodinqQuery != null) {
-                encodinqQuery.associateEncoding(mainFile, originalFiles);
+                encodinqQuery.associateEncoding(encoding, originalFiles);
             }
-            return createReader(new File(tempFolder, fileObject.getNameExt()));
+            return getText(new File(tempFolder, fileObject.getNameExt()),
+                           encoding);
         } catch (Exception e) {
             // let providers raise errors when they feel appropriate
             return null;
         } finally {
-            if(encodinqQuery != null) {
+            if ((originalFiles != null) && (encodinqQuery != null)) {
                 encodinqQuery.resetEncodingForFiles(originalFiles);
             }
             Utils.deleteRecursively(tempFolder);
         }
     }
-    
-    private Reader createReader(File file) {
+
+    /**
+     * Returns files that belong to the same {@code DataObject} as the given
+     * file.
+     * @param  fileObj  file whose siblings are to be found
+     * @return  list of files that belong to the {@code DataObject} determined
+     *              by the given {@code FileObject},
+     *          or a singleton collection containing just the {@code File}
+     *              corresponding to the given {@code FileObject},
+     *          or an empty collection if the given {@code FileObject} could
+     *              not be translated to a {@code File}
+     */
+    private static Collection<File> getFiles(FileObject fileObj) {
+        File file = FileUtil.toFile(fileObj);
+        if (file == null) {
+            return Collections.emptyList();
+        }
+
+        Collection<File> files;
         try {
-            FileObject fo = FileUtil.toFileObject(FileUtil.normalizeFile(file));
-            DataObject dao = DataObject.find(fo);
-            Document doc = null;            
-            if (dao instanceof MultiDataObject) {
-                MultiDataObject mdao = (MultiDataObject) dao;
-                for (MultiDataObject.Entry entry : mdao.secondaryEntries()) {
-                    if (fo.equals(entry.getFile()) && entry instanceof CookieSet.Factory) {
-                        CookieSet.Factory factory = (CookieSet.Factory) entry;
-                        EditorCookie ec = factory.createCookie(EditorCookie.class);
-                        doc = ec.openDocument();
-                    }
+            Set<FileObject> fileObjects = DataObject.find(fileObj).files();
+            assert fileObjects.contains(fileObj);
+            if (fileObjects.size() == 1) {
+                files = Collections.singleton(file);
+            } else {
+                files = new ArrayList<File>(fileObjects.size());
+                for (FileObject fo : fileObjects) {
+                    files.add(FileUtil.toFile(fo));
                 }
             }
-            if (doc == null) {
-                EditorCookie ec = dao.getCookie(EditorCookie.class);
-                doc = ec.openDocument();
-            }
-            return new StringReader(doc.getText(0, doc.getLength()));
-        } catch (Exception e) {
-            // something's wrong, read the file from disk
+        } catch (DataObjectNotFoundException e) {
+            // no dataobject, never mind
+            files = Collections.singleton(file);
         }
+        assert files.contains(file);
+        return files;
+    }
+
+    /**
+     * Checks out original (unmodified) content of the given files to the given
+     * target folder.
+     * @param  filesToCheckout  files whose original content is to be checked out
+     * @param  targetFolder  target folder where unmodified files should be stored
+     * @param  vs  versioning system to be used for the checkout
+     * @return  collection of files containing unmodified content of the given
+     *          files; these files are named after the given files
+     */
+    private Collection<File> checkoutOriginalFiles(Collection<File> filesToCheckout,
+                                                   File targetFolder,
+                                                   VersioningSystem vs) {
+        Collection<File> originalFiles = new ArrayList<File>(filesToCheckout.size());
+
+        for (File file : filesToCheckout) {
+            File originalFile = new File(targetFolder, file.getName());
+            vs.getOriginalFile(file, originalFile);
+            originalFiles.add(originalFile);
+        }
+
+        return originalFiles;
+    }
+
+    private String getText(File file, Charset charset) throws IOException {
+        FileObject fo = FileUtil.toFileObject(file);
+        if (fo != null) {
+            try {
+                /*
+                 * Text returned by EditorCookie.openDocument.getText(...)
+                 * may differ from the raw text contained in the file.
+                 * For example, this is the case of FormDataObject, which trims
+                 * some special comments (tags) while the Java source file is
+                 * being loaded to the editor. When the file is being saved,
+                 * the special comments are written to the raw file.
+                 * This is the reason why text for the diff is read using
+                 * the EditorCookie, instead of reading it directly from the
+                 * File or FileObject.
+                 */
+                Document doc = getDocument(fo);
+                if (doc != null) {
+                    return doc.getText(0, doc.getLength());
+                } else {
+                    return getRawText(fo, charset);
+                }
+            } catch (IOException ex) {
+                throw ex;
+            } catch (Exception e) {
+                // something's wrong, read the file from disk
+            }
+        }
+
+        return getRawText(file, charset);
+    }
+
+    /**
+     * Tries to obtain a {@code Document} representing the given file.
+     * @param  fileObj  file to get a document from 
+     * @return  {@code Document} representing the file, or {@code null}
+     * @throws  java.io.IOException
+     *          if there was some I/O error while reading the file's content
+     */
+    private Document getDocument(FileObject fileObj) throws IOException {
+        DataObject dao;
         try {
-            return new FileReader(file);
-        } catch (FileNotFoundException e) {
+            dao = DataObject.find(fileObj);
+        } catch (DataObjectNotFoundException ex) {
             return null;
         }
-    }    
-    
+
+        if (dao instanceof MultiDataObject) {
+            MultiDataObject.Entry entry = findEntryForFile((MultiDataObject) dao, fileObj);
+            if ((entry != null) && (entry instanceof CookieSet.Factory)) {
+                CookieSet.Factory factory = (CookieSet.Factory) entry;
+                EditorCookie ec = factory.createCookie(EditorCookie.class);
+                if (ec != null) {
+                    return ec.openDocument();
+                }
+            }
+        }
+
+        EditorCookie ec = dao.getCookie(EditorCookie.class);
+        if (ec != null) {
+            return ec.openDocument();
+        }
+
+        return null;
+    }
+
+    /**
+     * Finds entry of the given {@code MultiDataObject} that corresponds to the
+     * to the given {@code FileObject}.
+     * @param  dataObj  {@code MultiDataObject} to search for the corresponding
+     *                  entry
+     * @param  fileObj  file for which the entry is to be found
+     * @return  found entry, or {@code null} if not found
+     */
+    private static MultiDataObject.Entry findEntryForFile(MultiDataObject dataObj,
+                                                          FileObject fileObj) {
+        MultiDataObject.Entry primaryEntry;
+
+        primaryEntry = dataObj.getPrimaryEntry();
+        if (fileObj.equals(primaryEntry.getFile())) {
+            return primaryEntry;
+        }
+
+        for (MultiDataObject.Entry entry : dataObj.secondaryEntries()) {
+            if (fileObj.equals(entry.getFile())) {
+                return primaryEntry;
+            }
+        }
+
+        return null;
+    }
+
+    private static String getRawText(FileObject fileObj, Charset charset) throws IOException {
+        //return fileObj.asText(charset);
+
+        char[] chars = new StringDecoder(charset).decode(fileObj.asBytes());
+        return new String(chars);
+    }
+
+    private static String getRawText(File file, Charset charset) throws IOException {
+        final long size = file.length();
+        if (size == 0L) {
+            return file.exists() ? "" : null;                           //NOI18N
+        }
+
+        FileInputStream inputStream = new FileInputStream(file);
+        FileChannel inputChannel = inputStream.getChannel();
+
+        try {
+            int inputSize = (int) inputChannel.size();
+            ByteBuffer inBuf = ByteBuffer.allocate(inputSize);
+            inputChannel.read(inBuf);
+            char[] chars = new StringDecoder(charset).decode(inBuf);
+            return new String(chars);
+        } finally {
+            inputChannel.close();
+        }
+    }
+
+    private static final class StringDecoder {
+
+        private final CharsetDecoder charsetDecoder;
+
+        StringDecoder(Charset charset) {
+	    charsetDecoder = charset.newDecoder()
+                             .onMalformedInput(CodingErrorAction.REPLACE)
+                             .onUnmappableCharacter(CodingErrorAction.REPLACE);
+        }
+
+        char[] decode(byte[] bytes) {
+            if (bytes.length == 0) {
+                return new char[0];
+            }
+
+           return decode(ByteBuffer.wrap(bytes));
+        }
+
+        char[] decode(ByteBuffer inBuf) {
+	    char[] chars = new char[computeOutBufSize(inBuf.limit())];
+
+	    CharBuffer outBuf = CharBuffer.wrap(chars);
+
+	    charsetDecoder.reset();
+	    try {
+		CoderResult result;
+
+		result = charsetDecoder.decode(inBuf, outBuf, true);
+		if (!result.isUnderflow()) {
+		    result.throwException();
+                }
+
+		result = charsetDecoder.flush(outBuf);
+		if (!result.isUnderflow()) {
+		    result.throwException();
+                }
+
+	    } catch (CharacterCodingException x) {
+                assert false;                       //should not happen
+		throw new Error(x);
+	    }
+
+            if (chars.length != outBuf.position()) {
+                chars = trimToSize(chars, outBuf.position());
+            }
+            return chars;
+        }
+
+        private int computeOutBufSize(int inBufSize) {
+            float ratio = charsetDecoder.maxCharsPerByte();
+            return (int) Math.ceil(inBufSize * (double) ratio);
+        }
+
+        private static char[] trimToSize(char[] chars, int requestedLength) {
+            if (requestedLength > chars.length) {
+                throw new IllegalArgumentException();
+            }
+
+            if (requestedLength == chars.length) {
+                return chars;
+            }
+
+            char[] result = new char[requestedLength];
+            System.arraycopy(chars, 0, result, 0, requestedLength);
+            return result;
+        }
+
+    }
+
     private class SidebarStreamSource extends StreamSource {
 
         private final boolean isFirst;
@@ -804,12 +1111,16 @@ class DiffSidebar extends JComponent implements DocumentListener, ComponentListe
             this.isFirst = isFirst;
         }
 
+        @Override
         public boolean isEditable() {
             return !isFirst;
         }
 
+        @Override
         public Lookup getLookup() {
-            if (isFirst) return super.getLookup();
+            if (isFirst) {
+                return super.getLookup();
+            }
             return Lookups.fixed(document);
         }
 
