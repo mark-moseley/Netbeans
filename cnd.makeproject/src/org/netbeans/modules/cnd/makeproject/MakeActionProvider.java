@@ -40,6 +40,7 @@
  */
 package org.netbeans.modules.cnd.makeproject;
 
+import java.util.concurrent.CancellationException;
 import org.netbeans.modules.cnd.utils.ui.ModalMessageDlg;
 import java.awt.Dialog;
 import java.awt.Frame;
@@ -51,10 +52,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.ResourceBundle;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JButton;
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 import org.netbeans.api.project.ProjectInformation;
 import org.netbeans.api.project.ProjectUtils;
 import org.netbeans.modules.cnd.actions.BuildToolsAction;
@@ -71,20 +73,18 @@ import org.netbeans.modules.cnd.makeproject.api.RunDialogPanel;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CCCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Configuration;
-import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptor;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ConfigurationDescriptorProvider;
 import org.netbeans.modules.cnd.makeproject.api.configurations.CustomToolConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.Item;
 import org.netbeans.modules.cnd.makeproject.api.configurations.ItemConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfiguration;
-import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
 import org.netbeans.modules.cnd.makeproject.api.remote.FilePathAdaptor;
 import org.netbeans.modules.cnd.makeproject.api.runprofiles.RunProfile;
 import org.netbeans.modules.cnd.makeproject.ui.utils.ConfSelectorPanel;
 import org.netbeans.modules.cnd.api.utils.IpeUtils;
 import org.netbeans.modules.cnd.api.compilers.Tool;
 import org.netbeans.modules.cnd.api.remote.CommandProvider;
-import org.netbeans.modules.cnd.api.remote.ExecutionEnvironmentFactory;
+import org.netbeans.modules.nativeexecution.api.ExecutionEnvironmentFactory;
 import org.netbeans.modules.cnd.api.remote.HostInfoProvider;
 import org.netbeans.modules.cnd.api.remote.ServerList;
 import org.netbeans.modules.cnd.api.remote.ServerRecord;
@@ -99,11 +99,14 @@ import org.netbeans.modules.cnd.makeproject.api.configurations.CompilerSet2Confi
 import org.netbeans.modules.cnd.makeproject.api.configurations.DevelopmentHostConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.FortranCompilerConfiguration;
 import org.netbeans.modules.cnd.makeproject.api.configurations.MakeConfigurationDescriptor;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platform;
+import org.netbeans.modules.cnd.makeproject.api.platforms.Platforms;
 import org.netbeans.modules.cnd.settings.CppSettings;
 import org.netbeans.modules.cnd.ui.options.LocalToolsPanelModel;
 import org.netbeans.modules.cnd.ui.options.ToolsPanel;
 import org.netbeans.modules.cnd.ui.options.ToolsPanelModel;
 import org.netbeans.modules.nativeexecution.api.ExecutionEnvironment;
+import org.netbeans.modules.nativeexecution.api.util.ConnectionManager;
 import org.netbeans.spi.project.ActionProvider;
 import org.netbeans.spi.project.support.ant.GeneratedFilesHelper;
 import org.netbeans.spi.project.ui.support.DefaultProjectOperations;
@@ -115,6 +118,7 @@ import org.openide.filesystems.FileObject;
 import org.openide.filesystems.FileUtil;
 import org.openide.loaders.DataObject;
 import org.openide.nodes.Node;
+import org.openide.util.Cancellable;
 import org.openide.util.Lookup;
 import org.openide.util.NbBundle;
 import org.openide.util.actions.SystemAction;
@@ -153,7 +157,7 @@ public class MakeActionProvider implements ActionProvider {
     MakeProject project;
 
     // Project Descriptor
-    ConfigurationDescriptor projectDescriptor = null;
+    MakeConfigurationDescriptor projectDescriptor = null;
     /** Map from commands to ant targets */
     Map<String, String[]> commands;
     Map<String, String[]> commandsNoBuild;
@@ -206,7 +210,7 @@ public class MakeActionProvider implements ActionProvider {
             ConfigurationDescriptorProvider pdp = project.getLookup().lookup(ConfigurationDescriptorProvider.class);
             projectDescriptor = pdp.getConfigurationDescriptor();
         }
-        return (MakeConfigurationDescriptor) projectDescriptor;
+        return projectDescriptor;
     }
 
     public String[] getSupportedActions() {
@@ -246,14 +250,14 @@ public class MakeActionProvider implements ActionProvider {
         ProjectInformation info = project.getLookup().lookup(ProjectInformation.class);
         final String projectName = info.getDisplayName();
         final MakeConfigurationDescriptor pd = getProjectDescriptor();
-        final MakeConfiguration conf = (MakeConfiguration) pd.getConfs().getActive();
+        final MakeConfiguration conf = pd.getActiveConfiguration();
+        if (conf == null) {
+            return;
+        }
 
-        // vv: leaving all logic to be later called from EDT
-        // (although I'm not sure all of below need to be done in EDT)
-        Runnable actionWorker = new Runnable() {
-
-            public void run() {
-                // Add actions to do
+        CancellableTask actionWorker = new CancellableTask() {
+            @Override
+            protected void runImpl() {
                 ArrayList<ProjectActionEvent> actionEvents = new ArrayList<ProjectActionEvent>();
                 if (command.equals(COMMAND_BATCH_BUILD)) {
                     BatchConfigurationSelector batchConfigurationSelector = new BatchConfigurationSelector(pd.getConfs().getConfs());
@@ -261,97 +265,107 @@ public class MakeActionProvider implements ActionProvider {
                     Configuration[] confs = batchConfigurationSelector.getSelectedConfs();
                     if (batchCommand != null && confs != null) {
                         for (int i = 0; i < confs.length; i++) {
-                            addAction(actionEvents, projectName, pd, (MakeConfiguration) confs[i], batchCommand, context);
+                            addAction(actionEvents, projectName, pd, (MakeConfiguration) confs[i], batchCommand, context, cancelled);
                         }
                     } else {
                         // Close button
                         return;
                     }
                 } else {
-                    addAction(actionEvents, projectName, pd, conf, command, context);
+                    addAction(actionEvents, projectName, pd, conf, command, context, cancelled);
                 }
 
                 // Execute actions
-                if (actionEvents.size() > 0) {
+                if (actionEvents.size() > 0 && ! cancelled.get()) {
                     ProjectActionSupport.getInstance().fireActionPerformed(actionEvents.toArray(new ProjectActionEvent[actionEvents.size()]));
                 }
             }
         };
-        runActionWorker(conf.getDevelopmentHost().getName(), actionWorker);
+        runActionWorker(conf.getDevelopmentHost().getExecutionEnvironment(), actionWorker);
     }
 
-    private static void runActionWorker(String hkey, Runnable actionWorker) {
-        if (ExecutionEnvironmentFactory.getExecutionEnvironment(hkey).isLocal()) {
+    private static void runActionWorker(ExecutionEnvironment exeEnv, CancellableTask actionWorker) {
+        if (exeEnv.isLocal()) {
             actionWorker.run();
         } else {
-            ServerList registry = Lookup.getDefault().lookup(ServerList.class);
-            assert registry != null;
-            ServerRecord record = registry.get(hkey);
+            ServerRecord record = ServerList.get(exeEnv);
             assert record != null;
             invokeRemoteHostAction(record, actionWorker);
         }
     }
 
     public void invokeCustomAction(final String projectName, final MakeConfigurationDescriptor pd, final MakeConfiguration conf, final ProjectActionHandler customProjectActionHandler) {
-        Runnable actionWorker = new Runnable() {
-
-            public void run() {
+        CancellableTask actionWorker = new CancellableTask() {
+            @Override
+            protected void runImpl() {
                 ArrayList<ProjectActionEvent> actionEvents = new ArrayList<ProjectActionEvent>();
-                addAction(actionEvents, projectName, pd, conf, MakeActionProvider.COMMAND_CUSTOM_ACTION, null);
+                addAction(actionEvents, projectName, pd, conf, MakeActionProvider.COMMAND_CUSTOM_ACTION, null, cancelled);
                 ProjectActionSupport.getInstance().fireActionPerformed(
                         actionEvents.toArray(new ProjectActionEvent[actionEvents.size()]),
                         customProjectActionHandler);
             }
         };
-        runActionWorker(conf.getDevelopmentHost().getName(), actionWorker);
+        runActionWorker(conf.getDevelopmentHost().getExecutionEnvironment(), actionWorker);
     }
 
-    private static void invokeRemoteHostAction(final ServerRecord record, final Runnable actionWorker) {
+    private static void invokeRemoteHostAction(final ServerRecord record, final CancellableTask actionWorker) {
+        CancellableTask wrapper;
         if (!record.isDeleted() && record.isOnline()) {
-            actionWorker.run();
+            wrapper = actionWorker;
         } else {
             String message;
             int res = JOptionPane.NO_OPTION;
             if (record.isDeleted()) {
-                message = MessageFormat.format(getString("ERR_RequestingDeletedConnection"), record.getName());
+                message = MessageFormat.format(getString("ERR_RequestingDeletedConnection"), record.getDisplayName());
                 res = JOptionPane.showConfirmDialog(WindowManager.getDefault().getMainWindow(), message, getString("DLG_TITLE_DeletedConnection"), JOptionPane.YES_NO_OPTION);
                 if (res == JOptionPane.YES_OPTION) {
-                    ServerList registry = Lookup.getDefault().lookup(ServerList.class);
-                    assert registry != null;
-                    registry.addServer(record.getName(), false, true);
+                    ServerList.addServer(record.getExecutionEnvironment(), record.getDisplayName(), record.getSyncFactory(), false, true);
                 }
             } else if (!record.isOnline()) {
-                message = MessageFormat.format(getString("ERR_NeedToInitializeRemoteHost"), record.getName());
+                message = MessageFormat.format(getString("ERR_NeedToConnectToRemoteHost"), record.getDisplayName());
                 res = JOptionPane.showConfirmDialog(WindowManager.getDefault().getMainWindow(), message, getString("DLG_TITLE_Connect"), JOptionPane.YES_NO_OPTION);
             }
-            if (res == JOptionPane.YES_OPTION) {
-                // start validation phase
-                final Frame mainWindow = WindowManager.getDefault().getMainWindow();
-                Runnable csmWorker = new Runnable() {
-
-                    public void run() {
-                        try {
-                            record.validate(true);
-                            // initialize compiler sets for remote host if needed
-                            CompilerSetManager csm = CompilerSetManager.getDefault(record.getName());
-                            csm.initialize(true, true);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                };
-                Runnable edtWorker = new Runnable() {
-
-                    public void run() {
-                        if (record.isOnline()) {
-                            actionWorker.run();
-                        }
-                    }
-                };
-                String msg = NbBundle.getMessage(MakeActionProvider.class, "MSG_Configure_Host_Progress", record.getName());
-                ModalMessageDlg.runLongTask(mainWindow, csmWorker, edtWorker, NbBundle.getMessage(MakeActionProvider.class, "DLG_TITLE_Configure_Host"), msg);
+            if (res != JOptionPane.YES_OPTION) {
+                return;
             }
+            // start validation phase
+            wrapper = new CancellableTask() {
+                @Override
+                public boolean cancel() {
+                    return actionWorker.cancel();
+                }
+                public void runImpl() {
+                    try {
+                        if (!ConnectionManager.getInstance().isConnectedTo(record.getExecutionEnvironment())) {
+                            ConnectionManager.getInstance().connectTo(record.getExecutionEnvironment());
+                        }
+                        record.validate(true);
+                        // initialize compiler sets for remote host if needed
+                        CompilerSetManager csm = CompilerSetManager.getDefault(record.getExecutionEnvironment());
+                        csm.initialize(true, true);
+                    } catch (CancellationException ex) {
+                        cancel();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        final String message = MessageFormat.format(getString("ERR_Cant_Connect"), record.getDisplayName()); //NOI18N
+                        final String title = getString("DLG_TITLE_Cant_Connect"); //NOI18N
+                        SwingUtilities.invokeLater(new Runnable() {
+                            public void run() {
+                                JOptionPane.showMessageDialog(WindowManager.getDefault().getMainWindow(),
+                                        message, title, JOptionPane.ERROR_MESSAGE);
+                            }
+                        });
+                    }
+                    if (record.isOnline()) {
+                        actionWorker.run();
+                    }
+                }
+            };
         }
+        Frame mainWindow = WindowManager.getDefault().getMainWindow();
+        String msg = NbBundle.getMessage(MakeActionProvider.class, "MSG_Validate_Host", record.getDisplayName());
+        String title = NbBundle.getMessage(MakeActionProvider.class, "DLG_TITLE_Validate_Host");
+        ModalMessageDlg.runLongTask(mainWindow, wrapper, null, wrapper, title, msg);
     }
 
     class BatchConfigurationSelector implements ActionListener {
@@ -414,7 +428,14 @@ public class MakeActionProvider implements ActionProvider {
     public final static boolean useRsync = Boolean.getBoolean("cnd.remote.useRsync");
     public static final String REMOTE_BASE_PATH = "~/NetBeansProjects/remote"; //NOI18N
 
-    public void addAction(ArrayList<ProjectActionEvent> actionEvents, String projectName, MakeConfigurationDescriptor pd, MakeConfiguration conf, String command, Lookup context) throws IllegalArgumentException {
+    public void addAction(ArrayList<ProjectActionEvent> actionEvents, String projectName, 
+            MakeConfigurationDescriptor pd, MakeConfiguration conf, String command, Lookup context,
+            AtomicBoolean cancelled) throws IllegalArgumentException {
+
+        if (cancelled.get()) {
+            return;
+        }
+
         String[] targetNames;
         boolean validated = false;
         lastValidation = false;
@@ -455,6 +476,9 @@ public class MakeActionProvider implements ActionProvider {
                 actionEvent = ProjectActionEvent.Type.RUN;
             }
 
+            if (cancelled.get()) {
+                return; // getPlatformInfo() might be costly for remote host
+            }
             PlatformInfo pi = conf.getPlatformInfo();
 
             if (targetName.equals("save")) { // NOI18N
@@ -470,10 +494,10 @@ public class MakeActionProvider implements ActionProvider {
                 if (useRsync && !conf.getDevelopmentHost().isLocalhost()) {
                     final String rsyncLocalPath = "rsync"; //NOI18N
                     CommandProvider provider = Lookup.getDefault().lookup(CommandProvider.class);
-                    int result = provider.run(conf.getDevelopmentHost().getName(), "which rsync", null); //NOI18N
+                    int result = provider.run(conf.getDevelopmentHost().getExecutionEnvironment(), "which rsync", null); //NOI18N
                     String rsyncRemotePath = (result != 0 || provider.getOutput().indexOf(' ')>-1) ? "/opt/csw/bin/rsync" : provider.getOutput(); //NOI18N //YESCHEAT
                     // do sync
-                    RunProfile runSyncProfile = conf.getProfile().clone();
+                    RunProfile runSyncProfile = conf.getProfile().clone(conf);
                     // TODO: remote and local rsync paths from toolchain
                     // TODO: real project name
                     String lpath = project.getProjectDirectory().getNameExt();
@@ -483,14 +507,15 @@ public class MakeActionProvider implements ActionProvider {
                         System.err.println("Rsync not fould in Toolchain: sources can not be synchronized");
                         return;
                     } else {
+                        // TODO: using getName() does not suite for non-standard ssh port
                         String rsyncArgs = " --rsh=ssh --recursive --verbose --perms --links --delete --rsync-path=" + rsyncRemotePath + //NOI18N
                                 " --exclude \"build*\" --exclude \"dist*\" --cvs-exclude . " + //NOI18N
-                                conf.getDevelopmentHost().getName() + ":" + remotePath; //NOI18N
+                                conf.getDevelopmentHost().getHostKey() + ":" + remotePath; //NOI18N
                         runSyncProfile.setArgs(rsyncArgs);
                         runSyncProfile.getConsoleType().setValue(RunProfile.CONSOLE_TYPE_OUTPUT_WINDOW);
 
                         MakeConfiguration syncConf = (MakeConfiguration) conf.clone();
-                        syncConf.setDevelopmentHost(new DevelopmentHostConfiguration(CompilerSetManager.LOCALHOST)); // rsync should be ran only locally
+                        syncConf.setDevelopmentHost(new DevelopmentHostConfiguration(ExecutionEnvironmentFactory.getLocal())); // rsync should be ran only locally
                         ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                                 project,
                                 actionEvent,
@@ -503,7 +528,7 @@ public class MakeActionProvider implements ActionProvider {
                     }
                 }
             } else if (targetName.equals("run") || targetName.equals("debug") || targetName.equals("debug-stepinto") || targetName.equals("debug-load-only")) { // NOI18N
-                if (!validateBuildSystem(pd, conf, validated)) {
+                if (!validateBuildSystem(pd, conf, validated, cancelled)) {
                     return;
                 }
                 validated = true;
@@ -519,10 +544,8 @@ public class MakeActionProvider implements ActionProvider {
                         }
                     } else {
                         // Always absolute
-                        // FIXME - GRP: This call fails for a Makefile project where the sources aren't in the
-                        // project baseDir and the buildOutput isn't absolute.
-                        path = getExePath(pd, conf);
-//                        path = conf.getMakefileConfiguration().getAbsOutput().replace("\\", "/"); // NOI18N
+                        path = conf.getMakefileConfiguration().getAbsOutput(); // NOI18N
+                        path = FilePathAdaptor.normalize(path);
                     }
                     ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                             project,
@@ -540,10 +563,10 @@ public class MakeActionProvider implements ActionProvider {
                     return;
                 } else if (conf.isApplicationConfiguration()) {
                     RunProfile runProfile = null;
-                    int platform = conf.getPlatform().getValue();
+                    int platform = conf.getDevelopmentHost().getBuildPlatform();
                     if (platform == Platform.PLATFORM_WINDOWS) {
                         // On Windows we need to add paths to dynamic libraries from subprojects to PATH
-                        runProfile = conf.getProfile().clone();
+                        runProfile = conf.getProfile().clone(conf);
                         Set subProjectOutputLocations = conf.getSubProjectOutputLocations();
                         String path = ""; // NOI18N
                         // Add paths from subprojetcs
@@ -561,7 +584,10 @@ public class MakeActionProvider implements ActionProvider {
                         }
                         String userPath = runProfile.getEnvironment().getenv(pi.getPathName());
                         if (userPath == null) {
-                            userPath = HostInfoProvider.getDefault().getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get(pi.getPathName());
+                                if (cancelled.get()) {
+                                    return; // getEnv() might be costly for remote host
+                                }
+                            userPath = HostInfoProvider.getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get(pi.getPathName());
                         }
                         path = path + ";" + userPath; // NOI18N
                         runProfile.getEnvironment().putenv(pi.getPathName(), path);
@@ -589,10 +615,13 @@ public class MakeActionProvider implements ActionProvider {
                             path.append(location);
                         }
                         if (path.length() > 0) {
-                            runProfile = conf.getProfile().clone();
+                            runProfile = conf.getProfile().clone(conf);
                             String extPath = runProfile.getEnvironment().getenv("DYLD_LIBRARY_PATH"); // NOI18N
                             if (extPath == null) {
-                                extPath = HostInfoProvider.getDefault().getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("DYLD_LIBRARY_PATH"); // NOI18N
+                                if (cancelled.get()) {
+                                    return; // getEnv() might be costly for remote host
+                                }
+                                extPath = HostInfoProvider.getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("DYLD_LIBRARY_PATH"); // NOI18N
                             }
                             if (extPath != null) {
                                 path.append(":" + extPath); // NOI18N
@@ -614,10 +643,13 @@ public class MakeActionProvider implements ActionProvider {
                             path.append(location);
                         }
                         if (path.length() > 0) {
-                            runProfile = conf.getProfile().clone();
+                            runProfile = conf.getProfile().clone(conf);
                             String extPath = runProfile.getEnvironment().getenv("LD_LIBRARY_PATH"); // NOI18N
                             if (extPath == null) {
-                                extPath = HostInfoProvider.getDefault().getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("LD_LIBRARY_PATH"); // NOI18N
+                                if (cancelled.get()) {
+                                    return; // getEnv() might be costly for remote host
+                                }
+                                extPath = HostInfoProvider.getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("LD_LIBRARY_PATH"); // NOI18N
                             }
                             if (extPath != null) {
                                 path.append(":" + extPath); // NOI18N
@@ -631,10 +663,15 @@ public class MakeActionProvider implements ActionProvider {
                             platform == Platform.PLATFORM_SOLARIS_SPARC ||
                             platform == Platform.PLATFORM_LINUX) {
                         // Make sure DISPLAY variable has been set
-                        if (HostInfoProvider.getDefault().getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("DISPLAY") == null && conf.getProfile().getEnvironment().getenv("DISPLAY") == null) { // NOI18N
+                        if (cancelled.get()) {
+                            return; // getEnv() might be costly for remote host
+                        }
+                        if (conf.getDevelopmentHost().getExecutionEnvironment().isLocal() &&
+                                HostInfoProvider.getEnv(conf.getDevelopmentHost().getExecutionEnvironment()).get("DISPLAY") == null && // NOI18N
+                                conf.getProfile().getEnvironment().getenv("DISPLAY") == null) { // NOI18N
                             // DISPLAY hasn't been set
                             if (runProfile == null) {
-                                runProfile = conf.getProfile().clone();
+                                runProfile = conf.getProfile().clone(conf);
                             }
                             runProfile.getEnvironment().putenv("DISPLAY", ":0.0"); // NOI18N
                         }
@@ -646,14 +683,12 @@ public class MakeActionProvider implements ActionProvider {
                         // naturalize if relative
                         path = makeArtifact.getOutput();
                         //TODO: we also need remote aware IpeUtils..........
-                        if (conf.getDevelopmentHost().isLocalhost()) {
-                            if (!IpeUtils.isPathAbsolute(path)) {
-                                // make path relative to run working directory
-                                path = makeArtifact.getWorkingDirectory() + "/" + path; // NOI18N
-                                path = FilePathAdaptor.naturalize(path);
-                                path = IpeUtils.toRelativePath(conf.getProfile().getRunDirectory(), path);
-                                path = FilePathAdaptor.naturalize(path);
-                            }
+                        if (!IpeUtils.isPathAbsolute(path)) {
+                            // make path relative to run working directory
+                            path = makeArtifact.getWorkingDirectory() + "/" + path; // NOI18N
+                            path = FilePathAdaptor.naturalize(path);
+                            path = IpeUtils.toRelativePath(conf.getProfile().getRunDirectory(), path);
+                            path = FilePathAdaptor.naturalize(path);
                         }
                     } else {
                         // Always absolute
@@ -694,7 +729,7 @@ public class MakeActionProvider implements ActionProvider {
                 if (conf.isCompileConfiguration() && !validateProject(conf)) {
                     break;
                 }
-                if (validateBuildSystem(pd, conf, validated)) {
+                if (validateBuildSystem(pd, conf, validated, cancelled)) {
                     MakeArtifact makeArtifact = new MakeArtifact(pd, conf);
                     String buildCommand = makeArtifact.getBuildCommand(getMakeCommand(pd, conf), "");
                     String args = "";
@@ -703,7 +738,7 @@ public class MakeActionProvider implements ActionProvider {
                         args = buildCommand.substring(index + 1);
                         buildCommand = buildCommand.substring(0, index);
                     }
-                    RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getPlatform().getValue());
+                    RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getDevelopmentHost().getBuildPlatform());
                     profile.setArgs(args);
                     ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                             project,
@@ -725,7 +760,7 @@ public class MakeActionProvider implements ActionProvider {
                 }
                 String buildCommand;
                 String args;
-                if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS) {
+                if (conf.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_WINDOWS) {
                     buildCommand = "cmd.exe"; // NOI18N
                     args = "/c sh "; // NOI18N
                 } else {
@@ -736,7 +771,7 @@ public class MakeActionProvider implements ActionProvider {
                     args += " -x "; // NOI18N
                 }
                 args += "nbproject/Package-" + conf.getName() + ".bash"; // NOI18N
-                RunProfile profile = new RunProfile(conf.getBaseDir(), conf.getPlatform().getValue());
+                RunProfile profile = new RunProfile(conf.getBaseDir(), conf.getDevelopmentHost().getBuildPlatform());
                 profile.setArgs(args);
                 ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                         project,
@@ -751,7 +786,7 @@ public class MakeActionProvider implements ActionProvider {
 //                if (conf.isCompileConfiguration() && !validateProject(conf)) {
 //                    break;
 //                }
-                if (validateBuildSystem(pd, conf, validated)) {
+                if (validateBuildSystem(pd, conf, validated, cancelled)) {
                     MakeArtifact makeArtifact = new MakeArtifact(pd, conf);
                     String buildCommand = makeArtifact.getCleanCommand(getMakeCommand(pd, conf), ""); // NOI18N
                     String args = ""; // NOI18N
@@ -760,7 +795,7 @@ public class MakeActionProvider implements ActionProvider {
                         args = buildCommand.substring(index + 1);
                         buildCommand = buildCommand.substring(0, index);
                     }
-                    RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getPlatform().getValue());
+                    RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getDevelopmentHost().getBuildPlatform());
                     profile.setArgs(args);
                     ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                             project,
@@ -776,7 +811,7 @@ public class MakeActionProvider implements ActionProvider {
                 }
                 validated = true;
             } else if (targetName.equals("compile-single")) { // NOI18N
-                if (validateBuildSystem(pd, conf, validated)) {
+                if (validateBuildSystem(pd, conf, validated, cancelled)) {
                     Iterator<? extends Node> it = context.lookupAll(Node.class).iterator();
                     while (it.hasNext()) {
                         Node node = it.next();
@@ -816,14 +851,14 @@ public class MakeActionProvider implements ActionProvider {
                         // Clean command
                         String commandLine;
                         String args;
-                        if (conf.getPlatform().getValue() == Platform.PLATFORM_WINDOWS) {
+                        if (conf.getDevelopmentHost().getBuildPlatform() == Platform.PLATFORM_WINDOWS) {
                             commandLine = "cmd.exe"; // NOI18N
                             args = "/c rm -rf " + outputFile; // NOI18N
                         } else {
                             commandLine = "rm"; // NOI18N
                             args = "-rf " + outputFile; // NOI18N
                         }
-                        RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getPlatform().getValue());
+                        RunProfile profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getDevelopmentHost().getBuildPlatform());
                         profile.setArgs(args);
                         ProjectActionEvent projectActionEvent = new ProjectActionEvent(
                                 project,
@@ -843,7 +878,7 @@ public class MakeActionProvider implements ActionProvider {
                             commandLine = commandLine.substring(0, index);
                         }
                         // Add the build commandLine
-                        profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getPlatform().getValue());
+                        profile = new RunProfile(makeArtifact.getWorkingDirectory(), conf.getDevelopmentHost().getBuildPlatform());
                         profile.setArgs(args);
                         projectActionEvent = new ProjectActionEvent(
                                 project,
@@ -878,7 +913,7 @@ public class MakeActionProvider implements ActionProvider {
         StringBuilder actionName = new StringBuilder(projectName);
         actionName.append(" (").append(targetName); // NOI18N
         if (!conf.getDevelopmentHost().isLocalhost()) {
-            actionName.append(" - ").append(conf.getDevelopmentHost().getName()); // NOI18N
+            actionName.append(" - ").append(conf.getDevelopmentHost().getHostKey()); // NOI18N
         }
         actionName.append(")"); // NOI18N
         return actionName.toString();
@@ -920,8 +955,11 @@ public class MakeActionProvider implements ActionProvider {
                 command.equals(COMMAND_DEBUG_STEP_INTO) ||
                 command.equals(COMMAND_DEBUG_LOAD_ONLY) ||
                 command.equals(COMMAND_CUSTOM_ACTION)) {
-            ConfigurationDescriptor pd = getProjectDescriptor();
-            MakeConfiguration conf = (MakeConfiguration) pd.getConfs().getActive();
+            MakeConfigurationDescriptor pd = getProjectDescriptor();
+            MakeConfiguration conf = pd.getActiveConfiguration();
+            if (conf == null) {
+                return null;
+            }
             RunProfile profile = (RunProfile) conf.getAuxObject(RunProfile.PROFILE_ID);
             if (profile == null) { // See IZ 89349
                 return null;
@@ -952,10 +990,10 @@ public class MakeActionProvider implements ActionProvider {
         if (!isProjectDescriptorLoaded()) {
             return false;
         }
-        if (!(getProjectDescriptor().getConfs().getActive() instanceof MakeConfiguration)) {
+        MakeConfiguration conf = getProjectDescriptor().getActiveConfiguration();
+        if (conf == null) {
             return false;
         }
-        MakeConfiguration conf = (MakeConfiguration) getProjectDescriptor().getConfs().getActive();
         if (command.equals(COMMAND_CLEAN)) {
             return true;
         } else if (command.equals(COMMAND_BUILD)) {
@@ -1041,14 +1079,14 @@ public class MakeActionProvider implements ActionProvider {
         return cmd;
     }
 
-    public boolean validateBuildSystem(MakeConfigurationDescriptor pd, MakeConfiguration conf, boolean validated) {
+    private boolean validateBuildSystem(MakeConfigurationDescriptor pd, MakeConfiguration conf,
+            boolean validated, AtomicBoolean cancelled) {
         CompilerSet2Configuration csconf = conf.getCompilerSet();
-        ExecutionEnvironment env = ExecutionEnvironmentFactory.getExecutionEnvironment(conf.getDevelopmentHost().getName());
+        ExecutionEnvironment env = ExecutionEnvironmentFactory.fromUniqueID(conf.getDevelopmentHost().getHostKey());
         ArrayList<String> errs = new ArrayList<String>();
         CompilerSet cs;
         String csname;
         File file;
-        ServerList serverList = Lookup.getDefault().lookup(ServerList.class);
         boolean cRequired = conf.hasCFiles(pd);
         boolean cppRequired = conf.hasCPPFiles(pd);
         boolean fRequired = conf.hasFortranFiles(pd);
@@ -1060,15 +1098,33 @@ public class MakeActionProvider implements ActionProvider {
         }
 
         if (!conf.getDevelopmentHost().isLocalhost()) {
-            assert serverList != null;
-            ServerRecord record = serverList.get(env);
+            ServerRecord record = ServerList.get(env);
             assert record != null;
             record.validate(false);
+            if (cancelled.get()) {
+                return false;
+            }
             if (!record.isOnline()) {
                 lastValidation = false;
                 runBTA = true;
             }
         // TODO: all validation below works, but it may be more efficient to make a verifying script
+        }
+
+        // Check build/run/debug platform vs. host platform
+        int buildPlatformId = conf.getDevelopmentHost().getBuildPlatform();
+        ExecutionEnvironment execEnv = conf.getDevelopmentHost().getExecutionEnvironment();
+        int hostPlatformId = CompilerSetManager.getDefault(execEnv).getPlatform();
+        if (buildPlatformId != hostPlatformId) {
+            if (!conf.isMakefileConfiguration()) {
+                Platform buildPlatform = Platforms.getPlatform(buildPlatformId);
+                Platform hostPlatform = Platforms.getPlatform(hostPlatformId);
+                String errormsg = getString("WRONG_PLATFORM", hostPlatform.getDisplayName(), buildPlatform.getDisplayName());
+                if (DialogDisplayer.getDefault().notify(new NotifyDescriptor.Confirmation(errormsg, NotifyDescriptor.WARNING_MESSAGE)) != NotifyDescriptor.OK_OPTION) {
+                    return false;
+                }
+            }
+            conf.getDevelopmentHost().setBuildPlatform(hostPlatformId);
         }
 
         boolean unknownCompilerSet = false;
@@ -1104,35 +1160,47 @@ public class MakeActionProvider implements ActionProvider {
         Tool asTool = cs.getTool(Tool.Assembler);
         Tool makeTool = cs.getTool(Tool.MakeTool);
 
+        if (cancelled.get()) {
+            return false;
+        }
+
+        PlatformInfo pi = conf.getPlatformInfo();
         // Check for a valid make program
         if (conf.getDevelopmentHost().isLocalhost()) {
             file = new File(makeTool.getPath());
-            if ((!file.exists() && Path.findCommand(makeTool.getPath()) == null) || !ToolsPanel.supportedMake(file.getPath())) {
+            if ((!exists(makeTool.getPath(), pi) && Path.findCommand(makeTool.getPath()) == null) || !ToolsPanel.supportedMake(file.getPath())) {
                 runBTA = true;
             }
         } else {
-            if (serverList != null && !unknownCompilerSet) {
-                if (!serverList.isValidExecutable(env, makeTool.getPath())) {
-                    runBTA = true;
-                }
+            if (!isValidExecutable(makeTool.getPath(), pi)) {
+                runBTA = true;
             }
         }
 
         // Check compilers
-
-        PlatformInfo pi = conf.getPlatformInfo();
-
+        if (cancelled.get()) {
+            return false;
+        }
         if (cRequired && !exists(cTool.getPath(), pi)) {
             errs.add(NbBundle.getMessage(MakeActionProvider.class, "ERR_MissingCCompiler", csname, cTool.getDisplayName())); // NOI18N
             runBTA = true;
+        }
+        if (cancelled.get()) {
+            return false;
         }
         if (cppRequired && !exists(cppTool.getPath(), pi)) {
             errs.add(NbBundle.getMessage(MakeActionProvider.class, "ERR_MissingCppCompiler", csname, cppTool.getDisplayName())); // NOI18N
             runBTA = true;
         }
+        if (cancelled.get()) {
+            return false;
+        }
         if (fRequired && !exists(fTool.getPath(), pi)) {
             errs.add(NbBundle.getMessage(MakeActionProvider.class, "ERR_MissingFortranCompiler", csname, fTool.getDisplayName())); // NOI18N
             runBTA = true;
+        }
+        if (cancelled.get()) {
+            return false;
         }
         if (asRequired && !exists(asTool.getPath(), pi)) {
             //errs.add(NbBundle.getMessage(MakeActionProvider.class, "ERR_MissingFortranCompiler", csname, fTool.getDisplayName())); // NOI18N
@@ -1143,6 +1211,9 @@ public class MakeActionProvider implements ActionProvider {
             runBTA = true;
         }
 
+        if (cancelled.get()) {
+            return false;
+        }
         if (runBTA) {
             if (conf.getDevelopmentHost().isLocalhost()) {
                 BuildToolsAction bt = SystemAction.get(BuildToolsAction.class);
@@ -1153,14 +1224,14 @@ public class MakeActionProvider implements ActionProvider {
                 model.setCompilerSetName(null); // means don't change
                 model.setSelectedCompilerSetName(csname);
                 model.setMakeRequired(true);
-                model.setGdbRequired(false);
+                model.setDebuggerRequired(false);
                 model.setCRequired(cRequired);
                 model.setCppRequired(cppRequired);
                 model.setFortranRequired(fRequired);
                 model.setAsRequired(asRequired);
                 model.setShowRequiredBuildTools(true);
                 model.setShowRequiredDebugTools(false);
-                model.SetEnableRequiredCompilerCB(conf.isMakefileConfiguration());
+                model.setEnableRequiredCompilerCB(conf.isMakefileConfiguration());
                 if (bt.initBuildTools(model, errs) && pd.okToChange()) {
                     String name = model.getSelectedCompilerSetName();
                     CppSettings.getDefault().setCompilerSetName(name);
@@ -1176,10 +1247,14 @@ public class MakeActionProvider implements ActionProvider {
                     lastValidation = false;
                 }
             } else {
+                if (cancelled.get()) {
+                    return false;
+                }
                 // User can't change anything in BTA for remote host yet,
                 // so showing above dialog will only confuse him
                 NotifyDescriptor nd = new NotifyDescriptor.Message(
-                        NbBundle.getMessage(MakeActionProvider.class, "ERR_INVALID_COMPILER_SET", csname, conf.getDevelopmentHost().getName()));
+                        NbBundle.getMessage(MakeActionProvider.class, "ERR_INVALID_COMPILER_SET",
+                        csname, conf.getDevelopmentHost().getDisplayName(false)));
                 DialogDisplayer.getDefault().notify(nd);
                 lastValidation = false;
             }
@@ -1210,11 +1285,11 @@ public class MakeActionProvider implements ActionProvider {
 //                    errormsg = NbBundle.getMessage(MakeActionProvider.class, "ERR_MISSING_TOOL2", tool); // NOI18N
 //                }
 //            } else {
-//                String hkey = conf.getDevelopmentHost().getName();
+//                ExecutionEnvironment execEnv = conf.getDevelopmentHost().getExecutionEnvironment();
 //                ServerList serverList = Lookup.getDefault().lookup(ServerList.class);
 //                if (serverList != null) {
-//                    if (!serverList.isValidExecutable(hkey, tool)) {
-//                        errormsg = NbBundle.getMessage(MakeActionProvider.class, "ERR_MISSING_TOOL3", tool, hkey); // NOI18N
+//                    if (!serverList.isValidExecutable(execEnv, tool)) {
+//                        errormsg = NbBundle.getMessage(MakeActionProvider.class, "ERR_MISSING_TOOL3", tool, execEnv.getHost()); // NOI18N
 //                    }
 //                }
 //            }
@@ -1234,37 +1309,73 @@ public class MakeActionProvider implements ActionProvider {
         return true;
     }
 
+    /** cache for file existence status. */
+    private static Map<String, Boolean> fileExistenceCache = new HashMap<String, Boolean>();
+
+    /** cache for valid executables */
+    private static Map<String, Boolean> validExecutablesCache = new HashMap<String, Boolean>();
+
+    private static final boolean isValidExecutable(String path, PlatformInfo pi) {
+        return existsImpl(path, pi, true);
+    }
     private static boolean exists(String path, PlatformInfo pi) {
-        return pi.fileExists(path) || pi.findCommand(path) != null;
+        return existsImpl(path, pi, false);
     }
 
-    private static String getExePath(MakeConfigurationDescriptor mcd, MakeConfiguration conf) {
-        String buildResult = conf.getMakefileConfiguration().getOutput().getValue();
+    private static boolean existsImpl(String path, PlatformInfo pi, boolean checkExecutable) {
+        ExecutionEnvironment execEnv = pi.getExecutionEnvironment();
+        String key = path + ExecutionEnvironmentFactory.toUniqueID(execEnv);
+        Map<String, Boolean> map = checkExecutable ? validExecutablesCache : fileExistenceCache;
 
-        if (buildResult == null || buildResult.length() == 0) {
-            return buildResult;
-        }
-
-        List<String> paths = new ArrayList<String>();
-        if (isAbsolutePath(conf, buildResult)) {
-            paths.add(buildResult);
-        }
-        paths.add(conf.getBaseDir());
-        paths.addAll(mcd.getSourceRoots());
-
-        for (String dir : paths) {
-            dir = dir.replace("\\", "/");  // NOI18N
-            String path = dir + '/' + buildResult; // gdb *requires* forward slashes!
-            File file = new File(path);
-            if (file.exists()) {
-                return path;
+        synchronized (map) {
+            Boolean cached = map.get(key);
+            if (cached != null && cached.booleanValue()) {
+                return true;
             }
         }
-        return "";
+        
+        boolean result;
+        if (checkExecutable) {
+            result = ServerList.isValidExecutable(execEnv, path);
+        } else {
+            result = pi.fileExists(path) || pi.isWindows() && pi.fileExists(path+".lnk") || pi.findCommand(path) != null; // NOI18N
+        }
+        
+        if (result) {
+            synchronized (map) {
+                map.put(key, Boolean.TRUE);
+            }
+        }
+        return result;
     }
 
+//    private static String getExePath(MakeConfigurationDescriptor mcd, MakeConfiguration conf) {
+//        String buildResult = conf.getMakefileConfiguration().getOutput().getValue();
+//
+//        if (buildResult == null || buildResult.length() == 0) {
+//            return buildResult;
+//        }
+//
+//        List<String> paths = new ArrayList<String>();
+//        if (isAbsolutePath(conf, buildResult)) {
+//            paths.add(buildResult);
+//        }
+//        paths.add(conf.getBaseDir());
+//        paths.addAll(mcd.getSourceRoots());
+//
+//        for (String dir : paths) {
+//            dir = dir.replace("\\", "/");  // NOI18N
+//            String path = dir + '/' + buildResult; // gdb *requires* forward slashes!
+//            File file = new File(path);
+//            if (file.exists()) {
+//                return path;
+//            }
+//        }
+//        return "";
+//    }
+
     private static boolean isAbsolutePath(MakeConfiguration conf, String path) {
-        if (conf.getPlatform().getValue() == PlatformTypes.PLATFORM_WINDOWS) {
+        if (conf.getDevelopmentHost().getBuildPlatform() == PlatformTypes.PLATFORM_WINDOWS) {
             return path.length() > 3 && path.charAt(1) == ':' && path.charAt(2) == '/';
         } else {
             return path.length() > 0 && path.charAt(0) == '/';
@@ -1273,12 +1384,34 @@ public class MakeActionProvider implements ActionProvider {
 
     // Private methods -----------------------------------------------------
     /** Look up i18n strings here */
-    private static ResourceBundle bundle;
-
     private static String getString(String s) {
-        if (bundle == null) {
-            bundle = NbBundle.getBundle(MakeActionProvider.class);
-        }
-        return bundle.getString(s);
+        return NbBundle.getMessage(MakeActionProvider.class, s);
     }
+    private static String getString(String s, String arg1, String arg2) {
+        return NbBundle.getMessage(MakeActionProvider.class, s, arg1, arg2);
+    }
+
+    private abstract static class CancellableTask implements Runnable, Cancellable {
+
+        protected abstract void runImpl();
+
+        public final void run() {
+            thread = Thread.currentThread();
+            if (!cancelled.get()) {
+                runImpl();
+            }
+        }
+
+        public boolean cancel() {
+            cancelled.set(true);
+            if (thread != null) { // we never set it back to null => no sync
+                thread.interrupt();
+            }
+            return true;
+        }
+
+        private volatile Thread thread;
+        protected final AtomicBoolean cancelled = new AtomicBoolean(false);
+    }
+
 }
