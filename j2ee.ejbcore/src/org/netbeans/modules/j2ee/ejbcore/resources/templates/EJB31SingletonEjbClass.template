@@ -5,16 +5,16 @@
 
 package ${package};
 
-import javax.ejb.Stateful;
+import javax.ejb.Singleton;
 
 /**
  *
  * @author ${user}
  */
-@Stateful
+@Singleton
 public class ${name} {
     
     // Add business logic below. (Right-click in editor and choose
     // "Insert Code > Add Business Method")
-    
+ 
 }
