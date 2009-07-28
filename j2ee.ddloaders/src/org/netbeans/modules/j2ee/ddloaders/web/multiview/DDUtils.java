@@ -41,6 +41,17 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.Stack;
+import java.util.StringTokenizer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.modules.j2ee.dd.api.web.*;
 import org.netbeans.modules.j2ee.ddloaders.web.DDDataObject;
 import org.netbeans.modules.web.api.webmodule.WebModule;
@@ -55,16 +66,20 @@ import org.openide.util.NbBundle;
 /**
  * @author mkuchtiak
  */
-public class DDUtils {
+public final class DDUtils {
     
+    private static final Logger LOG = Logger.getLogger(DDUtils.class.getName());
+
+    private DDUtils() {
+    }
+
     public static String[] getUrlPatterns(WebApp webApp, Servlet servlet) {
         if (servlet.getServletName()==null) return new String[]{};
         ServletMapping[] mapping = webApp.getServletMapping();
-        java.util.List maps = new java.util.ArrayList();
-        for (int i=0;i<mapping.length;i++) {
-            if (servlet.getServletName().equals(mapping[i].getServletName())) {
-                String urlPattern = mapping[i].getUrlPattern();
-                if (urlPattern!=null) maps.add(urlPattern);
+        List<String> maps = new LinkedList<String>();
+        for (ServletMapping sm : mapping) {
+            if (servlet.getServletName().equals(sm.getServletName())) {
+                maps.addAll(getUrlPatterns(sm));
             }
         }
         String[] urlPatterns = new String[maps.size()];
@@ -75,7 +90,7 @@ public class DDUtils {
     public static String[] getUrlPatterns(WebApp webApp, Filter filter) {
         if (filter.getFilterName()==null) return new String[]{};
         FilterMapping[] mapping = webApp.getFilterMapping();
-        java.util.List maps = new java.util.ArrayList();
+        List maps = new ArrayList();
         for (int i=0;i<mapping.length;i++) {
             if (filter.getFilterName().equals(mapping[i].getFilterName())) {
                 String urlPattern = mapping[i].getUrlPattern();
@@ -92,8 +107,8 @@ public class DDUtils {
     }
     
     public static String[] getStringArray(String text) {
-        java.util.StringTokenizer tok = new java.util.StringTokenizer(text,",");
-        java.util.Set set = new java.util.HashSet();
+        StringTokenizer tok = new StringTokenizer(text, ",");
+        Set set = new HashSet();
         while (tok.hasMoreTokens()) {
             String token = tok.nextToken().trim();
             if (token.length()>0) set.add(token);
@@ -104,15 +119,23 @@ public class DDUtils {
     }
     
     public static boolean isServletMapping(WebApp webApp, String urlPattern) {
+        if (isWebApp25(webApp)) {
+            for (ServletMapping mapping : webApp.getServletMapping()) {
+                if (getUrlPatterns(mapping).contains(urlPattern)) {
+                    return true;
+                }
+            }
+            return false;
+        }
         return webApp.findBeanByName("ServletMapping","UrlPattern",urlPattern)!=null;
     }
     
     public static boolean isServletMapping(WebApp webApp, Servlet servlet, String urlPattern) {
         ServletMapping[] maps = webApp.getServletMapping();
         String servletName = servlet.getServletName();
-        if (servletName!=null) {
-            for (int i=0;i<maps.length;i++) {
-                if (urlPattern.equals(maps[i].getUrlPattern()) && !servletName.equals(maps[i].getServletName()) ) {
+        if (servletName != null) {
+            for (ServletMapping sm : maps) {
+                if (!servletName.equals(sm.getServletName()) && getUrlPatterns(sm).contains(urlPattern)) {
                     return true;
                 }
             }
@@ -121,8 +144,10 @@ public class DDUtils {
     }
     
     public static String urlPatternList(String[] urlPatterns) {
-        if (urlPatterns==null) return "";
-        StringBuffer buf = new StringBuffer();
+        if (urlPatterns == null) {
+            return ""; // NOI18N
+        }
+        StringBuilder buf = new StringBuilder();
         for (int i=0;i<urlPatterns.length;i++) {
             if (i>0) buf.append(", "); //NOI18N
             buf.append(urlPatterns[i]);
@@ -133,19 +158,31 @@ public class DDUtils {
     public static void addServletMappings(WebApp webApp, Servlet servlet, String[] urlPatterns) {
         String servletName = servlet.getServletName();
         try {
-            for (int i=0;i<urlPatterns.length;i++) {
-                ServletMapping map = (ServletMapping)webApp.createBean("ServletMapping"); //NOI18
-                map.setServletName(servletName);
-                map.setUrlPattern(urlPatterns[i]);
-                webApp.addServletMapping(map);
+            if (isWebApp25(webApp)) {
+                ServletMapping25 mapping = (ServletMapping25) webApp.createBean("ServletMapping"); // NOI18
+                mapping.setServletName(servletName);
+                mapping.setUrlPatterns(urlPatterns);
+                webApp.addServletMapping(mapping);
+            } else {
+                for (int i=0;i<urlPatterns.length;i++) {
+                    ServletMapping map = (ServletMapping)webApp.createBean("ServletMapping"); //NOI18
+                    map.setServletName(servletName);
+                    map.setUrlPattern(urlPatterns[i]);
+                    webApp.addServletMapping(map);
+                }
             }
         } catch (ClassNotFoundException ex){}
     }
-    
+
     public static void setServletMappings(WebApp webApp, Servlet servlet, String[] urlPatterns) {
+        // tmysik: because i don't understand what's happening below, i will just add a new method for web.xml 2.5
+        if (isWebApp25(webApp)) {
+            setServletMappings25(webApp, servlet, urlPatterns);
+            return;
+        }
         String servletName = servlet.getServletName();
-        java.util.List oldMaps = getServletMappingList(webApp,servlet);
-        java.util.List newPatterns = new java.util.ArrayList();
+        List oldMaps = getServletMappingList(webApp,servlet);
+        List newPatterns = new ArrayList();
         // looking for old mappings
         for (int i=0;i<urlPatterns.length;i++) {
             boolean found =false;
@@ -159,7 +196,7 @@ public class DDUtils {
             }
             if (!found) newPatterns.add(urlPatterns[i]);
         }
-        int min = java.lang.Math.min(oldMaps.size(),newPatterns.size());
+        int min = Math.min(oldMaps.size(), newPatterns.size());
         // replace old mappings
         for (int i=0;i<min;i++) {
             ServletMapping oldMap = (ServletMapping)oldMaps.get(i);
@@ -181,14 +218,14 @@ public class DDUtils {
     }
     
     public static ServletMapping[] getServletMappings(WebApp webApp, Servlet servlet) {
-        java.util.List maps = getServletMappingList(webApp,servlet);
+        List maps = getServletMappingList(webApp,servlet);
         ServletMapping[] newMappings = new ServletMapping[maps.size()];
         maps.toArray(newMappings);
         return newMappings;
     }
     
     public static FilterMapping[] getFilterMappings(WebApp webApp, Filter filter) {
-        java.util.List maps = getFilterMappingList(webApp,filter);
+        List maps = getFilterMappingList(webApp,filter);
         FilterMapping[] newMappings = new FilterMapping[maps.size()];
         maps.toArray(newMappings);
         return newMappings;
@@ -198,7 +235,7 @@ public class DDUtils {
      * @return filter mappings that refer to given <code>servlet</code>. 
      */
     public static FilterMapping[] getFilterMappings(WebApp webApp, Servlet servlet) {
-        java.util.List maps = new java.util.ArrayList();
+        List maps = new ArrayList();
         if (servlet == null){
             return new FilterMapping[0];
         }
@@ -212,9 +249,9 @@ public class DDUtils {
         return (FilterMapping[]) maps.toArray(new FilterMapping[maps.size()]);
     }
     
-    private static java.util.List getServletMappingList(WebApp webApp, Servlet servlet) {
+    private static List<ServletMapping> getServletMappingList(WebApp webApp, Servlet servlet) {
         String servletName = servlet.getServletName();
-        java.util.List maps = new java.util.ArrayList();
+        List<ServletMapping> maps = new LinkedList<ServletMapping>();
         if (servletName==null) return maps;
         ServletMapping[] mapping = webApp.getServletMapping();
         for (int i=0;i<mapping.length;i++) {
@@ -225,9 +262,9 @@ public class DDUtils {
         return maps;
     }
     
-    private static java.util.List getFilterMappingList(WebApp webApp, Filter filter) {
+    private static List getFilterMappingList(WebApp webApp, Filter filter) {
         String filterName = filter.getFilterName();
-        java.util.List maps = new java.util.ArrayList();
+        List maps = new ArrayList();
         if (filterName==null) return maps;
         FilterMapping[] mapping = webApp.getFilterMapping();
         for (int i=0;i<mapping.length;i++) {
@@ -256,7 +293,9 @@ public class DDUtils {
                     }
                 }
             }
-        } catch (java.io.IOException ex) {}
+        } catch (IOException ex) {
+            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+        }
         org.openide.DialogDisplayer.getDefault().notify(new org.openide.NotifyDescriptor.Message(
                 org.openide.util.NbBundle.getMessage(DDUtils.class,"MSG_sourceNotFound")));
     }
@@ -266,7 +305,10 @@ public class DDUtils {
         FileObject docBase = null;
         try {
             docBase = getDocumentBase(dObj);
-        } catch (java.io.IOException ex) {return;}
+        } catch (IOException ex) {
+            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+            return;
+        }
         if (docBase!=null) {
             FileObject target = docBase.getFileObject(fileName.trim());
             if (target!=null) {
@@ -278,18 +320,23 @@ public class DDUtils {
                         cookie.open();
                         return;
                     }
-                } catch (org.openide.loaders.DataObjectNotFoundException ex) {}
+                } catch (org.openide.loaders.DataObjectNotFoundException ex) {
+                    LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                }
             }
         }
         org.openide.DialogDisplayer.getDefault().notify(new org.openide.NotifyDescriptor.Message(
                 org.openide.util.NbBundle.getMessage(DDUtils.class,"MSG_sourceNotFound")));
     }
     
-    public static void openEditorForFiles(DDDataObject dObj, java.util.StringTokenizer tok) {
+    public static void openEditorForFiles(DDDataObject dObj, StringTokenizer tok) {
         FileObject docBase = null;
         try {
             docBase = getDocumentBase(dObj);
-        } catch (java.io.IOException ex) {return;}
+        } catch (IOException ex) {
+            LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+            return;
+        }
         if (!tok.hasMoreTokens()) return;
         boolean found=false;
         if (docBase!=null)
@@ -306,7 +353,9 @@ public class DDUtils {
                             cookie.open();
                             found=true;
                         }
-                    } catch (org.openide.loaders.DataObjectNotFoundException ex) {}
+                    } catch (org.openide.loaders.DataObjectNotFoundException ex) {
+                        LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                    }
                 }
             }
             }
@@ -316,21 +365,21 @@ public class DDUtils {
         }
     }
     
-    public static SourceGroup[] getJavaSourceGroups(DDDataObject dObj) throws java.io.IOException {
+    public static SourceGroup[] getJavaSourceGroups(DDDataObject dObj) throws IOException {
         Project proj = FileOwnerQuery.getOwner(dObj.getPrimaryFile());
         if (proj==null) return new SourceGroup[]{};
         Sources sources = ProjectUtils.getSources(proj);
         return sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
     }
     
-    public static SourceGroup[] getDocBaseGroups(DDDataObject dObj) throws java.io.IOException {
+    public static SourceGroup[] getDocBaseGroups(DDDataObject dObj) throws IOException {
         Project proj = FileOwnerQuery.getOwner(dObj.getPrimaryFile());
         if (proj==null) return new SourceGroup[]{};
         Sources sources = ProjectUtils.getSources(proj);
         return sources.getSourceGroups(WebProjectConstants.TYPE_DOC_ROOT);
     }
     
-    public static FileObject getDocumentBase(DDDataObject dObj) throws java.io.IOException {
+    public static FileObject getDocumentBase(DDDataObject dObj) throws IOException {
         WebModule wm = WebModule.getWebModule(dObj.getPrimaryFile());
         if (wm==null) return null;
         return wm.getDocumentBase();
@@ -363,6 +412,7 @@ public class DDUtils {
         }
         return "";
     }
+
     /** removes all filter mappings for given servlet name
      */
     public static void removeServletMappings(WebApp webApp, String servletName) {
@@ -377,8 +427,8 @@ public class DDUtils {
     /** removes all filter mappings for given filter name
      * @return Stack of deleted rows
      */
-    public static java.util.Stack removeFilterMappings(WebApp webApp, String filterName) {
-        java.util.Stack deletedRows = new java.util.Stack();
+    public static Stack removeFilterMappings(WebApp webApp, String filterName) {
+        Stack deletedRows = new Stack();
         if (filterName==null) return deletedRows;
         FilterMapping[] oldMaps = webApp.getFilterMapping();
         for (int i=0;i<oldMaps.length;i++) {
@@ -393,7 +443,6 @@ public class DDUtils {
     /** removes all filter mappings for given servlet name
      */
     public static void removeFilterMappingsForServlet(WebApp webApp, String servletName) {
-        java.util.Stack deletedRows = new java.util.Stack();
         if (servletName==null) return;
         FilterMapping[] oldMaps = webApp.getFilterMapping();
         for (int i=0;i<oldMaps.length;i++) {
@@ -405,7 +454,7 @@ public class DDUtils {
     
     public static String addItem(String text, String newItem, boolean asFirst) {
         String[] stringArray = getStringArray(text);
-        java.util.List list = new java.util.ArrayList();
+        List list = new ArrayList();
         if (asFirst) {
             list.add(newItem);
             for (int i=0;i<stringArray.length;i++) {
@@ -420,7 +469,7 @@ public class DDUtils {
         return getAsString(list);
     }
     
-    private static String getAsString(java.util.List list) {
+    private static String getAsString(List list) {
         StringBuffer buf = new StringBuffer();
         for (int i=0;i<list.size();i++) {
             if (i>0) buf.append(", "); //NOI18N
@@ -431,7 +480,7 @@ public class DDUtils {
     
     public static String[] getServletNames(WebApp webApp) {
         Servlet[] allServlets = webApp.getServlet();
-        java.util.List list = new java.util.ArrayList();
+        List list = new ArrayList();
         for (int i=0;i<allServlets.length;i++) {
             String servletName = allServlets[i].getServletName();
             if (servletName!=null && !list.contains(allServlets[i])) list.add(servletName);
@@ -443,7 +492,7 @@ public class DDUtils {
     
     public static String[] getFilterNames(WebApp webApp) {
         Filter[] filters = webApp.getFilter();
-        java.util.List list = new java.util.ArrayList();
+        List list = new ArrayList();
         for (int i=0;i<filters.length;i++) {
             String filterName = filters[i].getFilterName();
             if (filterName!=null && !list.contains(filters[i])) list.add(filterName);
@@ -465,5 +514,42 @@ public class DDUtils {
         }
         return null;
     }
-    
+
+    private static List<String> getUrlPatterns(ServletMapping sm) {
+        assert sm != null;
+        List<String> urlPatterns = new LinkedList<String>();
+        if (sm instanceof ServletMapping25) {
+            String[] patterns = ((ServletMapping25) sm).getUrlPatterns();
+            if (patterns != null) {
+                for (String p : patterns) {
+                    if (p != null) {
+                        urlPatterns.add(p);
+                    }
+                }
+            }
+        } else {
+            String urlPattern = sm.getUrlPattern();
+            if (urlPattern != null) {
+                urlPatterns.add(urlPattern);
+            }
+        }
+        return urlPatterns;
+    }
+
+    private static void setServletMappings25(WebApp webApp, Servlet servlet, String[] urlPatterns) {
+        final String servletName = servlet.getServletName();
+        // first remove _all_ the mappings of the servlet
+        for (ServletMapping mapping : getServletMappingList(webApp, servlet)) {
+            if (servletName.equals(mapping.getServletName())) {
+                webApp.removeServletMapping(mapping);
+            }
+        }
+        // add only one
+        addServletMappings(webApp, servlet, urlPatterns);
+    }
+
+    private static boolean isWebApp25(WebApp webApp) {
+        BigDecimal ver = new BigDecimal(webApp.getVersion());
+        return ver.compareTo(new BigDecimal(WebApp.VERSION_2_5)) >= 0;
+    }
 }

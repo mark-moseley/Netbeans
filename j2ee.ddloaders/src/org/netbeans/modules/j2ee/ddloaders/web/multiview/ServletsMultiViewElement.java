@@ -41,7 +41,9 @@
 
 package org.netbeans.modules.j2ee.ddloaders.web.multiview;
 
-import org.netbeans.core.spi.multiview.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.netbeans.core.api.multiview.MultiViewPerspective;
 import org.openide.nodes.*;
 import org.netbeans.modules.j2ee.dd.api.web.*;
 import org.netbeans.modules.j2ee.ddloaders.web.*;
@@ -51,11 +53,15 @@ import org.netbeans.modules.xml.multiview.Error;
 import org.openide.util.NbBundle;
 import org.openide.util.RequestProcessor;
 import org.openide.util.HelpCtx;
+
 /**
  *
  * @author mkuchtiak
  */
 public class ServletsMultiViewElement extends ToolBarMultiViewElement implements java.beans.PropertyChangeListener {
+
+    private static final Logger LOG = Logger.getLogger(ServletsMultiViewElement.class.getName());
+    
     private SectionView view;
     private ToolBarDesignEditor comp;
     private DDDataObject dObj;
@@ -93,6 +99,7 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
         return view;
     }
     
+    @Override
     public void componentShowing() {
         super.componentShowing();
         dObj.setLastOpenView(index);
@@ -102,11 +109,13 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
         }
     }
 
+    @Override
     public void componentOpened() {
         super.componentOpened();
         dObj.getWebApp().addPropertyChangeListener(this);
     }
     
+    @Override
     public void componentClosed() {
         super.componentClosed();
         dObj.getWebApp().removePropertyChangeListener(this);
@@ -117,7 +126,8 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
             String name = evt.getPropertyName();
             if ( name.indexOf("Servlet")>0 ) { //NOI18
                 // repaint view if the wiew is active and something is changed with servlets
-                if (SERVLET_MV_ID.equals(dObj.getSelectedPerspective().preferredID())) {
+                MultiViewPerspective selected = dObj.getSelectedPerspective();
+                if (selected != null && SERVLET_MV_ID.equals(selected.preferredID())) {
                     repaintingTask.schedule(100);
                 } else {
                     needInit=true;
@@ -182,7 +192,7 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
             return servletsNode;
         }
         
-        SectionContainer getServletsContainer(){
+        SectionContainer getServletsContainer() {
             return servletsCont;
         }
         
@@ -193,6 +203,7 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
             return NbBundle.getMessage(ServletsMultiViewElement.class,"TTL_servletPanel",servletName,mappings);
         }
         
+        @Override
         public Error validateView() {
             Error error = getSectionView().getErrorPanel().getError();
             if (error != null){
@@ -203,17 +214,12 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
     }
     
     private class ServletNode extends org.openide.nodes.AbstractNode {
-        private Servlet servlet;
-        private WebApp webApp;
-        private SectionView view;
         ServletNode(SectionView view, WebApp webApp, Servlet servlet) {
             super(org.openide.nodes.Children.LEAF);
-            this.servlet=servlet;
-            this.webApp=webApp;
-            this.view=view;
             setDisplayName(servlet.getServletName());
             setIconBaseWithExtension("org/netbeans/modules/j2ee/ddloaders/web/multiview/resources/class.gif"); //NOI18N
         }
+        @Override
         public HelpCtx getHelpCtx() {
             return new HelpCtx(HELP_ID_PREFIX+"servletNode"); //NOI18N
         }
@@ -235,13 +241,6 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
                 NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_description"),
                 NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_urlPatterns")
             };
-            char[] mnem = new char[] {
-                NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_servletName_mnem").charAt(0),
-                NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_servletClass_mnem").charAt(0),
-                NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_jspFile_mnem").charAt(0),
-                NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_description_mnem").charAt(0),
-                NbBundle.getMessage(ServletsMultiViewElement.class,"LBL_urlPatterns_mnem").charAt(0)
-            };
             String[] a11y_desc = new String[]{
                 NbBundle.getMessage(ServletsMultiViewElement.class,"ACSD_servletName"),
                 NbBundle.getMessage(ServletsMultiViewElement.class,"ACSD_servletClass"),
@@ -250,8 +249,8 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
                 NbBundle.getMessage(ServletsMultiViewElement.class,"ACSD_urlPatterns")
             };
             boolean[] buttons = new boolean[]{false,true,true,false,false};
-            SimpleDialogPanel.DialogDescriptor descriptor = new SimpleDialogPanel.DialogDescriptor(labels);
-            descriptor.setMnemonics(mnem);
+            SimpleDialogPanel.DialogDescriptor descriptor =
+                    new SimpleDialogPanel.DialogDescriptor(labels, true);
             descriptor.setButtons(buttons);
             descriptor.setA11yDesc(a11y_desc);
             descriptor.setTextField(new boolean[]{true,true,true,false,true});
@@ -269,7 +268,9 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
                             String className = DDUtils.getResourcePath(groups,fo);
                             dialogPanel.getTextComponents()[1].setText(className);
                         }
-                    } catch (java.io.IOException ex) {}
+                    } catch (java.io.IOException ex) {
+                        LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                    }
                 }
             });
             dialogPanel.getCustomizerButtons()[1].addActionListener(new java.awt.event.ActionListener() {
@@ -281,7 +282,9 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
                             String res = "/"+DDUtils.getResourcePath(groups,fo,'/',true);
                             dialogPanel.getTextComponents()[2].setText(res);
                         }
-                    } catch (java.io.IOException ex) {}
+                    } catch (java.io.IOException ex) {
+                        LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                    }
                 }
             });
             EditDialog dialog = new EditDialog(dialogPanel,NbBundle.getMessage(ServletsMultiViewElement.class,"TTL_Servlet"),true) {
@@ -333,7 +336,9 @@ public class ServletsMultiViewElement extends ToolBarMultiViewElement implements
                     SectionPanel pan = new SectionPanel(view, node, view.getServletTitle(servlet), servlet);
                     pan.setHeaderActions(new javax.swing.Action[]{removeAction});
                     view.getServletsContainer().addSection(pan, true);
-                } catch (ClassNotFoundException ex){}
+                } catch (ClassNotFoundException ex) {
+                    LOG.log(Level.FINE, "ignored exception", ex); //NOI18N
+                }
                 finally {
                     dObj.setChangedFromUI(false);
                 }
