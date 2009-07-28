@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2006 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2008 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -43,16 +43,20 @@ package org.netbeans.modules.web.jspparser;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.util.StringTokenizer;
 
 import org.openide.filesystems.FileObject;
+import org.openide.filesystems.FileStateInvalidException;
+import org.openide.filesystems.FileSystem;
 import org.openide.filesystems.FileUtil;
 
-/** Static utilities related to web context stuff - relative paths, relative objects etc.
- *
+/**
+ * Static utilities related to web context stuff - relative paths, relative objects etc.
  * @author Petr Jiricka
  */
-public class ContextUtil {
+public final class ContextUtil {
+
+    private ContextUtil() {
+    }
 
     /** Returns a message for a given throwable. Optionally includes the throwable
      * stack trace in the message.
@@ -69,9 +73,7 @@ public class ContextUtil {
             pw.close();
             return swriter.toString();
         }
-        else {
-            return throwable.getMessage();
-        }
+        return throwable.getMessage();
     }
     
     /**********************************
@@ -80,14 +82,14 @@ public class ContextUtil {
      */
     
     /** Decides whether a given file is in the subtree defined by the given folder.
-     * Similar to <code>org.openide.filesystems.FileUtil.isParentOf (FileObject folder, FileObject fo)</code>, 
+     * Similar to <code>org.openide.filesystems.FileUtil.isParentOf (FileObject folder, FileObject fo)</code>,
      * but also accepts the case that <code>fo == folder</code>
      */
     public static boolean isInSubTree(FileObject folder, FileObject fo) {
         if (fo == folder) {
             return true;
         }
-        else return FileUtil.isParentOf(folder, fo);
+        return FileUtil.isParentOf(folder, fo);
     }
 
     /** Finds a relative resource path between rootFolder and relativeObject. 
@@ -99,8 +101,40 @@ public class ContextUtil {
         String rfp = rootFolder.getPath();
         String rop = relativeObject.getPath();
         // check that they share the start of the path 
-        if (!isInSubTree (rootFolder, relativeObject)) {
-            throw new IllegalArgumentException("" + rootFolder + " / " + relativeObject); // NOI18N
+        if (!isInSubTree(rootFolder, relativeObject)) {
+            // #146242 - remove debug messages when issue is solved
+            String message = relativeObject + " not under " + rootFolder + "\n";  //NOI18N
+            FileSystem fs = null;
+            try {
+                fs = rootFolder.getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                fs = null;
+            }
+            message += rootFolder + " valid=" + rootFolder.isValid() + " id=" + System.identityHashCode(rootFolder) + " filesystem=" + fs + "\n";  //NOI18N
+            try {
+                fs = relativeObject.getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                fs = null;
+            }
+            message += relativeObject + " valid=" + relativeObject.isValid() + " id=" + System.identityHashCode(relativeObject) + " filesystem=" + fs + "\n";  //NOI18N
+            FileObject parent = relativeObject.getParent();
+            while (parent != null && !rfp.equals(parent.getPath())) {
+                try {
+                    fs = parent.getFileSystem();
+                } catch (FileStateInvalidException ex) {
+                    fs = null;
+                }
+                message += parent + " valid=" + parent.isValid() + " id=" + System.identityHashCode(parent) + " filesystem=" + fs + "\n";  //NOI18N
+                parent = parent.getParent();
+            }
+            try {
+                fs = parent.getFileSystem();
+            } catch (FileStateInvalidException ex) {
+                fs = null;
+            }
+            message += parent + " valid=" + parent.isValid() + " id=" + System.identityHashCode(parent) + " filesystem=" + fs + "\n";  //NOI18N
+            throw new IllegalArgumentException(message);
+            //throw new IllegalArgumentException("" + rootFolder + " / " + relativeObject); // NOI18N
         }
         // now really return the result
         String result = rop.substring(rfp.length());
@@ -120,23 +154,5 @@ public class ContextUtil {
     public static String findRelativeContextPath(FileObject rootFolder, FileObject relativeObject) {
         String result = "/" + findRelativePath(rootFolder, relativeObject); // NOI18N
         return relativeObject.isFolder() ? (result + "/") : result; // NOI18N
-    }
-    
-    /** Finds a FileObject relative to a given root folder, with a given relative path. 
-     * @param rootFolder the root folder
-     * @relativePath the relative path (not starting with a '/', delimited by '/')
-     * @return fileobject relative to the given root folder or null if not found.
-     * @exception IllegalArgumentException if relativeObject is not in rootFolder's tree.
-     */ 
-    public static FileObject findRelativeFileObject(FileObject rootFolder, String relativePath) {
-        if (relativePath.startsWith("/")) {  // NOI18N
-            relativePath = relativePath.substring(1);
-        }
-        FileObject myObj = rootFolder;
-        StringTokenizer st = new StringTokenizer(relativePath, "/"); // NOI18N
-        while (myObj != null && st.hasMoreTokens()) {
-            myObj = myObj.getFileObject(st.nextToken());
-        }
-        return myObj;
     }
 }
