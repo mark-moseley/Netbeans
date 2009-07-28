@@ -41,6 +41,9 @@
 
 package org.netbeans.modules.websvc.core.jaxws.projects;
 
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.netbeans.api.project.Project;
 import org.netbeans.modules.websvc.api.client.WebServicesClientSupport;
 import org.netbeans.modules.websvc.api.jaxws.client.JAXWSClientSupport;
@@ -49,13 +52,19 @@ import org.netbeans.modules.websvc.spi.client.WebServicesClientSupportImpl;
 import org.netbeans.modules.websvc.spi.jaxws.client.JAXWSClientSupportFactory;
 import org.netbeans.modules.websvc.spi.jaxws.client.JAXWSClientSupportImpl;
 import org.netbeans.spi.project.LookupProvider;
+import org.netbeans.spi.project.ui.ProjectOpenedHook;
+import org.openide.filesystems.FileObject;
 import org.openide.util.Lookup;
+import org.openide.util.RequestProcessor;
 import org.openide.util.lookup.Lookups;
 
 /** Lookup Provider for WS Support
  *
  * @author mkuchtiak
  */
+// XXX could probably be converted to use @ProjectServiceProvider instead
+// (would need to do some refactoring first)
+@LookupProvider.Registration(projectType="org-netbeans-modules-java-j2seproject")
 public class J2SEWSSupportLookupProvider implements LookupProvider {
     
     /** Creates a new instance of JaxWSLookupProvider */
@@ -65,11 +74,44 @@ public class J2SEWSSupportLookupProvider implements LookupProvider {
     public Lookup createAdditionalLookup(Lookup baseContext) {
         final Project project = baseContext.lookup(Project.class);
         JAXWSClientSupportImpl j2seJAXWSClientSupport = new J2SEProjectJAXWSClientSupport(project);
-        JAXWSClientSupport jaxWsClientSupportApi = JAXWSClientSupportFactory.createJAXWSClientSupport(j2seJAXWSClientSupport);
+        final JAXWSClientSupport jaxWsClientSupportApi = JAXWSClientSupportFactory.createJAXWSClientSupport(j2seJAXWSClientSupport);
         
         WebServicesClientSupportImpl jaxrpcClientSupport = new J2SEProjectJaxRpcClientSupport(project);
-        WebServicesClientSupport jaxRpcClientSupportApi = WebServicesClientSupportFactory.createWebServicesClientSupport(jaxrpcClientSupport);
+        final WebServicesClientSupport jaxRpcClientSupportApi = WebServicesClientSupportFactory.createWebServicesClientSupport(jaxrpcClientSupport);
         
-        return Lookups.fixed(new Object[] {jaxWsClientSupportApi,jaxRpcClientSupportApi,new J2SEProjectWSClientSupportProvider(), new JaxWsArtifactsClassPathProvider(project)});
+        ProjectOpenedHook openHook = new ProjectOpenedHook() {
+            @Override
+            protected void projectOpened() {
+                if(jaxRpcClientSupportApi.isBroken(project)) {
+                    jaxRpcClientSupportApi.showBrokenAlert(project);
+                }
+                if (jaxWsClientSupportApi.getServiceClients().size() > 0) {
+                    FileObject wsdlFolder = null;
+                    try {
+                        wsdlFolder = jaxWsClientSupportApi.getWsdlFolder(false);
+                    } catch (IOException ex) {}
+                    if (wsdlFolder == null || wsdlFolder.getParent().getFileObject("jax-ws-catalog.xml") == null) { //NOI18N
+                        RequestProcessor.getDefault().post(new Runnable() {
+                            public void run() {
+                                try {
+                                    JaxWsCatalogPanel.generateJaxWsCatalog(project, jaxWsClientSupportApi);
+                                } catch (IOException ex) {
+                                    Logger.getLogger(JaxWsCatalogPanel.class.getName()).log(Level.WARNING, "Cannot create jax-ws-catalog.xml", ex);
+                                }
+                            }
+                        });
+                    }
+
+                }
+            }
+
+            @Override
+            protected void projectClosed() {
+            }
+        };
+        return Lookups.fixed(new Object[] {
+            jaxWsClientSupportApi,
+            jaxRpcClientSupportApi,
+            openHook});
     }
 }
