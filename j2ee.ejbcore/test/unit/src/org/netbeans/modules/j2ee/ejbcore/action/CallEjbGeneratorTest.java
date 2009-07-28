@@ -97,7 +97,7 @@ public class CallEjbGeneratorTest extends TestBase {
                 referencedEjb21Module.getSources()[0].getFileObject("statelesslr/StatelessLRBean2.java"),
                 "statelesslr.StatelessLRBean2",
                 null,
-                false,
+                EjbReference.EjbRefIType.LOCAL,
                 false,
                 referencedEjb21Module.getProject()
                 );
@@ -114,10 +114,10 @@ public class CallEjbGeneratorTest extends TestBase {
         "        StatelessLRLocalHome2 rv = (StatelessLRLocalHome2)c.lookup(\"java:comp/env/StatelessLRBean2\");" + newline +
         "        return rv.create();" + newline +
         "    } catch (NamingException ne) {" + newline +
-        "        java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.SEVERE, \"exception caught\", ne);" + newline +
+        "        Logger.getLogger(getClass().getName()).log(Level.SEVERE, \"exception caught\", ne);" + newline +
         "        throw new RuntimeException(ne);" + newline +
         "    } catch (CreateException ce) {" + newline +
-        "        java.util.logging.Logger.getLogger(getClass().getName()).log(java.util.logging.Level.SEVERE, \"exception caught\", ce);" + newline +
+        "        Logger.getLogger(getClass().getName()).log(Level.SEVERE, \"exception caught\", ce);" + newline +
         "        throw new RuntimeException(ce);" + newline +
         "    }" + newline +
         "}";
@@ -148,7 +148,7 @@ public class CallEjbGeneratorTest extends TestBase {
                 referencedEjb21Module.getSources()[0].getFileObject("statelesslr/StatelessLRBean2.java"),
                 "statelesslr.StatelessLRBean2",
                 null,
-                false,
+                EjbReference.EjbRefIType.LOCAL,
                 false,
                 referencedEjb21Module.getProject()
                 );
