@@ -49,14 +49,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.prefs.Preferences;
 import org.netbeans.api.java.source.CompilationInfo;
 import org.netbeans.api.java.source.support.CaretAwareJavaSourceTaskFactory;
 import org.netbeans.modules.java.editor.semantic.ScanningCancellableTask;
 import org.netbeans.modules.java.hints.options.HintsSettings;
 import org.netbeans.modules.java.hints.spi.AbstractHint;
 import org.netbeans.modules.java.hints.spi.TreeRule;
-import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.netbeans.spi.editor.hints.ErrorDescription;
 import org.netbeans.spi.editor.hints.HintsController;
 
@@ -65,12 +63,16 @@ import org.netbeans.spi.editor.hints.HintsController;
  * @author Jan Lahoda
  */
 public class SuggestionsTask extends ScanningCancellableTask<CompilationInfo> {
+
+    private final List<ErrorDescription> result;
     
     public SuggestionsTask() {
+        result = new ArrayList<ErrorDescription>();
     }
     
     public void run(CompilationInfo info) throws Exception {
         resume();
+        result.clear();
         
         Map<Kind, List<TreeRule>> suggestions = new HashMap<Kind, List<TreeRule>>();
         
@@ -97,7 +99,6 @@ public class SuggestionsTask extends ScanningCancellableTask<CompilationInfo> {
         }
         
         int position = CaretAwareJavaSourceTaskFactory.getLastPosition(info.getFileObject());
-        List<ErrorDescription> result = new ArrayList<ErrorDescription>();
         
         if (position != (-1)) {
             TreePath tp = info.getTreeUtilities().pathFor(position);
@@ -139,5 +140,9 @@ public class SuggestionsTask extends ScanningCancellableTask<CompilationInfo> {
         
         HintsController.setErrors(info.getFileObject(), SuggestionsTask.class.getName(), result);
     }
-    
+
+    public List<ErrorDescription> getSuggestions() {
+        return result;
+    }
+
 }
