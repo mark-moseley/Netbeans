@@ -101,11 +101,13 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
      */
     static final String EA_ASSIGNED_LOADER_MODULE = "NetBeansAttrAssignedLoaderModule"; // NOI18N
 
+    private static final Logger OBJ_LOG = Logger.getLogger(DataObject.class.getName());
+
     /** all modified data objects contains DataObjects.
     * ! Use syncModified for modifications instead !*/
     private static ModifiedRegistry modified = new ModifiedRegistry();
     /** sync modified data (for modification operations) */
-    private static Set<DataObject> syncModified = Collections.synchronizedSet(modified);
+    private static final Set<DataObject> syncModified = Collections.synchronizedSet(modified);
 
     /** Modified flag */
     private boolean modif = false;
@@ -129,7 +131,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
     private static final Object listenersMethodLock = new Object();
     
     /** Lock used for ensuring there will be just one node delegate */
-    private Object nodeCreationLock = new Object();
+    private final Object nodeCreationLock = new Object();
     
     /** Lock for copy/move/rename/etc. operations */
     private static Object synchObject = new Object ();
@@ -162,6 +164,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
     * @param loader loader that created the data object
     */
     private DataObject (FileObject pf, DataObjectPool.Item item, DataLoader loader) {
+        OBJ_LOG.log(Level.FINE, "created {0}", pf); // NOI18N
         this.item = item;
         this.loader = loader;
         item.setDataObject (this);
@@ -180,11 +183,11 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
     * the original data object, it is protected.
     */
     protected void dispose () {
-        DataObjectPool.Item item = this.item;
+        DataObjectPool.Item i = item;
         
-        if (item != null) {
-            item.deregister (true);
-            item.setDataObject(null);
+        if (i != null) {
+            i.deregister (true);
+            i.setDataObject(null);
             firePropertyChange (PROP_VALID, Boolean.TRUE, Boolean.FALSE);
         }
     }
@@ -264,7 +267,11 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
     */
     public final Node getNodeDelegate () {
         if (! isValid()) {
-            Exception e = new IllegalStateException("The data object " + getPrimaryFile() + " is invalid; you may not call getNodeDelegate on it any more; see #17020 and please fix your code"); // NOI18N
+            String debugMessage = "this=" + this + " id=" + System.identityHashCode(this) + " primaryFileId=" + System.identityHashCode(this.getPrimaryFile()) + " valid=" + this.getPrimaryFile().isValid() + "\n";  //NOI18N
+            DataObject dob = DataObjectPool.getPOOL().find(getPrimaryFile());
+            debugMessage += "pool=" + dob + " id=" + System.identityHashCode(dob) + " primaryFileId=" + System.identityHashCode(dob.getPrimaryFile()) + " valid=" + dob.getPrimaryFile().isValid();  //NOI18N
+
+            Exception e = new IllegalStateException("The data object " + getPrimaryFile() + " is invalid; you may not call getNodeDelegate on it any more; see #17020 and please fix your code.\n" + debugMessage); // NOI18N
             Logger.getLogger(DataObject.class.getName()).log(Level.WARNING, null, e);
         }
         return getNodeDelegateImpl();
@@ -306,8 +313,12 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
     /** Access method for node delagate.
      * @return node delegate or null
      */
-    Node getNodeDelegateOrNull () {
+    final Node getNodeDelegateOrNull () {
         return nodeDelegate;
+    }
+
+    final void setNodeDelegate(Node n) {
+        nodeDelegate = n;
     }
 
     /** Provides node that should represent this data object.
@@ -518,6 +529,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
         return getPrimaryFile ().getName ();
     }
 
+    @Override
     public String toString () {
         return super.toString () + '[' + getPrimaryFile () + ']';
     }
@@ -655,7 +667,11 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
         // executes atomic action with renaming
         Op op = new Op();
         op.newName = name;
-        invokeAtomicAction (getPrimaryFile().getParent(), op, synchObject());
+        FileObject target = getPrimaryFile().getParent();
+        if (target == null) {
+            target = getPrimaryFile();
+        }
+        invokeAtomicAction (target, op, synchObject());
 
         if (op.oldName.equals (op.newName)) {
             return; // the new name is the same as the old one
@@ -1071,6 +1087,32 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
         return NbBundle.getMessage (DataObject.class, name);
     }
     
+    /** Factory interface for converting file object to data objects. Read
+     * more about the layer based registrations in 
+     * <a href="@TOP@/org/openide/loaders/doc-files/api.html#register"/>separate document</a>.
+     * @since 7.0
+     */
+    public static interface Factory {
+        /** Find a data object appropriate to the given file object--the meat of this class.
+        * The loader can add all files it has recognized into the <CODE>recognized</CODE>
+        * buffer. Then all these files will be excluded from further processing.
+        *
+        * @param fo file object to recognize
+        * @param recognized recognized file buffer
+        * @exception DataObjectExistsException if the data object for the
+        *    primary file already exists
+        * @exception IOException if the object is recognized but cannot be created
+        * @exception InvalidClassException if the class is not instance of
+        *    {@link #getRepresentationClass}
+        *
+        * @return suitable data object or <CODE>null</CODE> if the handler cannot
+        *   recognize this object (or its group)
+        * @see DataLoader
+        */
+        public DataObject findDataObject(FileObject fo, Set<? super FileObject> recognized)
+        throws IOException;
+    }
+    
     /** Interface for objects that can contain other data objects.
      * For example DataFolder and DataShadow implement this interface
      * to allow others to access the contained objects in uniform maner
@@ -1137,6 +1179,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
 
     private static final class ModifiedRegistry extends HashSet<DataObject> {
         static final long serialVersionUID =-2861723614638919680L;
+        private static final Logger REGLOG = Logger.getLogger("org.openide.loaders.DataObject.Registry"); // NOI18N
         
         private final ChangeSupport cs = new ChangeSupport(this);
 
@@ -1161,6 +1204,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
         @Override
         public boolean add (DataObject o) {
             boolean result = super.add(o);
+            REGLOG.log(Level.FINER, "Data Object {0} modified, change {1}", new Object[] { o, result }); // NOI18N
             if (result) {
                 cs.fireChange();
             }
@@ -1170,6 +1214,7 @@ implements Node.Cookie, Serializable, HelpCtx.Provider, Lookup.Provider {
         @Override
         public boolean remove (Object o) {
             boolean result = super.remove(o);
+            REGLOG.log(Level.FINER, "Data Object {0} unmodified, change {1}", new Object[] { o, result }); // NOI18N
             if (result) {
                 cs.fireChange();
             }
