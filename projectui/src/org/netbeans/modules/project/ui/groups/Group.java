@@ -156,6 +156,10 @@ public abstract class Group {
         if (nue != null) {
             NODE.put(KEY_ACTIVE, nue.id);
         } else {
+            if (old == null) {
+                //#141403
+                return;
+            }
             NODE.remove(KEY_ACTIVE);
         }
         // OK if g == old; still want to fix open projects.
@@ -367,14 +371,17 @@ public abstract class Group {
         };
     }
 
+    @Override
     public int hashCode() {
         return id.hashCode();
     }
 
+    @Override
     public boolean equals(Object obj) {
         return obj instanceof Group && id.equals(((Group) obj).id);
     }
 
+    @Override
     public String toString() {
         return toString(false);
     }
