@@ -3,7 +3,7 @@
  * and open the template in the editor.
  */
 
-package testGenerateJavaEE50;
+package testGenerateJavaEE60;
 
 import javax.ejb.Stateful;
 
