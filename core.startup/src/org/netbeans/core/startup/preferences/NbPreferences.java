@@ -42,11 +42,11 @@
 package org.netbeans.core.startup.preferences;
 
 import java.io.IOException;
-import java.util.Properties;
 import java.util.prefs.AbstractPreferences;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import org.openide.ErrorManager;
+import org.openide.util.EditableProperties;
 import org.openide.util.RequestProcessor;
 
 /**
@@ -57,19 +57,23 @@ public abstract class NbPreferences extends AbstractPreferences {
     private static Preferences USER_ROOT;
     private static Preferences SYSTEM_ROOT;
     
-    /*private*/Properties properties;
+    /*private*/EditableProperties properties;
     /*private*/FileStorage fileStorage;
     
     private static final RequestProcessor RP = new RequestProcessor();
     /*private*/final RequestProcessor.Task flushTask = RP.create(new Runnable() {
         public void run() {
-            synchronized(lock) {
-                try {
-                    flushSpi();
-                } catch (BackingStoreException ex) {
-                    ErrorManager.getDefault().notify(ex);
+            fileStorage.runAtomic(new Runnable() {
+                public void run() {
+                    synchronized (lock) {
+                        try {
+                            flushSpi();
+                        } catch (BackingStoreException ex) {
+                            ErrorManager.getDefault().notify(ex);
+                        }
+                    }
                 }
-            }
+            });
         }
     },true);
     
@@ -103,7 +107,7 @@ public abstract class NbPreferences extends AbstractPreferences {
     }
         
     protected final String getSpi(String key) {
-        return (String)properties().getProperty(key);
+        return properties().getProperty(key);
     }
     
     protected final String[] childrenNamesSpi() throws BackingStoreException {
@@ -112,7 +116,7 @@ public abstract class NbPreferences extends AbstractPreferences {
     }
     
     protected final String[] keysSpi() throws BackingStoreException {
-        return (String[])properties().keySet().toArray(new String[0]);
+        return properties().keySet().toArray(new String[0]);
     }
     
     protected final void putSpi(String key, String value) {
@@ -177,9 +181,10 @@ public abstract class NbPreferences extends AbstractPreferences {
         }
     }
     
-    Properties properties()  {
+    EditableProperties properties()  {
         if (properties == null) {
-            properties = new Properties(/*loadDefaultProperties()*/);
+            properties = new EditableProperties(true);
+            //properties.putAll(loadDefaultProperties());
             try {
                 properties().putAll(fileStorage.load());
             } catch (IOException ex) {
@@ -189,7 +194,7 @@ public abstract class NbPreferences extends AbstractPreferences {
         return properties;
     }
 
-    public final void removeNode() throws BackingStoreException {
+    public @Override final void removeNode() throws BackingStoreException {
         if (fileStorage.isReadOnly()) {
             throw new BackingStoreException("Unsupported operation: read-only storage");//NOI18N
         } else {
@@ -198,7 +203,7 @@ public abstract class NbPreferences extends AbstractPreferences {
         }
     }
     
-    public final void flush() throws BackingStoreException {
+    public @Override final void flush() throws BackingStoreException {
         if (fileStorage.isReadOnly()) {
             throw new BackingStoreException("Unsupported operation: read-only storage");//NOI18N
         } else {
@@ -206,7 +211,7 @@ public abstract class NbPreferences extends AbstractPreferences {
         }
     }
     
-    public final void sync() throws BackingStoreException {
+    public @Override final void sync() throws BackingStoreException {
         if (fileStorage.isReadOnly()) {
             throw new BackingStoreException("Unsupported operation: read-only storage");//NOI18N
         } else {
@@ -260,7 +265,8 @@ public abstract class NbPreferences extends AbstractPreferences {
         boolean existsNode();
         void removeNode() throws IOException;
         void markModified();
-        Properties load() throws IOException;
-        void save(final Properties properties) throws IOException;
+        EditableProperties load() throws IOException;
+        void save(final EditableProperties properties) throws IOException;
+        void runAtomic(Runnable run);
     }
 }
