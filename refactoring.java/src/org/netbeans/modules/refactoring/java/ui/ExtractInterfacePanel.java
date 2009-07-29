@@ -73,8 +73,8 @@ import org.netbeans.api.java.source.ElementHandle;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.TreePathHandle;
 import org.netbeans.api.java.source.TypeMirrorHandle;
-import org.netbeans.api.java.source.UiUtils;
-import org.netbeans.api.java.source.UiUtils.PrintPart;
+import org.netbeans.api.java.source.ui.ElementHeaders;
+import org.netbeans.api.java.source.ui.ElementIcons;
 import org.netbeans.modules.refactoring.java.api.ExtractInterfaceRefactoring;
 import org.netbeans.modules.refactoring.spi.ui.CustomRefactoringPanel;
 import org.openide.filesystems.FileObject;
@@ -174,7 +174,6 @@ public final class ExtractInterfacePanel extends JPanel implements CustomRefacto
         List<ElementHandle<ExecutableElement>> methods = new ArrayList<ElementHandle<ExecutableElement>>();
         List<TypeMirrorHandle<TypeMirror>> implementz = new ArrayList<TypeMirrorHandle<TypeMirror>>();
         
-        List<TreePathHandle> list = new ArrayList<TreePathHandle>();
         // go through all rows of a table and collect selected members
         for (int i = 0; i < members.length; i++) {
             if (members[i][0].equals(Boolean.TRUE)) {
@@ -308,7 +307,7 @@ public final class ExtractInterfacePanel extends JPanel implements CustomRefacto
 
                     }, true);
             } catch (IOException ex) {
-                new IllegalStateException(ex);
+                throw new IllegalStateException(ex);
             }
         }
         
@@ -323,7 +322,7 @@ public final class ExtractInterfacePanel extends JPanel implements CustomRefacto
                 result.add(new ExtractInterfaceInfo<TypeMirrorHandle>(
                         TypeMirrorHandle.create(implMirror),
                         "implements " + implTree.toString(), // NOI18N
-                        UiUtils.getElementIcon(ElementKind.INTERFACE, null),
+                        ElementIcons.getElementIcon(ElementKind.INTERFACE, null),
                         implTree.toString(),
                         Group.IMPLEMENTS
                         ));
@@ -340,13 +339,13 @@ public final class ExtractInterfacePanel extends JPanel implements CustomRefacto
                     continue;
                 
                 Group group;
-                String format = PrintPart.NAME;
+                String format = ElementHeaders.NAME;
                 if (memberElm.getKind() == ElementKind.FIELD) {
                     if (!mods.contains(Modifier.STATIC) || !mods.contains(Modifier.FINAL)
                             || ((VariableTree) member).getInitializer() == null)
                         continue;
                     group = Group.FIELD;
-                    format += " : " + PrintPart.TYPE; // NOI18N
+                    format += " : " + ElementHeaders.TYPE; // NOI18N
 // XXX see ExtractInterfaceRefactoringPlugin class description
 //                } else if (member.getKind() == Tree.Kind.CLASS) {
 //                    if (!mods.contains(Modifier.STATIC))
@@ -356,14 +355,14 @@ public final class ExtractInterfacePanel extends JPanel implements CustomRefacto
                     if (mods.contains(Modifier.STATIC))
                         continue;
                     group = Group.METHOD;
-                    format += PrintPart.PARAMETERS + " : " + PrintPart.TYPE; // NOI18N
+                    format += ElementHeaders.PARAMETERS + " : " + ElementHeaders.TYPE; // NOI18N
                 } else {
                     continue;
                 }
                 result.add(new ExtractInterfaceInfo<ElementHandle>(
                         ElementHandle.create(memberElm),
-                        UiUtils.getHeader(memberElm, javac, format),
-                        UiUtils.getElementIcon(memberElm.getKind(), mods),
+                        ElementHeaders.getHeader(memberElm, javac, format),
+                        ElementIcons.getElementIcon(memberElm.getKind(), mods),
                         memberElm.getSimpleName().toString(),
                         group
                         ));
