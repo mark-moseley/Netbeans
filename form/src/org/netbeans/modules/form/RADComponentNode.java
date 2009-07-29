@@ -166,7 +166,7 @@ public class RADComponentNode extends FormNode
 
     @Override
     public HelpCtx getHelpCtx() {
-        return new HelpCtx("gui.component-inspector"); // NOI18N
+        return new HelpCtx("gui.components.editing"); // NOI18N
     }
 
     @Override
@@ -649,7 +649,7 @@ public class RADComponentNode extends FormNode
                 comps = null;
             
             Node[] nodes = new Node[comps != null ? comps.length : 0];
-            for (int i = 0; i < comps.length; i++)
+            for (int i = 0; i < nodes.length; i++)
                 nodes[i] = comps[i].getNodeReference();
             
             return nodes;
