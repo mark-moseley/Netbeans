@@ -48,19 +48,20 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.swing.event.DocumentEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import org.netbeans.api.editor.fold.Fold;
 import org.netbeans.api.editor.fold.FoldHierarchyEvent;
-import org.netbeans.api.editor.fold.FoldHierarchyListener;
 import org.netbeans.api.editor.fold.FoldStateChange;
-import org.netbeans.api.editor.fold.FoldType;
 import org.netbeans.api.editor.fold.FoldUtilities;
-import org.netbeans.modules.editor.fold.FoldUtilitiesImpl;
 import org.netbeans.spi.editor.fold.FoldHierarchyTransaction;
 import org.netbeans.spi.editor.fold.FoldManager;
 import org.openide.ErrorManager;
+import org.openide.filesystems.FileObject;
+import org.openide.loaders.DataObject;
 
 /**
  * Class encapsulating a modification
@@ -87,6 +88,8 @@ import org.openide.ErrorManager;
  */
 
 public final class FoldHierarchyTransactionImpl {
+
+    private static final Logger LOG = Logger.getLogger(FoldHierarchyTransactionImpl.class.getName());
     
     private static final boolean debug
         = Boolean.getBoolean("netbeans.debug.editor.fold");
@@ -97,7 +100,9 @@ public final class FoldHierarchyTransactionImpl {
         = new FoldStateChange[0];
     
     private static final int[] EMPTY_INT_ARRAY = new int[0];
-    
+
+    // The max number of nested folds
+    private static final int MAX_NESTING_LEVEL = 1000;
     
     private FoldHierarchyTransaction transaction;
 
@@ -441,11 +446,15 @@ public final class FoldHierarchyTransactionImpl {
 
         } else { // not present in hierarchy - must be blocked (or error)
             if (!execution.isBlocked(fold)) { // not blocked i.e. already removed
-                throw new IllegalStateException("Fold already removed: " + fold); // NOI18N
+                if (LOG.isLoggable(Level.FINE)) {
+                    LOG.fine("Fold already removed: " + fold + '\n'); // NOI18N
+                }
+                return;
+            } else { // Blocked fold (not present in hierarchy) -> just unblock it
+                execution.unmarkBlocked(fold);
+                // If the fold was blocking other folds then unblock them here
+                unblockBlocked(fold);
             }
-            execution.unmarkBlocked(fold);
-            // If the fold was blocking other folds then unblock them here
-            unblockBlocked(fold);
         }
         
         processUnblocked(); // attempt to reinsert unblocked folds
@@ -495,7 +504,7 @@ public final class FoldHierarchyTransactionImpl {
             /*DEBUG*/System.err.println("addFold: " + fold); // NOI18N
         }
 
-        return addFold(fold, null);
+        return addFold(fold, null, 0);
     }
     
     /**
@@ -507,11 +516,12 @@ public final class FoldHierarchyTransactionImpl {
      *  The explicit passing of root fold can be used to force to ignore the hints.
      * @return true if the fold was successfully added or false if it became blocked.
      */
-    private boolean addFold(Fold fold, Fold parentFold) {
+    private boolean addFold(Fold fold, Fold parentFold, int level) {
         int foldStartOffset = fold.getStartOffset();
         int foldEndOffset = fold.getEndOffset();
         int foldPriority = getOperation(fold).getPriority();
-        
+        StringBuffer sbDebug = new StringBuffer();
+        sbDebug.append("\n addFold1 ENTER");
         int index;
         boolean useLast; // use hints from lastOperationFold and lastOperationIndex
         if (parentFold == null) { // attempt to guess
@@ -588,8 +598,62 @@ public final class FoldHierarchyTransactionImpl {
         int[] prevOverlapIndexes;
         if (prevFold != null && foldStartOffset < prevFold.getEndOffset()) { // overlap
             if (foldEndOffset <= prevFold.getEndOffset()) { // fold fully nested
-                // Nest into prevFold
-                return addFold(fold, prevFold);
+                if (level < MAX_NESTING_LEVEL) {
+                    if (getManager(fold) == getManager(prevFold) &&
+                        fold.getStartOffset() == prevFold.getStartOffset() &&
+                        fold.getEndOffset() == prevFold.getEndOffset())
+                    {
+                        if (LOG.isLoggable(Level.WARNING)) {
+                            StringBuilder sb = new StringBuilder();
+                            sb.append("Adding a fold that is identical with another previously added fold " + //NOI18N
+                                "from the same FoldManager is not allowed.\n"); //NOI18N
+                            sb.append("Existing fold: "); //NOI18N
+                            sb.append(prevFold.toString());
+                            sb.append("; FoldManager: ").append(getManager(prevFold)); //NOI18N
+                            sb.append("\n"); //NOI18N
+                            sb.append("     New fold: "); //NOI18N
+                            sb.append(fold.toString());
+                            sb.append("; FoldManager: ").append(getManager(fold)); //NOI18N
+                            sb.append("\n"); //NOI18N
+
+                            LOG.warning(sb.toString());
+                        }
+                    } else {
+                        // Nest into prevFold
+                        return addFold(fold, prevFold, level + 1);
+                    }
+                } else {
+                    if (LOG.isLoggable(Level.WARNING)) {
+                        StringBuilder sb = new StringBuilder();
+
+                        Document doc = getOperation(prevFold).getDocument();
+                        sb.append("Too many nested folds in "); //NOI18N
+                        sb.append(doc.getClass().getName());
+                        sb.append("@"); //NOI18N
+                        sb.append(Integer.toHexString(System.identityHashCode(doc)));
+                        sb.append("['").append((String)doc.getProperty("mimeType")).append("', "); //NOI18N
+                        sb.append(findFilePath(doc)).append("]\n"); //NOI18N
+
+                        sb.append("Dumping the nesting folds:\n"); //NOI18N
+                        for(Fold f = prevFold; f != null; f = f.getParent()) {
+                            sb.append(f.toString());
+                            sb.append("; FoldManager: ").append(getManager(f));
+                            sb.append("\n"); //NOI18N
+                        }
+
+                        boolean assertionsOn = false;
+                        assert assertionsOn = true;
+                        if (assertionsOn) {
+                            LOG.log(Level.WARNING, null, new Throwable(sb.toString()));
+                        } else {
+                            LOG.warning(sb.toString());
+                        }
+                    }
+                }
+
+                blocked = true;
+                addFoldBlock = prevFold;
+                prevOverlapIndexes = null;
                 
             } else { // fold overlaps with prevFold
                 if (foldPriority > getOperation(prevFold).getPriority()) { // can replace
@@ -620,10 +684,10 @@ public final class FoldHierarchyTransactionImpl {
             prevOverlapIndexes = null;
         }
 
-
         if (!blocked) {
             // Which fold will be the next important for the insert (possibly overlapped)
             int nextIndex = index;
+            sbDebug.append("\n addFold2 nextIndex:" + nextIndex + " index:" + index);
             // Non-null in case of active overlapping for foldEndOffset
             int[] nextOverlapIndexes = null;
             if (nextFold != null) { // next fold exists
@@ -637,6 +701,8 @@ public final class FoldHierarchyTransactionImpl {
                         //  in multiple empty folds (same like in findFoldInsertIndex())
                         nextIndex = FoldUtilitiesImpl.findFoldStartIndex(parentFold,
                         foldEndOffset, false);
+                        sbDebug.append("\n addFold3 nextIndex = FoldUtilitiesImpl.findFoldStartIndex(parentFold, foldEndOffset, false)"
+                        + " nextIndex:" + nextIndex + " index:" + index);
 
                         // nextIndex should not be -1 - otherwise should not reach this code
                         nextFold = parentFold.getFold(nextIndex);
@@ -662,6 +728,7 @@ public final class FoldHierarchyTransactionImpl {
 
                     } else { // fold ends after bounds of nextFold but prior start of next fold
                         nextIndex++; // insert clearly after the nextFold
+                        sbDebug.append("\n addFold4 nextIndex++ nextIndex:" + nextIndex + " index:" + index);
                     }
 
                 } // fold ends before start offset of nextFold => insert normally later
@@ -684,11 +751,14 @@ public final class FoldHierarchyTransactionImpl {
                             prevOverlapIndexes, fold);
                         // Must shift nextIndex by number of replaced children
                         nextIndex += prevFold.getFoldCount();
+                        sbDebug.append("\n addFold5 nextIndex += prevFold.getFoldCount()"
+                        + " nextIndex:" + nextIndex + " index:" + index);
                     }
 
                     removeFoldFromHierarchy(parentFold, index - 1, fold);
                     index += replaceIndexShift - 1; // -1 for removed prevFold
                     nextIndex--; // -1 for removed prevFold
+                    sbDebug.append("\n addFold6 nextIndex-- nextIndex:" + nextIndex + " index:" + index);
                 }
                 
                 if (nextOverlapIndexes != null) {
@@ -702,8 +772,16 @@ public final class FoldHierarchyTransactionImpl {
                     
                     removeFoldFromHierarchy(parentFold, nextIndex, fold);
                     nextIndex += replaceIndexShift;
+                    sbDebug.append("\n addFold7 nextIndex += replaceIndexShift"
+                    + " nextIndex:" + nextIndex
+                    + " replaceIndexShift:" + replaceIndexShift + " index:" + index);
                 }
-                
+                sbDebug.append("\n addFold8 INVOKE ApiPackageAccessor.get().foldExtractToChildren"
+                + " index:" + index + " nextIndex:" + nextIndex + " diff:" + (nextIndex - index)
+                + " parentFold.getFoldCount():" + parentFold.getFoldCount());
+                System.out.println(sbDebug.toString());
+                assert (nextIndex - index) >= 0 : "Negative length." + sbDebug.toString();
+                assert (nextIndex <= parentFold.getFoldCount()) : "End index exceeds children list size." + sbDebug.toString();
                 ApiPackageAccessor.get().foldExtractToChildren(parentFold, index, nextIndex - index, fold);
                 
                 // Update affected offsets
@@ -724,6 +802,19 @@ public final class FoldHierarchyTransactionImpl {
         lastOperationIndex = index + 1;
         
         return !blocked;
+    }
+    
+    private String findFilePath(Document doc) {
+        Object o = doc.getProperty(Document.StreamDescriptionProperty);
+        if (o instanceof FileObject) {
+            return ((FileObject) o).getPath();
+        } else if (o instanceof DataObject) {
+            return ((DataObject) o).getPrimaryFile().getPath();
+        } else if (o != null) {
+            return o.getClass().getName() + "@" + Integer.toHexString(System.identityHashCode(o)); //NOI18N
+        } else {
+            return "null"; //NOI18N
+        }
     }
     
     /**
@@ -877,7 +968,7 @@ public final class FoldHierarchyTransactionImpl {
                         unblockedFoldMaxPriority = -1;
 
                         // Attempt to reinsert the fold - random order - use root fold
-                        addFold(unblocked, rootFold);
+                        addFold(unblocked, rootFold, 0);
 
                         if (unblockedFoldMaxPriority >= priority) {
                             throw new IllegalStateException("Folds removed with priority=" // NOI18N
