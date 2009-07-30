@@ -44,6 +44,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.SocketException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -115,7 +116,7 @@ public abstract class DbgpMessage {
         myNode = node;
     }
 
-    public static DbgpMessage create( InputStream inputStream ) {
+    public static DbgpMessage create( InputStream inputStream ) throws SocketException{
         
         try {
             int size = getDataSize(inputStream);
@@ -129,8 +130,9 @@ public abstract class DbgpMessage {
             Node node = getNode( bytes );
             logDebugInfo(bytes);
             return create( node );
-        }
-        catch (IOException e) {
+        } catch (SocketException e) {
+            throw e;
+        } catch (IOException e) {
             log(e);
         }
         return null;
@@ -299,7 +301,6 @@ public abstract class DbgpMessage {
             return Integer.parseInt(str);
         }
         catch( NumberFormatException e ) {
-            assert false;
             return -1;
         }
     }
@@ -309,7 +310,9 @@ public abstract class DbgpMessage {
             return null;
         }
         try {
-            Document doc = BUILDER.parse( new ByteArrayInputStream( bytes ) );
+            InputSource is = new InputSource(new ByteArrayInputStream( bytes ));
+            is.setEncoding("UTF-8");
+            Document doc = BUILDER.parse( is );
             return doc.getDocumentElement();
         }
         catch (SAXException e) {
