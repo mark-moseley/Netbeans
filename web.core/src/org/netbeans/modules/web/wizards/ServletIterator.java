@@ -1,7 +1,7 @@
 /*
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS HEADER.
  *
- * Copyright 1997-2007 Sun Microsystems, Inc. All rights reserved.
+ * Copyright 1997-2009 Sun Microsystems, Inc. All rights reserved.
  *
  * The contents of this file are subject to the terms of either the GNU
  * General Public License Version 2 only ("GPL") or the Common
@@ -24,7 +24,7 @@
  * Contributor(s):
  *
  * The Original Software is NetBeans. The Initial Developer of the Original
- * Software is Sun Microsystems, Inc. Portions Copyright 1997-2007 Sun
+ * Software is Sun Microsystems, Inc. Portions Copyright 1997-2009 Sun
  * Microsystems, Inc. All Rights Reserved.
  *
  * If you wish your version of this file to be governed by only the CDDL
@@ -59,108 +59,103 @@ import org.openide.loaders.DataObject;
 import org.openide.loaders.TemplateWizard;
 import org.openide.util.NbBundle;
 import org.openide.filesystems.FileObject;
-
 import org.netbeans.api.project.Project;
-
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.j2ee.common.dd.DDHelper;
+import org.netbeans.modules.j2ee.core.api.support.classpath.ContainerClassPathModifier;
 import org.netbeans.modules.web.core.Util;
 import org.netbeans.spi.java.project.support.ui.templates.JavaTemplates;
 import org.openide.util.HelpCtx;
 
-/** A template wizard iterator for new servlets, filters and
- * listeners. 
- *
+/**
+ * A template wizard iterator for new servlets, filters and listeners.
+ * 
  * @author radim.kubacki@sun.com
  * @author ana.von.klopp@sun.com
  * @author milan.kuchtiak@sun.com
  */
 
-public class ServletIterator implements TemplateWizard.Iterator {
+public class ServletIterator implements TemplateWizard.AsynchronousInstantiatingIterator {
     
     private static final long serialVersionUID = -4147344271705652643L;
-
-    private static final boolean debug = false; 
 
     private transient FileType fileType; 
     private transient Evaluator evaluator = null; 
     private transient DeployData deployData = null; 
-
     private transient int index;
     private transient WizardDescriptor.Panel[] panels;
     private transient TemplateWizard wizard;
-    private transient ServletPanel servletPanel;
     private transient WizardDescriptor.Panel customPanel;
 
-    private ServletIterator(FileType fileType) { 
-	this.fileType = fileType; 
-    } 
-
-    public static ServletIterator createServletIterator() { 
-	return new ServletIterator(FileType.SERVLET); 
-    } 
-
-    public static ServletIterator createFilterIterator() { 
-	return new ServletIterator(FileType.FILTER); 
+    private ServletIterator(FileType fileType) {
+        this.fileType = fileType;
     }
 
-    public void initialize (TemplateWizard wizard) {
-        
-        this.wizard = wizard;
+    public static ServletIterator createServletIterator() {
+        return new ServletIterator(FileType.SERVLET);
+    }
+
+    public static ServletIterator createFilterIterator() {
+        return new ServletIterator(FileType.FILTER);
+    }
+
+    public void initialize(WizardDescriptor wiz) {
+        this.wizard = (TemplateWizard) wiz;
         index = 0;
 
-	if(fileType.equals(FileType.SERVLET) ||
-	   fileType.equals(FileType.FILTER)) {
-	    deployData = new ServletData(fileType);
-	    evaluator = new TargetEvaluator(fileType, deployData); 
-	}
-            Project project = Templates.getProject( wizard );
-            DataFolder targetFolder=null;
-            try {
-                targetFolder = wizard.getTargetFolder();
-            } catch (IOException ex) {
-                targetFolder = DataFolder.findFolder(project.getProjectDirectory());
+        if (fileType.equals(FileType.SERVLET) || fileType.equals(FileType.FILTER)) {
+            deployData = new ServletData(fileType);
+            if (Utilities.isJavaEE6(wizard)) {
+                deployData.setMakeEntry(false);
             }
-	    evaluator.setInitialFolder(targetFolder,project); 
+            evaluator = new TargetEvaluator(fileType, deployData);
+        }
+
+        Project project = Templates.getProject(wizard);
+        DataFolder targetFolder=null;
+        try {
+            targetFolder = wizard.getTargetFolder();
+        }
+        catch (IOException ex) {
+            targetFolder = DataFolder.findFolder(project.getProjectDirectory());
+        }
+        evaluator.setInitialFolder(targetFolder,project); 
         
-	if(fileType == FileType.SERVLET) { 
-	    panels = new WizardDescriptor.Panel[] {
-                //wizard.targetChooser (),
-                new FinishableProxyWizardPanel(
-                        createPackageChooserPanel(wizard,null),
-                        new HelpCtx(ServletIterator.class.getName() + "." + fileType)),    // #114487
-		ServletPanel.createServletPanel((TargetEvaluator)evaluator, wizard) 
-	    };
-	}
-	else if(fileType == FileType.FILTER) {
+        if (fileType == FileType.SERVLET) {
+            panels = new WizardDescriptor.Panel[]{
+                        new FinishableProxyWizardPanel(
+                        createPackageChooserPanel(wizard, null),
+                        new HelpCtx(ServletIterator.class.getName() + "." + fileType)), // #114487
+                        ServletPanel.createServletPanel((TargetEvaluator) evaluator, wizard)
+                    };
+        } else if (fileType == FileType.FILTER) {
             customPanel = new WrapperSelection(wizard);
-	    panels = new WizardDescriptor.Panel[] {
-                //wizard.targetChooser (),
-                createPackageChooserPanel(wizard,customPanel),
-		servletPanel=ServletPanel.createServletPanel((TargetEvaluator)evaluator, wizard), 
-		ServletPanel.createFilterPanel((TargetEvaluator)evaluator, wizard)
-	    };
-	}
+            panels = new WizardDescriptor.Panel[]{
+                        createPackageChooserPanel(wizard, customPanel),
+                        ServletPanel.createServletPanel((TargetEvaluator) evaluator, wizard),
+                        ServletPanel.createFilterPanel((TargetEvaluator) evaluator, wizard)
+                    };
+        }
         
         // Creating steps.
-        Object prop = wizard.getProperty ("WizardPanel_contentData"); // NOI18N
+        Object prop = wizard.getProperty (WizardDescriptor.PROP_CONTENT_DATA); // NOI18N
         String[] beforeSteps = null;
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[])prop;
         }
-        String[] steps = Utilities.createSteps (beforeSteps, panels);
+        String[] steps = Utilities.createSteps(beforeSteps, panels);
         
         for (int i = 0; i < panels.length; i++) { 
-            JComponent jc = (JComponent)panels[i].getComponent ();
+            JComponent jc = (JComponent)panels[i].getComponent();
             if (steps[i] == null) {
                 // Default step name to component name of panel.
                 // Mainly useful for getting the name of the target
                 // chooser to appear in the list of steps.
-                steps[i] = jc.getName ();
+                steps[i] = jc.getName();
             }
-	    jc.putClientProperty ("WizardPanel_contentSelectedIndex", // NOI18N
-				  new Integer (i)); 
-	    jc.putClientProperty ("WizardPanel_contentData", steps); // NOI18N
+	    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(i));
+	    jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
 	}	
     }
 
@@ -180,9 +175,7 @@ public class ServletIterator implements TemplateWizard.Iterator {
         }
     }
     
-    public Set instantiate(TemplateWizard wizard) throws IOException {
-
-	if(debug) log("::instantiate()"); 
+    public Set<DataObject> instantiate() throws IOException {
 	// Create the target folder. The next piece is independent of
 	// the type of file we create, and it should be moved to the
 	// evaluator class instead. The exact same process
@@ -191,39 +184,63 @@ public class ServletIterator implements TemplateWizard.Iterator {
 
 	// ------------------------- FROM HERE -------------------------
         
-        FileObject dir = Templates.getTargetFolder( wizard );
-        DataFolder df = DataFolder.findFolder( dir );
+        FileObject dir = Templates.getTargetFolder(wizard);
+        DataFolder df = DataFolder.findFolder(dir);
 
-        FileObject template = Templates.getTemplate( wizard );
+        FileObject template = Templates.getTemplate(wizard);
         if (FileType.FILTER.equals(fileType) && ((WrapperSelection)customPanel).isWrapper()) {
-            template = Templates.getTemplate( wizard );
+            template = Templates.getTemplate(wizard);
             FileObject templateParent = template.getParent();
             template = templateParent.getFileObject("AdvancedFilter","java"); //NOI18N
         }
         
-        HashMap <String, String> templateParameters =  new HashMap<String, String>();
+        HashMap<String, String> templateParameters = new HashMap<String, String>();
         templateParameters.put("servletEditorFold", NbBundle.getMessage(ServletIterator.class, "MSG_ServletEditorFold")); //NOI18N
-        DataObject dTemplate = DataObject.find( template );                
-        DataObject dobj = dTemplate.createFromTemplate( df, Templates.getTargetName( wizard ), templateParameters  );
 
-	if(debug) log("\topened file"); //NOI18N
+        if (!deployData.makeEntry() && Utilities.isJavaEE6(wizard)) {
+            if (fileType == FileType.SERVLET) {
+                AnnotationGenerator.webServlet((ServletData)deployData, templateParameters);
+            }
+            if (fileType == FileType.FILTER) {
+                AnnotationGenerator.webFilter((ServletData)deployData, templateParameters);
+            }
+        }
 
-	// If the user does not want to add the file to the
-	// deployment descriptor, return
-	if(!deployData.makeEntry()) { 
-	    return Collections.singleton(dobj);
-	} 
+        DataObject dTemplate = DataObject.find(template);                
+        DataObject dobj = dTemplate.createFromTemplate(df, Templates.getTargetName(wizard), templateParameters);
 
-	TargetEvaluator te = (TargetEvaluator)evaluator; 
+        //#150274
+        Project project = Templates.getProject(wizard);
+        ContainerClassPathModifier modifier = project.getLookup().lookup(ContainerClassPathModifier.class);
+        if (modifier != null) {
+            modifier.extendClasspath(dobj.getPrimaryFile(), new String[] {
+                ContainerClassPathModifier.API_SERVLET
+            });
+        }
 
-	if(debug) log("\tcreate dd entries"); //NOI18N
-	
+	    // If the user does not want to add the file to the
+        // deployment descriptor, return
+        if (!deployData.makeEntry()) {
+            return Collections.singleton(dobj);
+        }
+
+        if (!deployData.hasDD()) {
+            // Create web.xml
+            WebModule wm = WebModule.getWebModule(project.getProjectDirectory());
+            if (wm != null) {
+                FileObject webInf = wm.getWebInf();
+                if (webInf != null){
+                    FileObject webXml = DDHelper.createWebXml(wm.getJ2eeProfile(), webInf);
+                    deployData.setWebApp(webXml);
+                }
+            }
+        }
+
         // needed to be able to finish ServletWizard from the second panel
         if (deployData.getClassName().length()==0) {
             String targetName = wizard.getTargetName();
             FileObject targetFolder = Templates.getTargetFolder(wizard);
             String packageName = null;
-            Project project = Templates.getProject( wizard );
             Sources sources = ProjectUtils.getSources(project);
             SourceGroup[] groups = sources.getSourceGroups(JavaProjectConstants.SOURCES_TYPE_JAVA);
             for (int i = 0; i < groups.length && packageName == null; i++) {
@@ -242,48 +259,41 @@ public class ServletIterator implements TemplateWizard.Iterator {
         } 
         deployData.createDDEntries();
 
-	if(debug) log("\tURI param"); //NOI18N
         return Collections.singleton(dobj);
     } 
 
-    private void log(String s) { 
-	System.out.println("ServletIterator" + s); 
-    } 
-    
 
-    public void uninitialize (TemplateWizard wizard) {
+    public void uninitialize(WizardDescriptor wizard) {
         this.wizard = null;
         panels = null;
     }
 
     // --- WizardDescriptor.Iterator METHODS: ---
     
-    public String name () {
+    public String name() {
         return NbBundle.getMessage (ServletIterator.class, "TITLE_x_of_y",
-        new Integer (index + 1), new Integer (panels.length));
+            index + 1, panels.length);
     }
     
     // If the user has elected to place the file in a regular
     // directory (not a web module) then we don't show the DD info
     // panel. 
-    public boolean hasNext () {
-	if(debug) log("::hasNext()"); //NOI18N
-	if(debug) log("\tindex is " + index); //NOI18N
-	return index < panels.length - 1 && deployData.hasDD();
+    public boolean hasNext() {
+        return index < panels.length - 1 && (deployData.hasDD() || Utilities.isJavaEE6(wizard));
     }
     
-    public boolean hasPrevious () {
+    public boolean hasPrevious() {
         return index > 0;
     }
-    public void nextPanel () {
-        if (! hasNext ()) throw new NoSuchElementException ();
+    public void nextPanel() {
+        if (!hasNext()) throw new NoSuchElementException();
         index++;
     }
-    public void previousPanel () {
-        if (! hasPrevious ()) throw new NoSuchElementException ();
+    public void previousPanel() {
+        if (!hasPrevious()) throw new NoSuchElementException();
         index--;
     }
-    public WizardDescriptor.Panel current () {
+    public WizardDescriptor.Panel current() {
         return panels[index];
     }
     
@@ -294,38 +304,7 @@ public class ServletIterator implements TemplateWizard.Iterator {
     //    DD entry, disable second DD panel for Filters. 
 
     // If nothing unusual changes in the middle of the wizard, simply:
-    public final void addChangeListener (ChangeListener l) {}
-    public final void removeChangeListener (ChangeListener l) {}
-    // If something changes dynamically (besides moving between panels),
-    // e.g. the number of panels changes in response to user input, then
-    // uncomment the following and call when needed:
-    // fireChangeEvent ();
-    /*
-    private transient Set listeners = new HashSet (1); // Set<ChangeListener>
-    public final void addChangeListener (ChangeListener l) {
-        synchronized (listeners) {
-            listeners.add (l);
-        }
-    }
-    public final void removeChangeListener (ChangeListener l) {
-        synchronized (listeners) {
-            listeners.remove (l);
-        }
-    }
-    protected final void fireChangeEvent () {
-        Iterator it;
-        synchronized (listeners) {
-            it = new HashSet (listeners).iterator ();
-        }
-        ChangeEvent ev = new ChangeEvent (this);
-        while (it.hasNext ()) {
-            ((ChangeListener) it.next ()).stateChanged (ev);
-        }
-    }
-    private void readObject (ObjectInputStream in) throws IOException, ClassNotFoundException {
-        in.defaultReadObject ();
-        listeners = new HashSet (1);
-    }
-     */
+    public final void addChangeListener(ChangeListener l) {}
+    public final void removeChangeListener(ChangeListener l) {}
 
 }

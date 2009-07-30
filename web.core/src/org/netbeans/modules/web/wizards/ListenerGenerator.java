@@ -57,7 +57,6 @@ import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.api.java.source.JavaSource.Phase;
 import org.netbeans.api.java.source.ModificationResult;
 import org.netbeans.api.java.source.Task;
-import org.netbeans.api.java.source.TreeMaker;
 import org.netbeans.api.java.source.WorkingCopy;
 import org.netbeans.modules.j2ee.core.api.support.java.GenerationUtils;
 
@@ -76,7 +75,6 @@ public class ListenerGenerator {
     boolean isRequest;
     boolean isRequestAttr;
 
-    private JavaSource clazz;
     private GenerationUtils gu;
 
     /** Creates a new instance of ListenerGenerator */
@@ -90,14 +88,10 @@ public class ListenerGenerator {
     }
 
     public void generate(JavaSource clazz) throws IOException {
-        this.clazz = clazz;
-
-        Task task = new Task<WorkingCopy>() {
-
+        Task<WorkingCopy> task = new Task<WorkingCopy>() {
             public void run(WorkingCopy workingCopy) throws Exception {
                 workingCopy.toPhase(Phase.RESOLVED);
                 CompilationUnitTree cut = workingCopy.getCompilationUnit();
-                TreeMaker make = workingCopy.getTreeMaker();
 
                 gu = GenerationUtils.newInstance(workingCopy);
                 for (Tree typeDecl : cut.getTypeDecls()) {
@@ -114,7 +108,6 @@ public class ListenerGenerator {
         };
         ModificationResult result = clazz.runModificationTask(task);
         result.commit();
-
 
 //        if (isContext) addContextListenerMethods();
 //        if (isContextAttr) addContextAttrListenerMethods();

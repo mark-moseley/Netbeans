@@ -49,25 +49,31 @@ import java.util.Set;
 import javax.swing.JComponent;
 import javax.swing.event.ChangeListener;
 import java.text.MessageFormat;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.netbeans.api.java.source.JavaSource;
 import org.netbeans.modules.web.core.Util;
-
 import org.openide.NotifyDescriptor;
 import org.openide.filesystems.FileObject;
 import org.openide.WizardDescriptor;
-import org.openide.loaders.*;
 import org.openide.util.NbBundle;
-
 import org.netbeans.api.java.classpath.ClassPath;
-import org.netbeans.modules.j2ee.dd.api.web.*;
 import org.openide.DialogDisplayer;
-
 import org.netbeans.spi.project.ui.templates.support.Templates;
 import org.netbeans.api.project.Project;
 import org.netbeans.api.project.SourceGroup;
+import org.netbeans.modules.j2ee.common.dd.DDHelper;
+import org.netbeans.modules.j2ee.core.api.support.classpath.ContainerClassPathModifier;
+import org.netbeans.modules.j2ee.dd.api.web.DDProvider;
+import org.netbeans.modules.j2ee.dd.api.web.Listener;
+import org.netbeans.modules.j2ee.dd.api.web.WebApp;
+import org.netbeans.modules.web.api.webmodule.WebModule;
 import org.netbeans.spi.java.project.support.ui.templates.JavaTemplates;
+import org.openide.loaders.DataFolder;
+import org.openide.loaders.DataObject;
+import org.openide.loaders.TemplateWizard;
 
 /** A template wizard iterator (sequence of panels).
  * Used to fill in the second and subsequent panels in the New wizard.
@@ -77,14 +83,16 @@ import org.netbeans.spi.java.project.support.ui.templates.JavaTemplates;
  *
  * @author  mk115033
  */
-public class ListenerIterator implements TemplateWizard.Iterator {
+public class ListenerIterator implements TemplateWizard.AsynchronousInstantiatingIterator {
 
+    private static final Logger LOG = Logger.getLogger(ListenerIterator.class.getName());
+    
     //                                    CHANGEME vvv
     //private static final long serialVersionUID = ...L;
 
     // You should define what panels you want to use here:
     private ListenerPanel panel;
-    protected WizardDescriptor.Panel[] createPanels (TemplateWizard wizard) {
+    protected WizardDescriptor.Panel[] createPanels(TemplateWizard wizard) {
         Project project = Templates.getProject( wiz );
         SourceGroup[] sourceGroups = Util.getJavaSourceGroups(project);
         panel = new ListenerPanel(wizard);
@@ -101,7 +109,7 @@ public class ListenerIterator implements TemplateWizard.Iterator {
         };
     }
 
-    public Set instantiate (TemplateWizard wiz) throws IOException/*, IllegalStateException*/ {
+    public Set<DataObject> instantiate () throws IOException/*, IllegalStateException*/ {
         // Here is the default plain behavior. Simply takes the selected
         // template (you need to have included the standard second panel
         // in createPanels(), or at least set the properties targetName and
@@ -111,24 +119,30 @@ public class ListenerIterator implements TemplateWizard.Iterator {
         // (return them all in the result of this method), populate file
         // contents on the fly, etc.
        
-        FileObject folder = Templates.getTargetFolder( wiz );
-        DataFolder targetFolder = DataFolder.findFolder( folder );
+        FileObject folder = Templates.getTargetFolder(wiz);
+        DataFolder targetFolder = DataFolder.findFolder(folder);
         
         ClassPath classPath = ClassPath.getClassPath(folder,ClassPath.SOURCE);
         String listenerName = wiz.getTargetName();
-        DataObject result=null;
+        DataObject result = null;
         
-        if (classPath!=null) { //NOI18N
-            DataObject template = wiz.getTemplate ();
-            if (listenerName==null) {
-                // Default name.
-                result = template.createFromTemplate (targetFolder);
-            } else {
-                result = template.createFromTemplate (targetFolder, listenerName);
+        if (classPath != null) {
+            Map<String, String> templateParameters = new HashMap<String, String>();
+            if (!panel.createElementInDD() && Utilities.isJavaEE6(wiz)) {
+                templateParameters.put("classAnnotation", AnnotationGenerator.webListener());
             }
-            String className = classPath.getResourceName(result.getPrimaryFile(),'.',false);
+
+            DataObject template = wiz.getTemplate();
+            result = template.createFromTemplate(targetFolder, listenerName, templateParameters);
             if (result!=null && panel.createElementInDD()){
+                String className = classPath.getResourceName(result.getPrimaryFile(),'.',false);
                 FileObject webAppFo=DeployData.getWebAppFor(folder);
+                if (webAppFo == null) {
+                    WebModule wm = WebModule.getWebModule(folder);
+                    if (wm != null) {
+                        webAppFo = DDHelper.createWebXml(wm.getJ2eeProfile(), wm.getWebInf());
+                    }
+                }
                 WebApp webApp=null;
                 if (webAppFo!=null) {
                     webApp = DDProvider.getDefault().getDDRoot(webAppFo);
@@ -178,12 +192,23 @@ public class ListenerIterator implements TemplateWizard.Iterator {
                             listener.setDescription(desc.toString());
                             webApp.addListener(listener);
                             webApp.write(webAppFo);
-                        } catch (ClassNotFoundException ex) {//Shouldn happen since
+                        }
+                        catch (ClassNotFoundException ex) {
+                            LOG.log(Level.FINE, "error", ex);
+                            //Shouldn happen since
                         }
                     }
                 }
             }
             if (result!=null) {
+                //#150274, #153790
+                Project project = Templates.getProject(wiz);
+                ContainerClassPathModifier modifier = project.getLookup().lookup(ContainerClassPathModifier.class);
+                if (modifier != null) {
+                    modifier.extendClasspath(result.getPrimaryFile(), new String[]{
+                                ContainerClassPathModifier.API_SERVLET
+                            });
+                }
                 JavaSource clazz = JavaSource.forFileObject(result.getPrimaryFile());
                 if (clazz!=null) {
                     ListenerGenerator gen = new ListenerGenerator(
@@ -196,7 +221,7 @@ public class ListenerIterator implements TemplateWizard.Iterator {
                     try {
                         gen.generate(clazz);
                     } catch (IOException ex){
-                        Logger.getLogger("global").log(Level.INFO, null, ex);
+                        LOG.log(Level.INFO, null, ex);
                     }
                 }
             }
@@ -222,13 +247,13 @@ public class ListenerIterator implements TemplateWizard.Iterator {
     // provide various kinds of useful information such as
     // the currently selected target name.
     // Also the panels will receive wiz as their "settings" object.
-    public void initialize (TemplateWizard wiz) {
-        this.wiz = wiz;
+    public void initialize (WizardDescriptor wiz) {
+        this.wiz = (TemplateWizard) wiz;
         index = 0;
-        panels = createPanels (wiz);
+        panels = createPanels (this.wiz);
         
         // Creating steps.
-        Object prop = wiz.getProperty ("WizardPanel_contentData"); // NOI18N
+        Object prop = wiz.getProperty (WizardDescriptor.PROP_CONTENT_DATA); // NOI18N
         String[] beforeSteps = null;
         if (prop != null && prop instanceof String[]) {
             beforeSteps = (String[])prop;
@@ -246,13 +271,13 @@ public class ListenerIterator implements TemplateWizard.Iterator {
             if (c instanceof JComponent) { // assume Swing components
                 JComponent jc = (JComponent) c;
                 // Step #.
-                jc.putClientProperty ("WizardPanel_contentSelectedIndex", new Integer (i)); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_SELECTED_INDEX, Integer.valueOf(i));
                 // Step name (actually the whole list for reference).
-                jc.putClientProperty ("WizardPanel_contentData", steps); // NOI18N
+                jc.putClientProperty(WizardDescriptor.PROP_CONTENT_DATA, steps);
             }
         }
     }
-    public void uninitialize (TemplateWizard wiz) {
+    public void uninitialize (WizardDescriptor wiz) {
         this.wiz = null;
         panels = null;
     }
@@ -264,7 +289,7 @@ public class ListenerIterator implements TemplateWizard.Iterator {
 
     public String name () {
         return NbBundle.getMessage(ListenerIterator.class, "TITLE_x_of_y",
-            new Integer (index + 1), new Integer (panels.length));
+            index + 1, panels.length);
     }
 
     public boolean hasNext () {
@@ -281,7 +306,7 @@ public class ListenerIterator implements TemplateWizard.Iterator {
         if (! hasPrevious ()) throw new NoSuchElementException ();
         index--;
     }
-    public WizardDescriptor.Panel current () {
+    public WizardDescriptor.Panel current() {
         return panels[index];
     }
 
