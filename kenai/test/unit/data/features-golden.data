@@ -1,0 +1,60 @@
+wiki
+WIKI
+Wiki
+null
+wiki
+https://testkenai.com/projects/golden-project-1/pages/Home
+forum
+FORUM
+General Discussion
+null
+forum
+https://testkenai.com/projects/golden-project-1/forums/forum
+subversion
+SOURCE
+Subversion Repository
+https://testkenai.com/svn/golden-project-1~subversion
+subversion
+https://testkenai.com/projects/golden-project-1/sources/subversion/show
+commits
+LISTS
+Commits Mailing List
+null
+lists
+https://testkenai.com/projects/golden-project-1/lists/commits/archive
+issues
+LISTS
+Issues Mailing List
+null
+lists
+https://testkenai.com/projects/golden-project-1/lists/issues/archive
+golden-project-1bugzilla
+ISSUES
+Bugzilla
+https://testkenai.com/bugzilla/buglist.cgi?product=golden-project-1
+bugzilla
+https://testkenai.com/bugzilla/buglist.cgi?product=golden-project-1&order=Importance&limit=25
+source-code-repository
+SOURCE
+Source Code Repository
+https://testkenai.com/hg/golden-project-1~source-code-repository
+mercurial
+https://testkenai.com/projects/golden-project-1/sources/source-code-repository/show
+jira
+ISSUES
+Issue Tracking
+https://testkenai.com/jira/browse/GOLDEN_PROJECT_1
+jira
+https://testkenai.com/jira/browse/GOLDEN_PROJECT_1
+downloads
+DOWNLOADS
+Downloads
+https://testkenai.com/projects/golden-project-1/downloads
+downloads
+https://testkenai.com/projects/golden-project-1/downloads
+golden-project-1
+CHAT
+golden-project-1 chat room
+null
+instant_messenger
+https://testkenai.com/projects/golden-project-1/instant_messenger/golden-project-1
