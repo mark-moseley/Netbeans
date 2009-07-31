@@ -54,7 +54,6 @@ import org.netbeans.modules.subversion.ui.project.ImportAction;
 import org.netbeans.modules.subversion.ui.checkout.CheckoutAction;
 import org.openide.util.actions.SystemAction;
 import org.openide.util.NbBundle;
-import org.openide.util.Utilities;
 import org.openide.util.Lookup;
 import org.openide.nodes.Node;
 import org.netbeans.modules.subversion.util.SvnUtils;
@@ -71,18 +70,23 @@ import java.text.MessageFormat;
 import java.io.File;
 import java.awt.*;
 import java.lang.reflect.Field;
+import java.util.logging.Level;
 import org.netbeans.modules.subversion.client.SvnClient;
 import org.netbeans.modules.subversion.client.SvnClientExceptionHandler;
 import org.netbeans.modules.subversion.ui.properties.SvnPropertiesAction;
 import org.netbeans.modules.subversion.ui.relocate.RelocateAction;
 import org.netbeans.modules.versioning.util.SystemActionBridge;
 import org.netbeans.modules.diff.PatchAction;
+import org.netbeans.modules.subversion.client.SvnClientFactory;
+import org.openide.util.ImageUtilities;
+import org.openide.util.RequestProcessor;
+import org.openide.util.WeakSet;
 import org.tigris.subversion.svnclientadapter.*;
 
 /**
  * Annotates names for display in Files and Projects view (and possible elsewhere). Uses
  * Filesystem support for this feature (to be replaced later in Core by something more generic).
- * 
+ *
  * @author Maros Sandor
  */
 public class Annotator {
@@ -100,29 +104,55 @@ public class Annotator {
     private static MessageFormat mergeableFormat = getFormat("mergeableFormat"); // NOI18N
     private static MessageFormat excludedFormat = getFormat("excludedFormat"); // NOI18N
 
-    private static final int STATUS_TEXT_ANNOTABLE = FileInformation.STATUS_NOTVERSIONED_EXCLUDED | 
+    private static MessageFormat newLocallyTooltipFormat = getFormat("newLocallyTooltipFormat");  // NOI18N
+    private static MessageFormat addedLocallyTooltipFormat = getFormat("addedLocallyTooltipFormat"); // NOI18N
+    private static MessageFormat modifiedLocallyTooltipFormat = getFormat("modifiedLocallyTooltipFormat"); // NOI18N
+    private static MessageFormat removedLocallyTooltipFormat = getFormat("removedLocallyTooltipFormat"); // NOI18N
+    private static MessageFormat deletedLocallyTooltipFormat = getFormat("deletedLocallyTooltipFormat"); // NOI18N
+    private static MessageFormat newInRepositoryTooltipFormat = getFormat("newInRepositoryTooltipFormat"); // NOI18N
+    private static MessageFormat modifiedInRepositoryTooltipFormat = getFormat("modifiedInRepositoryTooltipFormat"); // NOI18N
+    private static MessageFormat removedInRepositoryTooltipFormat = getFormat("removedInRepositoryTooltipFormat"); // NOI18N
+    private static MessageFormat conflictTooltipFormat = getFormat("conflictTooltipFormat"); // NOI18N
+    private static MessageFormat mergeableTooltipFormat = getFormat("mergeableTooltipFormat"); // NOI18N
+    private static MessageFormat excludedTooltipFormat = getFormat("excludedTooltipFormat"); // NOI18N
+
+    private static String badgeModified = "org/netbeans/modules/subversion/resources/icons/modified-badge.png";
+    private static String badgeConflicts = "org/netbeans/modules/subversion/resources/icons/conflicts-badge.png";
+
+    private static String toolTipModified = "<img src=\"" + Annotator.class.getClassLoader().getResource(badgeModified) + "\">&nbsp;"
+            + NbBundle.getMessage(Annotator.class, "MSG_Contains_Modified_Locally");
+    private static String toolTipConflict = "<img src=\"" + Annotator.class.getClassLoader().getResource(badgeConflicts) + "\">&nbsp;"
+            + NbBundle.getMessage(Annotator.class, "MSG_Contains_Conflicts");
+
+    private static final int STATUS_TEXT_ANNOTABLE = FileInformation.STATUS_NOTVERSIONED_EXCLUDED |
             FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_VERSIONED_UPTODATE |
-            FileInformation.STATUS_VERSIONED_MODIFIEDLOCALLY | FileInformation.STATUS_VERSIONED_CONFLICT | 
-            FileInformation.STATUS_VERSIONED_REMOVEDLOCALLY | FileInformation.STATUS_VERSIONED_DELETEDLOCALLY | 
+            FileInformation.STATUS_VERSIONED_MODIFIEDLOCALLY | FileInformation.STATUS_VERSIONED_CONFLICT |
+            FileInformation.STATUS_VERSIONED_REMOVEDLOCALLY | FileInformation.STATUS_VERSIONED_DELETEDLOCALLY |
             FileInformation.STATUS_VERSIONED_ADDEDLOCALLY;
 
     private static final Pattern lessThan = Pattern.compile("<");  // NOI18N
-    
+
     public static String ANNOTATION_REVISION    = "revision";
     public static String ANNOTATION_STATUS      = "status";
     public static String ANNOTATION_FOLDER      = "folder";
     public static String ANNOTATION_MIME_TYPE   = "mime_type";
-    
+
     public static String[] LABELS = new String[] {ANNOTATION_REVISION, ANNOTATION_STATUS, ANNOTATION_FOLDER, ANNOTATION_MIME_TYPE};
-    
+    private final RequestProcessor.Task modifiedFilesRPScanTask;
+    private final ModifiedFilesScanTask modifiedFilesScanTask;
+    private static final RequestProcessor rp = new RequestProcessor("MercurialAnnotateScan", 1, true); // NOI18N
+    private final WeakSet<Map<File, FileInformation>> allModifiedFiles = new WeakSet<Map<File, FileInformation>>(1);
+    private Map<File, FileInformation> modifiedFiles = null;
+
     private final FileStatusCache cache;
-    private MessageFormat format;        
+    private MessageFormat format;
     private String emptyFormat;
-            
+
     private boolean mimeTypeFlag;
 
     Annotator(Subversion svn) {
         this.cache = svn.getStatusCache();
+        modifiedFilesRPScanTask = rp.create(modifiedFilesScanTask = new ModifiedFilesScanTask());
         initDefaults();
     }
 
@@ -131,7 +161,7 @@ public class Annotator {
         for (int i = 0; i < fields.length; i++) {
             String name = fields[i].getName();
             if (name.endsWith("Format")) {  // NOI18N
-                initDefaultColor(name.substring(0, name.length() - 6)); 
+                initDefaultColor(name.substring(0, name.length() - 6));
             }
         }
         refresh();
@@ -139,17 +169,19 @@ public class Annotator {
 
     public void refresh() {
         String string = SvnModuleConfig.getDefault().getAnnotationFormat(); //System.getProperty("netbeans.experimental.svn.ui.statusLabelFormat");  // NOI18N
-        if (string != null && !string.trim().equals("")) {
+        if (string != null && !string.trim().equals("")) { // NOI18N
             mimeTypeFlag = string.indexOf("{mime_type}") > -1;
-            string = string.replaceAll("\\{revision\\}",  "\\{0\\}");           // NOI18N    
-            string = string.replaceAll("\\{status\\}",    "\\{1\\}");           // NOI18N
-            string = string.replaceAll("\\{folder\\}",    "\\{2\\}");           // NOI18N
-            string = string.replaceAll("\\{mime_type\\}", "\\{3\\}");           // NOI18N
+            string = SvnUtils.createAnnotationFormat(string);
+            if (!SvnUtils.isAnnotationFormatValid(string)) {
+                Subversion.LOG.log(Level.WARNING, "Bad annotation format, switching to defaults");
+                string = org.openide.util.NbBundle.getMessage(Annotator.class, "Annotator.defaultFormat"); // NOI18N
+                mimeTypeFlag = string.contains("{3}");
+            }
             format = new MessageFormat(string);
             emptyFormat = format.format(new String[] {"", "", "", ""} , new StringBuffer(), null).toString().trim();
-        }                      
+        }
     }
-    
+
     private void initDefaultColor(String name) {
         String color = System.getProperty("svn.color." + name);  // NOI18N
         if (color == null) return;
@@ -158,12 +190,12 @@ public class Annotator {
 
     /**
      * Changes annotation color of files.
-     * 
+     *
      * @param name name of the color to change. Can be one of:
-     * newLocally, addedLocally, modifiedLocally, removedLocally, deletedLocally, newInRepository, modifiedInRepository, 
+     * newLocally, addedLocally, modifiedLocally, removedLocally, deletedLocally, newInRepository, modifiedInRepository,
      * removedInRepository, conflict, mergeable, excluded.
      * @param colorString new color in the format: 4455AA (RGB hexadecimal)
-     */ 
+     */
     private void setAnnotationColor(String name, String colorString) {
         try {
             Field field = Annotator.class.getDeclaredField(name + "Format");  // NOI18N
@@ -173,19 +205,23 @@ public class Annotator {
             throw new IllegalArgumentException("Invalid color name");  // NOI18N
         }
     }
-    
+
     /**
      * Adds rendering attributes to an arbitrary String based on a SVN status. The name is usually a file or folder
-     * display name and status is usually its SVN status as reported by FileStatusCache. 
-     * 
+     * display name and status is usually its SVN status as reported by FileStatusCache.
+     *
      * @param name name to annotate
      * @param info status that an object with the given name has
      * @param file file this annotation belongs to. It is used to determine sticky tags for textual annotations. Pass
      * null if you do not want textual annotations to appear in returned markup
      * @return String html-annotated name that can be used in Swing controls that support html rendering. Note: it may
      * also return the original name String
-     */ 
+     */
     public String annotateNameHtml(String name, FileInformation info, File file) {
+        if(!SvnClientFactory.isClientAvailable()) {
+            Subversion.LOG.fine(" skipping annotateNameHtml due to missing client");
+            return name;
+        }
         name = htmlEncode(name);
         int status = info.getStatus();
         String textAnnotation;
@@ -214,7 +250,7 @@ public class Annotator {
             textAnnotation = ""; // NOI18N
         }
         if (textAnnotation.length() > 0) {
-            textAnnotation = NbBundle.getMessage(Annotator.class, "textAnnotation", textAnnotation); 
+            textAnnotation = NbBundle.getMessage(Annotator.class, "textAnnotation", textAnnotation);
         }
 
         // aligned with SvnUtils.getComparableStatus
@@ -251,7 +287,7 @@ public class Annotator {
         } else if (status == FileInformation.STATUS_UNKNOWN) {
             return name;
         } else {
-            throw new IllegalArgumentException("Uncomparable status: " + status); // NOI18N
+            throw new IllegalArgumentException("Unknown status: " + status); // NOI18N
         }
     }
 
@@ -268,12 +304,13 @@ public class Annotator {
         String revisionString = "";     // NOI18N
         String binaryString = "";       // NOI18N
 
-                
+
         ISVNStatus snvStatus = info.getEntry(file);
         if (snvStatus != null) {
-            revisionString = snvStatus.getRevision().toString();
+            SVNRevision rev = snvStatus.getRevision();
+            revisionString = rev != null ? rev.toString() : "";
             if(mimeTypeFlag) {
-                binaryString = getMimeType(file);                
+                binaryString = getMimeType(file);
             }
         }
 
@@ -288,10 +325,10 @@ public class Annotator {
             stickyString,
             binaryString
         };
-                
-        String annotation = format.format(arguments, new StringBuffer(), null).toString().trim();    
+
+        String annotation = format.format(arguments, new StringBuffer(), null).toString().trim();
         if(annotation.equals(emptyFormat)) {
-            return "";            
+            return "";
         } else {
             return " " + annotation;
         }
@@ -300,18 +337,18 @@ public class Annotator {
     private String getMimeType(File file) {
         try {
             SvnClient client = Subversion.getInstance().getClient(false);
-            ISVNProperty prop = client.propertyGet(file, ISVNProperty.MIME_TYPE);        
+            ISVNProperty prop = client.propertyGet(file, ISVNProperty.MIME_TYPE);
             if(prop != null) {
-                String mime = prop.getValue();    
+                String mime = prop.getValue();
                 return mime != null ? mime : "";
-            }            
-        } catch (SVNClientException ex) {           
+            }
+        } catch (SVNClientException ex) {
             SvnClientExceptionHandler.notifyException(ex, false, false);
             return "";
-        }                
+        }
         return "";
     }
-    
+
     private String annotateFolderNameHtml(String name, FileInformation info, File file) {
         name = htmlEncode(name);
         int status = info.getStatus();
@@ -321,7 +358,7 @@ public class Annotator {
 
             if (format != null) {
                 textAnnotation = formatAnnotation(info, file);
-            } else {            
+            } else {
                 String sticky;
                 ISVNStatus lstatus = info.getEntry(file);
                 if (lstatus != null && lstatus.getUrl() != null) {
@@ -345,14 +382,14 @@ public class Annotator {
                 } else {
                     textAnnotation = " [" + info.getShortStatusText() + "; " + sticky + "]"; // NOI18N
                 }
-            }                
+            }
         } else {
             textAnnotation = ""; // NOI18N
         }
         if (textAnnotation.length() > 0) {
             textAnnotation = NbBundle.getMessage(Annotator.class, "textAnnotation", textAnnotation); // NOI18N
         }
-        
+
         if (status == FileInformation.STATUS_UNKNOWN) {
             return name;
         } else if (match(status, FileInformation.STATUS_VERSIONED_REMOVEDLOCALLY)) {
@@ -398,17 +435,33 @@ public class Annotator {
     public String annotateNameHtml(File file, FileInformation info) {
         return annotateNameHtml(file.getName(), info, file);
     }
-    
+
     public String annotateNameHtml(String name, VCSContext context, int includeStatus) {
+        if(!SvnClientFactory.isClientAvailable()) {
+            Subversion.LOG.fine(" skipping annotateNameHtml due to missing client");
+            return name;
+        }
         FileInformation mostImportantInfo = null;
         File mostImportantFile = null;
         boolean folderAnnotation = false;
-        
+
         for (File file : context.getRootFiles()) {
-            FileInformation info = cache.getStatus(file);
+            if (SvnUtils.isPartOfSubversionMetadata(file)) {
+                // no need to handle .svn files, eliminates some warnings as 'no repository url found for managed file .svn'
+                // happens e.g. when annotating a Project folder
+                continue;
+            }
+            FileInformation info = cache.getCachedStatus(file);
+            if (info == null) {
+                // status not in cache, plan refresh
+                File parentFile = file.getParentFile();
+                Subversion.LOG.log(Level.FINE, "null cached status for: {0} in {1}", new Object[] {file, parentFile});
+                cache.refreshAsync(file);
+                info = new FileInformation(FileInformation.STATUS_VERSIONED_UPTODATE, false);
+            }
             int status = info.getStatus();
             if ((status & includeStatus) == 0) continue;
-            
+
             if (isMoreImportant(info, mostImportantInfo)) {
                 mostImportantInfo = info;
                 mostImportantFile = file;
@@ -417,15 +470,15 @@ public class Annotator {
         }
 
         if (folderAnnotation == false && context.getRootFiles().size() > 1) {
-            folderAnnotation = !Utils.shareCommonDataObject(context.getRootFiles().toArray(new File[context.getRootFiles().size()]));
+            folderAnnotation = !Utils.isFromMultiFileDataObject(context);
         }
 
         if (mostImportantInfo == null) return null;
-        return folderAnnotation ? 
-                annotateFolderNameHtml(name, mostImportantInfo, mostImportantFile) : 
+        return folderAnnotation ?
+                annotateFolderNameHtml(name, mostImportantInfo, mostImportantFile) :
                 annotateNameHtml(name, mostImportantInfo, mostImportantFile);
     }
-    
+
     private boolean isMoreImportant(FileInformation a, FileInformation b) {
         if (b == null) return true;
         if (a == null) return false;
@@ -440,20 +493,12 @@ public class Annotator {
      * Returns array of versioning actions that may be used to construct a popup menu. These actions
      * will act on the supplied context.
      *
-     * @param ctx context similar to {@link org.openide.util.ContextAwareAction#createContextAwareInstance(org.openide.util.Lookup)}   
+     * @param ctx context similar to {@link org.openide.util.ContextAwareAction#createContextAwareInstance(org.openide.util.Lookup)}
      * @param destination
      * @return Action[] array of versioning actions that may be used to construct a popup menu. These actions
      * will act on currently activated nodes.
-     */ 
+     */
     public static Action [] getActions(VCSContext ctx, VCSAnnotator.ActionDestination destination) {
-        ResourceBundle loc = NbBundle.getBundle(Annotator.class);
-        Node [] nodes = ctx.getElements().lookupAll(Node.class).toArray(new Node[0]);
-        File [] files = ctx.getRootFiles().toArray(new File[ctx.getRootFiles().size()]);
-        Lookup context = ctx.getElements();
-        boolean noneVersioned = isNothingVersioned(files);
-        boolean onlyFolders = onlyFolders(files);
-        boolean onlyProjects = onlyProjects(nodes);
-        
         List<Action> actions = new ArrayList<Action>(20);
         if (destination == VCSAnnotator.ActionDestination.MainMenu) {
             actions.add(SystemAction.get(CheckoutAction.class));
@@ -483,9 +528,16 @@ public class Annotator {
             actions.add(null);
             actions.add(SystemAction.get(SvnPropertiesAction.class));
         } else {
+            ResourceBundle loc = NbBundle.getBundle(Annotator.class);
+            File[] files = ctx.getRootFiles().toArray(new File[ctx.getRootFiles().size()]);
+            Lookup context = ctx.getElements();
+            boolean noneVersioned = isNothingVersioned(files);
             if (noneVersioned) {
                 actions.add(SystemActionBridge.createAction(SystemAction.get(ImportAction.class).createContextAwareInstance(context), loc.getString("CTL_PopupMenuItem_Import"), context));
             } else {
+                Node[] nodes = ctx.getElements().lookupAll(Node.class).toArray(new Node[0]);
+                boolean onlyFolders = onlyFolders(files);
+                boolean onlyProjects = onlyProjects(nodes);
                 actions.add(SystemActionBridge.createAction(SystemAction.get(StatusAction.class), loc.getString("CTL_PopupMenuItem_Status"), context));
                 actions.add(SystemActionBridge.createAction(SystemAction.get(DiffAction.class), loc.getString("CTL_PopupMenuItem_Diff"), context));
                 actions.add(SystemActionBridge.createAction(SystemAction.get(UpdateAction.class), loc.getString("CTL_PopupMenuItem_Update"), context));
@@ -500,9 +552,9 @@ public class Annotator {
                 actions.add(null);
                 if (!onlyFolders) {
                     actions.add(SystemActionBridge.createAction(SystemAction.get(BlameAction.class),
-                                                                ((BlameAction)SystemAction.get(BlameAction.class)).visible(nodes) ? 
-                                                                        loc.getString("CTL_PopupMenuItem_HideAnnotations") : 
-                                                                        loc.getString("CTL_PopupMenuItem_ShowAnnotations"), context));            
+                                                                ((BlameAction)SystemAction.get(BlameAction.class)).visible(nodes) ?
+                                                                        loc.getString("CTL_PopupMenuItem_HideAnnotations") :
+                                                                        loc.getString("CTL_PopupMenuItem_ShowAnnotations"), context));
                 }
                 actions.add(SystemActionBridge.createAction(SystemAction.get(SearchHistoryAction.class), loc.getString("CTL_PopupMenuItem_SearchHistory"), context));
                 actions.add(null);
@@ -510,27 +562,26 @@ public class Annotator {
                 actions.add(SystemActionBridge.createAction(SystemAction.get(ResolveConflictsAction.class), loc.getString("CTL_PopupMenuItem_ResolveConflicts"), context));
                 if (!onlyProjects) {
                     actions.add(SystemActionBridge.createAction(SystemAction.get(IgnoreAction.class),
-                                                                ((IgnoreAction)SystemAction.get(IgnoreAction.class)).getActionStatus(nodes) == IgnoreAction.UNIGNORING ? 
-                                                                        loc.getString("CTL_PopupMenuItem_Unignore") : 
-                                                                        loc.getString("CTL_PopupMenuItem_Ignore"), context));                                        
-                }               
+                                                                ((IgnoreAction)SystemAction.get(IgnoreAction.class)).getActionStatus(nodes) == IgnoreAction.UNIGNORING ?
+                                                                        loc.getString("CTL_PopupMenuItem_Unignore") :
+                                                                        loc.getString("CTL_PopupMenuItem_Ignore"), context));
+                }
                 actions.add(null);
                 actions.add(SystemActionBridge.createAction(
-                                SystemAction.get(SvnPropertiesAction.class), 
-                                loc.getString("CTL_PopupMenuItem_Properties"), context));                
+                                SystemAction.get(SvnPropertiesAction.class),
+                                loc.getString("CTL_PopupMenuItem_Properties"), context));
             }
         }
         return actions.toArray(new Action[actions.size()]);
     }
-    
+
     private static boolean isNothingVersioned(File[] files) {
-        FileStatusCache cache = Subversion.getInstance().getStatusCache();
         for (File file : files) {
-            if ((cache.getStatus(file).getStatus() & FileInformation.STATUS_MANAGED) != 0) return false;
+            if (SvnUtils.isManaged(file)) return false;
         }
         return true;
     }
-    
+
     private static boolean onlyProjects(Node[] nodes) {
         if (nodes == null || nodes.length == 0) return false;
         for (Node node : nodes) {
@@ -538,24 +589,38 @@ public class Annotator {
         }
         return true;
     }
-    
+
     private static boolean onlyFolders(File[] files) {
         FileStatusCache cache = Subversion.getInstance().getStatusCache();
+        boolean onlyFolders = true;
         for (int i = 0; i < files.length; i++) {
             if (files[i].isFile()) return false;
-            if (!files[i].exists() && !cache.getStatus(files[i]).isDirectory()) return false;
+            FileInformation status = cache.getCachedStatus(files[i]);
+            if (status == null) {
+                onlyFolders = false; // be optimistic, this can be a file
+            } else if (!files[i].exists() && !status.isDirectory()) {
+                onlyFolders = false;
+                break;
+            }
         }
-        return true;
+        return onlyFolders;
     }
 
     private static MessageFormat getFormat(String key) {
         String format = NbBundle.getMessage(Annotator.class, key);
-        return new MessageFormat(format);  
+        return new MessageFormat(format);
     }
 
-    private static final int STATUS_BADGEABLE = FileInformation.STATUS_VERSIONED_UPTODATE | FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY | FileInformation.STATUS_VERSIONED_MODIFIEDLOCALLY;
-    
-    public Image annotateIcon(Image icon, VCSContext context) {
+    private static final int STATUS_BADGEABLE =
+            FileInformation.STATUS_VERSIONED_UPTODATE |
+            FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY |
+            FileInformation.STATUS_VERSIONED_MODIFIEDLOCALLY;
+
+    public Image annotateIcon(Image icon, VCSContext context, int includeStatus) {
+        if(!SvnClientFactory.isClientAvailable()) {
+            Subversion.LOG.fine(" skipping annotateIcon due to missing client");
+            return null;
+        }
         boolean folderAnnotation = false;
         for (File file : context.getRootFiles()) {
             if (file.isDirectory()) {
@@ -563,81 +628,314 @@ public class Annotator {
                 break;
             }
         }
-        
+
         if (folderAnnotation == false && context.getRootFiles().size() > 1) {
-            folderAnnotation = !Utils.shareCommonDataObject(context.getRootFiles().toArray(new File[context.getRootFiles().size()]));
+            folderAnnotation = !Utils.isFromMultiFileDataObject(context);
         }
 
         if (folderAnnotation == false) {
-            return null;
+            return annotateFileIcon(context, icon, includeStatus);
+        } else {
+            return annotateFolderIcon(context, icon);
         }
+    }
 
-        FileStatusCache cache = Subversion.getInstance().getStatusCache();
+    private Image annotateFileIcon(VCSContext context, Image icon, int includeStatus) {
+        FileInformation mostImportantInfo = null;
+
+        List<File> filesToRefresh = new LinkedList<File>();
+        for (File file : context.getRootFiles()) {
+            FileInformation info = cache.getCachedStatus(file);
+            if (info == null) {
+                File parentFile = file.getParentFile();
+                Subversion.LOG.log(Level.FINE, "null cached status for: {0} in {1}", new Object[] {file, parentFile});
+                filesToRefresh.add(file);
+                info = new FileInformation(FileInformation.STATUS_VERSIONED_UPTODATE, false);
+            }
+            int status = info.getStatus();
+            if ((status & includeStatus) == 0) continue;
+
+            if (isMoreImportant(info, mostImportantInfo)) {
+                mostImportantInfo = info;
+            }
+        }
+        cache.refreshAsync(filesToRefresh);
+
+        if(mostImportantInfo == null) return null;
+        String statusText = null;
+        int status = mostImportantInfo.getStatus();
+        if (0 != (status & FileInformation.STATUS_VERSIONED_CONFLICT)) {
+            statusText = conflictTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_MERGE)) {
+            statusText = mergeableTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_DELETEDLOCALLY)) {
+            statusText = deletedLocallyTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_REMOVEDLOCALLY)) {
+            statusText = removedLocallyTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY)) {
+            statusText = newLocallyTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_ADDEDLOCALLY)) {
+            statusText = addedLocallyTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_MODIFIEDLOCALLY)) {
+            statusText = modifiedLocallyTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+
+        // repository changes - lower annotator priority
+
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_REMOVEDINREPOSITORY)) {
+            statusText = removedInRepositoryTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_NEWINREPOSITORY)) {
+            statusText = newInRepositoryTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_MODIFIEDINREPOSITORY)) {
+            statusText = modifiedInRepositoryTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_VERSIONED_UPTODATE)) {
+            statusText = null;
+        } else if (0 != (status & FileInformation.STATUS_NOTVERSIONED_EXCLUDED)) {
+            statusText = excludedTooltipFormat.format(new Object [] { mostImportantInfo.getStatusText() });
+        } else if (0 != (status & FileInformation.STATUS_NOTVERSIONED_NOTMANAGED)) {
+            statusText = null;
+        } else if (status == FileInformation.STATUS_UNKNOWN) {
+            statusText = null;
+        } else {
+            throw new IllegalArgumentException("Unknown status: " + status); // NOI18N
+        }
+        return statusText != null ? ImageUtilities.addToolTipToImage(icon, statusText) : null; // NOI18
+    }
+
+    private Image annotateFolderIcon(VCSContext context, Image icon) {
         boolean isVersioned = false;
+        List<File> filesToRefresh = new LinkedList<File>();
         for (Iterator i = context.getRootFiles().iterator(); i.hasNext();) {
             File file = (File) i.next();
-            if ((cache.getStatus(file).getStatus() & STATUS_BADGEABLE) != 0) {  
+            FileInformation info = cache.getCachedStatus(file);
+            if (info == null) {
+                filesToRefresh.add(file);
+            } else if ((info.getStatus() & STATUS_BADGEABLE) != 0) {
                 isVersioned = true;
                 break;
             }
         }
-        if (!isVersioned) return null;
+        cache.refreshAsync(filesToRefresh);
         
-        SvnModuleConfig config = SvnModuleConfig.getDefault();
-        boolean allExcluded = true;
-        boolean modified = false;
-
-        Map map = cache.getAllModifiedFiles();
-        Map<File, FileInformation> modifiedFiles = new HashMap<File, FileInformation>();
-        for (Iterator i = map.keySet().iterator(); i.hasNext();) {
-            File file = (File) i.next();
-            FileInformation info = (FileInformation) map.get(file);
-            if ((info.getStatus() & FileInformation.STATUS_LOCAL_CHANGE) != 0) modifiedFiles.put(file, info);
+        if (!isVersioned) {
+            return null;
         }
+        
+        IconSelector sc = new IconSelector(context.getRootFiles(), icon);
+        // return the icon as soon as possible and schedule a complete scan if needed
+        sc.scanFilesLazy();
+        return sc.getBadge();
+    }
 
-        for (Iterator i = context.getRootFiles().iterator(); i.hasNext();) {
-            File file = (File) i.next();
-            if (VersioningSupport.isFlat(file)) {
-                for (Iterator j = modifiedFiles.keySet().iterator(); j.hasNext();) {
-                    File mf = (File) j.next();
-                    if (mf.getParentFile().equals(file)) {
-                        FileInformation info = (FileInformation) modifiedFiles.get(mf);
-                        if (info.isDirectory()) continue;
-                        int status = info.getStatus();
-                        if (status == FileInformation.STATUS_VERSIONED_CONFLICT) {
-                            Image badge = Utilities.loadImage("org/netbeans/modules/subversion/resources/icons/conflicts-badge.png", true);  // NOI18N
-                            return Utilities.mergeImages(icon, badge, 16, 9);
-                        }
-                        modified = true;
-                        allExcluded &= config.isExcludedFromCommit(mf.getAbsolutePath());
-                    }
-                }
-            } else {
-                for (Iterator j = modifiedFiles.keySet().iterator(); j.hasNext();) {
-                    File mf = (File) j.next();
-                    if (Utils.isAncestorOrEqual(file, mf)) {
-                        FileInformation info = (FileInformation) modifiedFiles.get(mf);
-                        int status = info.getStatus();
-                        if ((status == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY || status == FileInformation.STATUS_VERSIONED_ADDEDLOCALLY) && file.equals(mf)) {
-                            continue;
-                        }
-                        if (status == FileInformation.STATUS_VERSIONED_CONFLICT) {
-                            Image badge = Utilities.loadImage("org/netbeans/modules/subversion/resources/icons/conflicts-badge.png", true); // NOI18N
-                            return Utilities.mergeImages(icon, badge, 16, 9);
-                        }
-                        modified = true;
-                        allExcluded &= config.isExcludedFromCommit(mf.getAbsolutePath());
+    /**
+     * Returns modified files from tha cache.
+     * @param changed if not null, returns cached modified files and changed[0] denotes if the returned values are outdated.
+     * If null, performs the complete scan which may access I/O
+     * @return
+     */
+    private Map<File, FileInformation> getLocallyChangedFiles (final boolean changed[]) {
+        Map<File, FileInformation> map;
+        if (changed != null) {
+            // return cached values
+            map = cache.getAllModifiedFilesCached(changed);
+        } else {
+            // perform complete scan if needed
+            map = cache.getAllModifiedFiles();
+        }
+        Map<File, FileInformation> m = null;
+        synchronized (allModifiedFiles) {
+            for (Map<File, FileInformation> sm : allModifiedFiles) {
+                m = sm;
+                break;
+            }
+            if (modifiedFiles == null || map != m) {
+                allModifiedFiles.clear();
+                allModifiedFiles.add(map);
+                modifiedFiles = new HashMap<File, FileInformation>();
+                for (Iterator i = map.keySet().iterator(); i.hasNext();) {
+                    File file = (File) i.next();
+                    FileInformation info = map.get(file);
+                    if ((info.getStatus() & FileInformation.STATUS_LOCAL_CHANGE) != 0) {
+                        modifiedFiles.put(file, info);
                     }
                 }
             }
-        }
-
-        if (modified && !allExcluded) {
-            Image badge = Utilities.loadImage("org/netbeans/modules/subversion/resources/icons/modified-badge.png", true); // NOI18N
-            return Utilities.mergeImages(icon, badge, 16, 9);
-        } else {
-            return null;
+            return modifiedFiles;
         }
     }
 
+    /**
+     * A task which performs a complete modified files scan, reevaluates all registered icon selectors
+     * and fires events if a wrong folder badge should be repainted
+     */
+    private class ModifiedFilesScanTask implements Runnable {
+
+        private final LinkedList<IconSelector> scanners;
+
+        public ModifiedFilesScanTask() {
+            scanners = new LinkedList<IconSelector>();
+        }
+
+        public void run() {
+            LinkedList<IconSelector> toScan;
+            synchronized (scanners) {
+                toScan = new LinkedList<IconSelector>(scanners);
+                scanners.clear();
+            }
+            // complete modified files scan
+            Map<File, FileInformation> modifiedFiles = getLocallyChangedFiles(null);
+            Set<File> filesToRefresh = new HashSet<File>();
+            for (IconSelector scanner : toScan) {
+                // all registered iconn selectors are re-evaluated
+                scanner.scanFiles(modifiedFiles);
+                filesToRefresh.addAll(scanner.getFilesToRefresh());
+            }
+            // fire an event if needed
+            if (filesToRefresh.size() > 0) {
+                Subversion.getInstance().refreshAnnotations(filesToRefresh.toArray(new File[filesToRefresh.size()]));
+            }
+        }
+
+        /**
+         * Registers a given badge selector and reschedules this task
+         *@param scanner
+         */
+        public void schedule(IconSelector scanner) {
+            synchronized (scanners) {
+                scanners.add(scanner);
+                modifiedFilesRPScanTask.schedule(1000);
+            }
+        }
+    }
+
+    /**
+     * Evaluates root files' status and return their common badge. It tries to evaluate as fast as possible so it can return a fake badge.
+     *
+     * If cached all modified files, which it uses in the evaluation, are outdated, it schedules a complete scan of those files (which may access I/O)
+     * With these freshly scanned files it recalculates the icon and if that differs from the one returned after the first scan,
+     * the instance method getFilesToRefresh returns a non-empty set of responsible files which should be refreshed.
+     */
+    private final class IconSelector {
+
+        private Set<File> rootFiles;
+        private final Image initialIcon;
+        private Image badge = null;
+        private String badgePath;
+        private String originalBadgePath;
+        private final Set<File> responsibleFiles;
+        boolean allExcluded;
+        boolean modified;
+
+        public IconSelector(Set<File> rootFiles, Image initialIcon) {
+            this.rootFiles = rootFiles;
+            this.initialIcon = initialIcon;
+            this.responsibleFiles = new HashSet<File>();
+        }
+
+        void scanFilesLazy() {
+            boolean changed[] = new boolean[1];
+            Map<File, FileInformation> locallyChangedFiles = getLocallyChangedFiles(changed);
+            scanFiles(locallyChangedFiles);
+            if (changed[0]) {
+                // schedule a scan
+                scheduleDeepScan();
+            }
+        }
+
+        /**
+         * Computes the badge for given root files.
+         * Iterates through all root files and check if any of its children is by any chance included in a map of modified files.
+         * If it finds any such child, it sets the badge to modified (or conflicted if any of rootfile's children is in conflict).
+         * @param locallyChangedFiles
+         */
+        private void scanFiles(Map<File, FileInformation> locallyChangedFiles) {
+            allExcluded = true;
+            modified = false;
+            SvnModuleConfig config = SvnModuleConfig.getDefault();
+            responsibleFiles.clear();
+            for (File file : rootFiles) {
+                for (Map.Entry<File, FileInformation> entry : locallyChangedFiles.entrySet()) {
+                    File mf = entry.getKey();
+                    if (mf == null) {
+                        Subversion.LOG.log(Level.WARNING, "null File entry returned from getAllModifiedFiles");
+                        continue;
+                    }
+                    FileInformation info = entry.getValue();
+                    int status = info.getStatus();
+                    if (VersioningSupport.isFlat(file)) {
+                        if (mf.getParentFile().equals(file)) {
+                            if (info.isDirectory()) {
+                                continue;
+                            }
+                            if (checkConflictAndUpdateFlags(mf, config, status)) {
+                                return;
+                            }
+                        }
+                    } else {
+                        if (Utils.isAncestorOrEqual(file, mf)) {
+                            if ((status == FileInformation.STATUS_NOTVERSIONED_NEWLOCALLY || status == FileInformation.STATUS_VERSIONED_ADDEDLOCALLY) && file.equals(mf)) {
+                                continue;
+                            }
+                            if (checkConflictAndUpdateFlags(mf, config, status)) {
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (modified && !allExcluded) {
+                badge = ImageUtilities.assignToolTipToImage(
+                        ImageUtilities.loadImage(badgePath = badgeModified, true), toolTipModified);
+                badge = ImageUtilities.mergeImages(initialIcon, badge, 16, 9);
+            } else {
+                badge = null;
+                badgePath = "";
+                responsibleFiles.addAll(rootFiles);
+            }
+        }
+
+        /**
+         *
+         * @param modifiedFile
+         * @param config
+         * @param status
+         * @return true if the badge should be 'CONFLICT', false otherwise
+         */
+        private boolean checkConflictAndUpdateFlags(File modifiedFile, SvnModuleConfig config, int status) {
+            responsibleFiles.add(modifiedFile);
+            // conflict - this status has the highest weight
+            if (status == FileInformation.STATUS_VERSIONED_CONFLICT) {
+                badge = ImageUtilities.assignToolTipToImage(
+                        ImageUtilities.loadImage(badgePath = badgeConflicts, true), toolTipConflict);
+                badge = ImageUtilities.mergeImages(initialIcon, badge, 16, 9);
+                return true;
+            }
+            modified = true;
+            allExcluded &= config.isExcludedFromCommit(modifiedFile.getAbsolutePath());
+            return false;
+        }
+
+        Image getBadge() {
+            return badge;
+        }
+
+        private void scheduleDeepScan() {
+            originalBadgePath = badgePath; // save the badge path for later comparison
+            modifiedFilesScanTask.schedule(this);
+        }
+
+        /**
+         * Returns files which are responsible for a badge being changed and whose refresh should result in badge repainting.
+         * @return
+         */
+        public Set<File> getFilesToRefresh() {
+            assert originalBadgePath != null; // scan has been already run
+            if (!badgePath.equals(originalBadgePath)) {
+                // badge has changed
+                return responsibleFiles;
+            } else {
+                return Collections.EMPTY_SET;
+            }
+        }
+    }
 }
